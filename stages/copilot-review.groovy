@@ -122,6 +122,38 @@ def resolveDiffPrepPath() {
     return resolveScriptPath('git-diff-prep.py')
 }
 
+/** Prefer majordomo prep binary; MAJORDOMO_PREP=python forces Python fallback. */
+def resolveDiffPrepCommand(String baseBranch, String stagingDir, String routingArg, String agentContextArg, String summaryConfigArg) {
+    def args = ["'${baseBranch}'", "'${stagingDir}'", routingArg, agentContextArg, summaryConfigArg]
+        .findAll { it }
+        .join(' ')
+    def forcePython = (env.MAJORDOMO_PREP ?: '').trim().equalsIgnoreCase('python')
+    def majordomoBin = ''
+    if (!forcePython) {
+        def candidates = [
+            './majordomo',
+            './.majordomo/majordomo',
+            'majordomo',
+        ]
+        for (def c in candidates) {
+            if (c == 'majordomo') {
+                if (sh(script: "command -v majordomo >/dev/null 2>&1", returnStatus: true) == 0) {
+                    majordomoBin = 'majordomo'
+                    break
+                }
+            } else if (sh(script: "[ -x '${c}' ]", returnStatus: true) == 0) {
+                majordomoBin = c
+                break
+            }
+        }
+    }
+    if (majordomoBin) {
+        return "${majordomoBin} prep ${args}"
+    }
+    def diffPrepPath = resolveDiffPrepPath()
+    return "python3 '${diffPrepPath}' ${args}"
+}
+
 def sha256Hex(String input) {
     def tempFile = sh(script: 'mktemp', returnStdout: true).trim()
     if (!tempFile) {
@@ -842,30 +874,28 @@ def runPipelineWithBatches(logger, executor, String prNumber, String baseBranch,
     def reviewCacheScriptPath = resolveScriptPath('review-cache.py')
     def pushToCacheScriptPath = resolveScriptPath('push-to-cache.py')
 
-    // Run git-diff-prep.py — also writes per-skill/per-batch staging dirs and batch-plan.json
+    // Run majordomo prep (or git-diff-prep.py fallback) — writes staging dirs + batch-plan.json
     // APP_REPO_DIR: set only by the central pipeline — git commands run from that subdirectory.
     // Unset (per-repo submodule mode): behaviour unchanged, cwd is the workspace root.
+    // MAJORDOMO_PREP=python forces the Python script for one-release rollback.
     def appRepoDir   = env.APP_REPO_DIR?.trim()
-    def diffPrepPath = resolveDiffPrepPath()
-    def diffPrepArgs = ["'${baseBranch}'", "'${stagingDir}'", routingArg, agentContextArg, summaryConfigArg]
-        .findAll { it }
-        .join(' ')
+    def diffPrepInner = resolveDiffPrepCommand(baseBranch, stagingDir, routingArg, agentContextArg, summaryConfigArg)
     def diffPrepCmd  = appRepoDir ?
-        "cd '${appRepoDir}' && python3 '${diffPrepPath}' ${diffPrepArgs}" :
-        "python3 '${diffPrepPath}' ${diffPrepArgs}"
+        "cd '${appRepoDir}' && ${diffPrepInner}" :
+        diffPrepInner
     def rc = sh(
         script: diffPrepCmd,
         returnStatus: true
     )
     if (rc == 2) {
-        logger.info("[${pipelineName}] git-diff-prep.py: nothing to review — skipping")
+        logger.info("[${pipelineName}] prep: nothing to review — skipping")
         return
     }
-    if (rc != 0) { error "git-diff-prep.py failed with exit code ${rc}" }
+    if (rc != 0) { error "prep failed with exit code ${rc}" }
 
     def batchPlanFile = "${stagingDir}/batch-plan.json"
     if (!fileExists(batchPlanFile)) {
-        error "batch-plan.json not found after git-diff-prep.py — expected: ${batchPlanFile}"
+        error "batch-plan.json not found after prep — expected: ${batchPlanFile}"
     }
 
     def batchPlan    = readBatchPlan(batchPlanFile)

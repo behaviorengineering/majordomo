@@ -614,28 +614,51 @@ jobs:
 
 ## Phased rollout
 
-### Phase 0 — Document and scaffold (current)
+### Phase 0 — Document and scaffold (done)
 
 - [x] Architecture plan (this document)
-- [ ] Agree on `repo_id` naming, payload schema, YAML config shape
+- [ ] Agree on `repo_id` naming, payload schema, YAML config shape (can land with first pilot)
 - [x] Create control-tower repo skeleton (`xynova/majordomo-tower`)
 - [x] Init Go module (`go.mod`, `cmd/majordomo`, package stubs; `go test ./...` green)
 - [x] Rename review cache branch to `majordomo-pr-reviewer-cache/<project-id>`
+- [x] Pin `.majordomo` submodule in tower → `behaviorengineering/majordomo`
 
-### Phase 1 — Pull mode end-to-end (default path)
+### Phase 1 — Go control plane (next; preferred over poll-first)
 
-- [ ] `majordomo-poll.yml` cron workflow + `majordomo poll` Go subcommand (or script stub)
-- [ ] `majordomo-review.yml` + `majordomo orchestrate` minimal path
-- [ ] Port `publish` + `status` to Go (GitHub + Bitbucket first)
+Port deterministic pipeline logic to Go. Tower poll/workflows stay stubs until the binary can prep, orchestrate, and publish.
+
+**1a — Staging and reports (start here)**
+
+- [x] `majordomo prep` — port `git-diff-prep.py` + tests from `tests/pipelines/scripts/test_git_diff_prep.py`
+- [ ] `majordomo report junit` — port `review-to-junit.py`
+- [ ] `majordomo report html` — port `md-to-html.py`
+- [x] `dep_clusters` + `doc_clusters` in Go (`internal/cluster`)
+
+**1b — Orchestration and agent bridge**
+
+- [ ] `majordomo orchestrate` — port wave/checkpoint logic from `stages/copilot-review.groovy`
+- [ ] `majordomo dispatch` — wrap agent CLI (Copilot for now; OpenCode in Phase 3)
+- [ ] Port `summary-loop` / `tech-review-loop` into orchestrate
+
+**1c — Publish and cache**
+
+- [ ] `majordomo publish` — GitHub first, then Bitbucket (port `publish-pr-summary.py`)
+- [ ] `majordomo status` — commit/check status
+- [ ] `majordomo cache` — review + poll cursor on served repo
+
+**1d — Retire Python/Groovy for ported paths**
+
+- [ ] Delete `stages/*.groovy`, `lib/*.groovy`, Jenkinsfiles, setup-majordomo scripts once Go parity is proven
+- [ ] Keep `pipelines/scripts/*.py` only until each subcommand is covered by tests
+
+### Phase 2 — Pull mode end-to-end (tower wiring)
+
+Requires enough Go from Phase 1 to run prep → orchestrate → publish.
+
+- [ ] Wire `majordomo-poll.yml` to build/run Go binary from `.majordomo`
+- [ ] Wire `majordomo-review.yml` to `majordomo orchestrate` + `publish`
 - [ ] One pilot served repo on **pull mode** — no files in served repo
-- [ ] Document beginner onboarding in this plan (trigger section)
-
-### Phase 2 — Go staging and orchestration
-
-- [ ] `majordomo prep` — port `git-diff-prep.py` with tests ported from `tests/pipelines/scripts/`
-- [ ] `majordomo orchestrate` — port wave/checkpoint logic from `copilot-review.groovy`
-- [ ] `dep_clusters` + `doc_clusters` in Go
-- [ ] **Delete** `stages/*.groovy`, `lib/*.groovy`, Jenkinsfiles, setup-majordomo scripts
+- [ ] Document beginner onboarding (credentials + YAML)
 
 ### Phase 3 — OpenCode + slim images
 
@@ -649,11 +672,11 @@ jobs:
 - [ ] Bitbucket poll (primary migration path from Jenkins webhooks)
 - [ ] Optional: `push-workflow` stub template + `repository_dispatch` for willing repos
 - [ ] Optional: webhook router under `triggers/` (push-webhook mode)
-- [ ] `generic` SCM — manual dispatch + artifact-only reviews
+- [ ] `generic` SCM — clone + artifact-only reviews
 
-### Phase 5 — Cache, hardening, and legacy cleanup
+### Phase 5 — Cache hardening and legacy cleanup
 
-- [ ] Port `review-cache.py` / `push-to-cache.py` → `majordomo cache`
+- [ ] Port remaining cache edge cases from `review-cache.py` / `push-to-cache.py`
 - [ ] Checks API annotations from JUnit
 - [ ] **Delete** remaining `pipelines/scripts/*.py` and bash orchestration
 - [ ] Rewrite `docs/02-setup.md` and archive Jenkins-specific docs
@@ -718,3 +741,4 @@ Historical mapping for anyone porting config or behaviour. **No Jenkins deployme
 | 2026-08-24 | Review cache branch renamed `copilot-pr-reviewer-cache` → `majordomo-pr-reviewer-cache` |
 | 2026-08-24 | Go module scaffold: `cmd/majordomo`, `internal/*` stubs; Phase 0 started |
 | 2026-08-24 | Control tower locked: `xynova/majordomo-tower`; pipeline stays `behaviorengineering/majordomo` |
+| 2026-08-24 | **Priority shift:** Go control plane (Phase 1) before tower poll wiring (Phase 2) |
