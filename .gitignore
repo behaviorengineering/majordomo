@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# uv / venv
+.venv/
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+.github/
+
+tmp/
+.pipelines-worktree/
+.majordomo/
+
+# Go
+/majordomo
+*.exe
+*.test
+*.out
+bin/
