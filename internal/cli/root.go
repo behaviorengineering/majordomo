@@ -4,6 +4,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/behaviorengineering/majordomo/internal/staging"
 	"github.com/spf13/cobra"
 )
 
@@ -60,7 +61,26 @@ func newPollCmd() *cobra.Command {
 }
 
 func newPrepCmd() *cobra.Command {
-	return stub("prep", "Classify diffs, cluster files, write staging manifest")
+	var routing, agentContext, summaryConfig string
+	cmd := &cobra.Command{
+		Use:   "prep <base-branch> <staging-dir>",
+		Short: "Classify diffs, cluster files, write staging manifest",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := staging.Options{
+				BaseBranch:        args[0],
+				StagingDir:        args[1],
+				RoutingPath:       routing,
+				AgentContextPath:  agentContext,
+				SummaryConfigPath: summaryConfig,
+			}
+			return staging.Run(opts)
+		},
+	}
+	cmd.Flags().StringVar(&routing, "routing", "", "path to routing JSON")
+	cmd.Flags().StringVar(&agentContext, "agent-context", "", "path to agent context JSON")
+	cmd.Flags().StringVar(&summaryConfig, "summary-config", "", "path to summary config JSON")
+	return cmd
 }
 
 func newOrchestrateCmd() *cobra.Command {

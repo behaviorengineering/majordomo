@@ -235,6 +235,13 @@ The exclusion filters for which files are sent to any skill are in `scripts/git-
 ```bash
 go build -o majordomo ./cmd/majordomo
 ./majordomo version
+./majordomo prep <base-branch> <staging-dir> \
+  [--routing path] [--agent-context path] [--summary-config path]
+```
+
+`majordomo prep` is the Go port of `pipelines/scripts/git-diff-prep.py` (same staging layout and exit codes `0` / `1` / `2`). Jenkins prefers the binary when present; set `MAJORDOMO_PREP=python` to force the Python script.
+
+```bash
 ./majordomo poll   # stub — Phase 1
 ```
 
