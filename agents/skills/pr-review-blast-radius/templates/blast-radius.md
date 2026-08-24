@@ -15,7 +15,7 @@
      been updated.
 
      H3 text: short statement of what the seam is.
-     Example: "`cms_navigator.py` is still imported by `main.py`."
+     Example: "`legacy_navigator.py` is still imported by `main.py`."
 
      Body (3-5 sentences):
      - What the changed file is and what replaced it (if anything)
@@ -59,7 +59,7 @@
 
      For each verified or refuted claim, one entry:
 
-     **Claim:** <what the diff implies — e.g. "CmsNavigator is replaced and no longer needed">
+     **Claim:** <what the diff implies — e.g. "LegacyNavigator is replaced and no longer needed">
      **Result:** CONFIRMED or REFUTED
      **Evidence:** <grep result — file and line if refuted, or "no remaining references found" if confirmed>
      **Action (if REFUTED):** <what needs to happen — one sentence>

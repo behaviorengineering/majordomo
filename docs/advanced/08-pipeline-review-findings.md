@@ -258,6 +258,6 @@ npm-groovy-lint --path .majordomo --files "**/*.groovy" --fix --no-insight
 
 ## References
 
-- [Repository memory](../../memories/repo/jenkins-pipeline-notes.md)
-- [Jenkins mode instructions](.github/instructions/copilot.instructions.md)
-- [PR Review agent](../agents/pr-review.agent.md)
+- [Control tower migration plan](../PLAN-control-tower-github-go.md)
+- [Pipeline stages reference](04.1-pipeline-stages-reference.md)
+- [PR Review agent](../../agents/pr-review.agent.md)

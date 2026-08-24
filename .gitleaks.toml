@@ -1,0 +1,28 @@
+title = "majordomo gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow known-safe example placeholders and test fixtures"
+paths = [
+  '''tests/''',
+  '''docs/advanced/07-example-summary.md''',
+  '''agents/skills/prose-quality/SKILL.md''',
+  '''agents/skills/pr-review-blast-radius/templates/blast-radius.md''',
+  '''agents/skills/pr-review-code/SKILL.md''',
+  '''docs/advanced/09-customising-the-review.md''',
+  '''docs/PROPOSAL-''',
+]
+
+regexes = [
+  '''(?i)example\.(com|test|org|local)''',
+  '''(?i)bitbucket\.example\.com''',
+  '''(?i)packages\.example\.com''',
+  '''(?i)proxy\.example\.com''',
+  '''(?i)ci-user@example\.com''',
+  '''(?i)my-registry-cred''',
+  '''(?i)copilot-pat''',
+  '''(?i)test@example\.com''',
+  '''(?i)user:token@example\.com''',
+]

@@ -123,15 +123,15 @@ Do not append what the reader can already infer.
 
 **Before:**
 ```
-CmsNavigator remains in the codebase with all methods annotated as replaced but not deleted —
+LegacyNavigator remains in the codebase with all methods annotated as replaced but not deleted —
 migration plan for Phase 4/5 is not visible in the diffs. If other code still imports
-CmsNavigator, this creates two parallel code paths until removal is complete.
+LegacyNavigator, this creates two parallel code paths until removal is complete.
 ```
 
 **After:**
 ```
-CmsNavigator remains with all methods annotated as replaced but not deleted. Migration plan for
-Phase 4/5 is not visible in the diffs. Check whether any callers still import CmsNavigator.
+LegacyNavigator remains with all methods annotated as replaced but not deleted. Migration plan for
+Phase 4/5 is not visible in the diffs. Check whether any callers still import LegacyNavigator.
 ```
 
 The cut: "this creates two parallel code paths" is the obvious consequence of "not deleted" +
@@ -146,19 +146,19 @@ Speculative language about future state MUST be stated as fact or cut entirely.
 
 **Before:**
 ```
-ImsNavigator and SovereignNavigator are not migrated in this PR — intentional scope limit, but
+BillingNavigator and PortalNavigator are not migrated in this PR — intentional scope limit, but
 suggests future PRs will mirror this refactor for other systems.
 ```
 
 **After (can be confirmed from context):**
 ```
-ImsNavigator and SovereignNavigator are not migrated in this PR. Other navigators follow in
+BillingNavigator and PortalNavigator are not migrated in this PR. Other navigators follow in
 subsequent PRs.
 ```
 
 **After (cannot be confirmed):**
 ```
-ImsNavigator and SovereignNavigator are not migrated in this PR. Intentional scope limit.
+BillingNavigator and PortalNavigator are not migrated in this PR. Intentional scope limit.
 ```
 
 ---
@@ -172,7 +172,7 @@ compress 8+ concepts into denser prose.
 ```
 This PR replaces the imperative navigator pattern with a graph-based navigation architecture.
 A new NavigationController orchestrates screen recognition, path-finding, and transition
-execution via NavigationGraph, ScreenRecogniser, and SessionGuard. The existing CmsNavigator
+execution via NavigationGraph, ScreenRecogniser, and SessionGuard. The existing LegacyNavigator
 class remains intact but annotated; domain logic moves into six new service modules that
 delegate to the controller and extract data from 53 new Screen subclasses. The PR also adds
 a .majordomo Git submodule and updates .env.template.
@@ -183,12 +183,12 @@ a .majordomo Git submodule and updates .env.template.
 This PR replaces the imperative navigator pattern with a graph-based navigation architecture.
 NavigationController orchestrates screen recognition, path-finding, and transition execution
 via NavigationGraph, ScreenRecogniser, and SessionGuard. Domain logic moves into six new
-service modules (CmsService, CmsAccountService, CmsConnectionsService, CmsStsService,
-CmsResponsibleOfficersService, CmsPccsService) that delegate to the controller.
+service modules (AppService, AccountService, ConnectionsService, InquiryService,
+OfficersService, PortalService) that delegate to the controller.
 
-CmsNavigator remains with methods annotated as replaced. Screen data extraction moves into
-53 new Screen subclasses in terminal/screens/cms/. The PR also adds a .majordomo Git
-submodule and updates .env.template with CMS__SYSTEMS.
+LegacyNavigator remains with methods annotated as replaced. Screen data extraction moves into
+53 new Screen subclasses in terminal/screens/. The PR also adds a .majordomo Git
+submodule and updates .env.template with APP__SYSTEMS.
 ```
 
 This is a flag + split instruction. Do not compress — split.

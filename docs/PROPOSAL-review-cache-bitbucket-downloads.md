@@ -188,9 +188,9 @@ Goal: produce one deterministic hash for the exact instruction set used by analy
 Input files (example):
 
 ```text
-.github/instructions/copilot.instructions.md
-.github/instructions/neurodivergent.instructions.md
-agents/python-coder.agent.md
+agents/pr-review.agent.md
+agents/skills/pr-review-code/SKILL.md
+agents/skills/pr-review-summary/SKILL.md
 ```
 
 Computation recipe:
@@ -207,9 +207,9 @@ Pseudo-code:
 
 ```text
 files = sort([
-    ".github/instructions/copilot.instructions.md",
-    ".github/instructions/neurodivergent.instructions.md",
-    "agents/python-coder.agent.md"
+    "agents/pr-review.agent.md",
+    "agents/skills/pr-review-code/SKILL.md",
+    "agents/skills/pr-review-summary/SKILL.md"
 ])
 
 buffer = bytes()
