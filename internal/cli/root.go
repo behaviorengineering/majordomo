@@ -4,6 +4,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/behaviorengineering/majordomo/internal/report"
 	"github.com/behaviorengineering/majordomo/internal/staging"
 	"github.com/spf13/cobra"
 )
@@ -104,7 +105,21 @@ func newReportCmd() *cobra.Command {
 		Use:   "report",
 		Short: "Convert review reports (junit, html)",
 	}
-	cmd.AddCommand(stub("junit", "Convert findings to JUnit XML"))
-	cmd.AddCommand(stub("html", "Convert markdown reports to HTML"))
+	cmd.AddCommand(&cobra.Command{
+		Use:   "junit <review-output-dir> <junit-output-dir>",
+		Short: "Convert findings to JUnit XML",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return report.ConvertToJUnit(args[0], args[1])
+		},
+	})
+	cmd.AddCommand(&cobra.Command{
+		Use:   "html <input.md> <output.html>",
+		Short: "Convert markdown reports to HTML",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return report.ConvertMarkdownToHTMLCLI(args[0], args[1])
+		},
+	})
 	return cmd
 }

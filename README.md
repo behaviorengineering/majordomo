@@ -237,9 +237,11 @@ go build -o majordomo ./cmd/majordomo
 ./majordomo version
 ./majordomo prep <base-branch> <staging-dir> \
   [--routing path] [--agent-context path] [--summary-config path]
+./majordomo report junit <review-output-dir> <junit-output-dir>
+./majordomo report html <input.md> <output.html>
 ```
 
-`majordomo prep` is the Go port of `pipelines/scripts/git-diff-prep.py` (same staging layout and exit codes `0` / `1` / `2`). Jenkins prefers the binary when present; set `MAJORDOMO_PREP=python` to force the Python script.
+`majordomo prep` ports `git-diff-prep.py` (exit codes `0` / `1` / `2`). `majordomo report junit` / `html` port `review-to-junit.py` and `md-to-html.py`. Jenkins prefers the binary when present; set `MAJORDOMO_PREP=python` or `MAJORDOMO_REPORT=python` to force the Python scripts.
 
 ```bash
 ./majordomo poll   # stub — Phase 1

@@ -37,14 +37,39 @@ def resolveScriptPath(String scriptFileName) {
     error "${scriptFileName} not found. Checked: ${candidates.join(', ')}"
 }
 
+def resolveMajordomoBin() {
+    def forcePython = (env.MAJORDOMO_REPORT ?: '').trim().equalsIgnoreCase('python')
+    if (forcePython) {
+        return ''
+    }
+    def candidates = ['./majordomo', './.majordomo/majordomo', 'majordomo']
+    for (def c in candidates) {
+        if (c == 'majordomo') {
+            if (sh(script: "command -v majordomo >/dev/null 2>&1", returnStatus: true) == 0) {
+                return 'majordomo'
+            }
+        } else if (sh(script: "[ -x '${c}' ]", returnStatus: true) == 0) {
+            return c
+        }
+    }
+    return ''
+}
+
 def convertOne(logger, String mdFile, String htmlFile) {
-    def converterPath = resolveScriptPath('md-to-html.py')
+    def majordomoBin = resolveMajordomoBin()
+    def cmd
+    if (majordomoBin) {
+        cmd = "${majordomoBin} report html '${mdFile}' '${htmlFile}'"
+    } else {
+        def converterPath = resolveScriptPath('md-to-html.py')
+        cmd = "python3 '${converterPath}' '${mdFile}' '${htmlFile}'"
+    }
     def rc = sh(
-        script: "python3 '${converterPath}' '${mdFile}' '${htmlFile}'",
+        script: cmd,
         returnStatus: true
     )
     if (rc != 0) {
-        logger.warn("md-to-html.py failed for ${mdFile} (exit ${rc}) — skipping")
+        logger.warn("report html failed for ${mdFile} (exit ${rc}) — skipping")
         return false
     }
     logger.info("Converted: ${mdFile} → ${htmlFile}")

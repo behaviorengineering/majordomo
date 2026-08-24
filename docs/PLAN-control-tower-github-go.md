@@ -630,8 +630,8 @@ Port deterministic pipeline logic to Go. Tower poll/workflows stay stubs until t
 **1a — Staging and reports (start here)**
 
 - [x] `majordomo prep` — port `git-diff-prep.py` + tests from `tests/pipelines/scripts/test_git_diff_prep.py`
-- [ ] `majordomo report junit` — port `review-to-junit.py`
-- [ ] `majordomo report html` — port `md-to-html.py`
+- [x] `majordomo report junit` — port `review-to-junit.py`
+- [x] `majordomo report html` — port `md-to-html.py`
 - [x] `dep_clusters` + `doc_clusters` in Go (`internal/cluster`)
 
 **1b — Orchestration and agent bridge**

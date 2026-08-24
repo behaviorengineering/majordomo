@@ -1373,8 +1373,30 @@ def archiveReport(String outputBaseDir) {
 
 def convertToJUnit(String outputDir) {
     def junitDir = "${outputDir}/junit"
-    def reportToJunitPath = resolveScriptPath('review-to-junit.py')
-    sh "python3 '${reportToJunitPath}' '${outputDir}' '${junitDir}'"
+    def forcePython = (env.MAJORDOMO_REPORT ?: '').trim().equalsIgnoreCase('python')
+    def majordomoBin = ''
+    if (!forcePython) {
+        def candidates = ['./majordomo', './.majordomo/majordomo', 'majordomo']
+        for (def c in candidates) {
+            if (c == 'majordomo') {
+                if (sh(script: "command -v majordomo >/dev/null 2>&1", returnStatus: true) == 0) {
+                    majordomoBin = 'majordomo'
+                    break
+                }
+            } else if (sh(script: "[ -x '${c}' ]", returnStatus: true) == 0) {
+                majordomoBin = c
+                break
+            }
+        }
+    }
+    def cmd
+    if (majordomoBin) {
+        cmd = "${majordomoBin} report junit '${outputDir}' '${junitDir}'"
+    } else {
+        def reportToJunitPath = resolveScriptPath('review-to-junit.py')
+        cmd = "python3 '${reportToJunitPath}' '${outputDir}' '${junitDir}'"
+    }
+    sh cmd
     junit testResults: "${junitDir}/*.xml", allowEmptyResults: true
 }
 
