@@ -13,6 +13,8 @@ paths = [
   '''agents/skills/pr-review-code/SKILL.md''',
   '''docs/advanced/09-customising-the-review.md''',
   '''docs/PROPOSAL-''',
+  '''scripts/scrub-history.sh''',
+  '''scripts/scrub-tree.sh''',
 ]
 
 regexes = [
