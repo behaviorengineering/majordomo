@@ -17,6 +17,11 @@ find . -type f \
   s/a01a0f-met-docker-snapshot-local\.artifactory\.srv\.westpac\.com\.au/example-docker-snapshot-local.packages.example.com/g;
   s/a01a0f-met-pypi-snapshot-dependencies/example-pypi-snapshot-dependencies/g;
   s/wbcorp-pr-proxy0\.westpac\.com\.au/proxy.example.com/g;
+  s/wbcorp-pr-proxy0\.example\.com/proxy.example.com/g;
+  s/wbcorp-pr-proxy0/proxy/g;
+  s|/a01a0f/|/example-project/|g;
+  s/a01a0f-met-/example-/g;
+  s/a01a0f/example-project/g;
   s/artifactory\.srv\.westpac\.com\.au/packages.example.com/g;
   s/jenkins\.srv\.westpac\.com\.au/jenkins.example.com/g;
   s/bitbucket\.srv\.westpac\.com\.au/bitbucket.example.com/g;
@@ -46,6 +51,8 @@ find . -type f \
   s/id=jfrog_token/id=token/g;
   s|/run/secrets/salary_id|/run/secrets/username|g;
   s|/run/secrets/jfrog_token|/run/secrets/token|g;
+  s/salary_id/username/g;
+  s/jfrog_token/token/g;
   s/westpac-ca\.crt/corp-ca.crt/g;
   s/au\/com\/westpac\/security/example\/security/g;
   s/Artifactory/package registry/g;
