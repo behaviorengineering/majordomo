@@ -1,51 +1,47 @@
 # SA tool image — eslint (JavaScript/TypeScript linter)
-# Triggered by: Changes to this Dockerfile
 #
-# Runs as: docker run --rm -v <workspace>:/workspace sa-eslint:<tag> --format unix /workspace/path/to/file.ts
+# GitHub CI / open internet:
+#   docker build --target public -t sa-eslint -f eslint.Dockerfile .
 #
-# Note: eslint requires a config file (eslint.config.js / .eslintrc.*) in the project.
-# If none is present, eslint exits with a config-not-found error (treated as no findings).
+# Corp (default stage): pass PACKAGE_REGISTRY_* build-args + BuildKit secrets.
 #
-# Base image pulled via package registry pull-through cache to avoid Docker Hub rate limits
+# Runs as: docker run --rm -v <workspace>:/workspace sa-eslint --format unix /workspace/path/to/file.ts
 
-ARG BASE_IMAGE=example-docker-snapshot-dependencies.packages.example.com/node:20-slim
+ARG BASE_IMAGE=node:20-slim
 
-FROM ${BASE_IMAGE}
-
-# Build arguments for proxy configuration
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY=localhost,127.0.0.1,packages.example.com
+FROM node:20-slim AS public
 
 WORKDIR /workspace
 
-# Configure package registry apt mirror, install CA cert — shared script keeps this DRY across all SA tool images.
-# Uses BuildKit secrets so credentials are never baked into image layers.
+RUN npm install -g eslint
+
+ENTRYPOINT ["eslint"]
+CMD ["--help"]
+
+FROM ${BASE_IMAGE} AS corp
+
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG NPM_VIRTUAL_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/setup-corp-apt.sh
-
-ARG NPM_REGISTRY=https://packages.example.com/package-registry/api/npm/example-npm-virtual/
-
-# Install eslint globally via package registry npm registry
-RUN --mount=type=secret,id=username \
-    --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
-    . /tmp/sa-scripts/registry-user.sh && \
-    REGISTRY_USER_SANITIZED=$(read_registry_user_sanitized /run/secrets/username) && \
-    REGISTRY_TOKEN=$(cat /run/secrets/token) && \
-    export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt && \
-    npm config set cafile /etc/ssl/certs/ca-certificates.crt && \
-    npm config set strict-ssl true && \
-    npm install -g eslint \
-        --registry "${NPM_REGISTRY}" \
-        --//packages.example.com/package-registry/api/npm/example-npm-virtual/:username="${REGISTRY_USER_SANITIZED}" \
-        --//packages.example.com/package-registry/api/npm/example-npm-virtual/:_password="$(echo -n "${REGISTRY_TOKEN}" | base64)" \
-        --//packages.example.com/package-registry/api/npm/example-npm-virtual/:always-auth=true
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+
+RUN --mount=type=secret,id=username \
+    --mount=type=secret,id=token \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
+    /bin/sh /tmp/sa-scripts/install-npm-tool.sh eslint
 
 ENTRYPOINT ["eslint"]
 CMD ["--help"]

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Copilot CLI single-batch dispatcher — called once per batch by copilot-review.groovy,
-# which owns wave orchestration and checkpoint logic.
+# Copilot CLI single-batch dispatcher — called once per batch by the review
+# orchestrator (Go/GHA host; formerly stages/copilot-review.groovy).
 #
 # Usage:
 #   copilot-dispatch.sh <pr-number> <staging-dir> <output-dir> [MODE]
@@ -470,7 +470,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# UTF-8 locale — required for Node.js / Python subprocesses in Jenkins.
+# UTF-8 locale — required for Node.js / Python subprocesses.
 # The agent environment may not have a locale set, causing stdout/file writes
 # to fall back to ASCII and produce mojibake (â€" instead of —).
 # ---------------------------------------------------------------------------

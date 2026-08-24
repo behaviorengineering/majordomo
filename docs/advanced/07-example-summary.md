@@ -93,10 +93,10 @@ Added with 386 findings: 312 auto-fixable style violations (`UP045`, `I001`, `W2
 ```
 [submodule ".majordomo"]
     path = .majordomo
-    url = ssh://git@bitbucket.example.com/example-project/copilot-cli-in-ci.git
+    url = ssh://git@bitbucket.example.com/scm/tooling/majordomo.git
 ```
 
-Links a Copilot CLI wrapper for Jenkins pipelines.
+Links a Copilot CLI wrapper for CI pipelines.
 
 ### **Module-level app initialization moved into `if __name__ == "__main__":`**
 

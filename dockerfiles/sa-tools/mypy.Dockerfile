@@ -1,59 +1,62 @@
 # SA tool image — mypy (Python type checker)
-# Triggered by: Changes to this Dockerfile
 #
-# Runs as: docker run --rm -v <workspace>:/workspace sa-mypy:<tag> [file...]
+# GitHub CI / open internet:
+#   docker build --target public -t sa-mypy -f mypy.Dockerfile .
 #
-# Config detection order (evaluated at runtime inside the container):
-#   1. /workspace/mypy.ini          — repo-level config (strict, project-specific)
-#   2. /workspace/pyproject.toml    — if it contains a [tool.mypy] section
-#   3. /defaults/mypy.ini           — baked-in fallback (lenient, ignore_missing_imports)
+# Corp (default stage): pass PACKAGE_REGISTRY_* build-args + BuildKit secrets.
 #
-# Source root detection: if /workspace/src exists, MYPYPATH is set to /workspace/src
-# automatically so that src-layout packages resolve correctly.
-#
-# Base image pulled via package registry pull-through cache to avoid Docker Hub rate limits
+# Config detection (runtime): mypy.ini → pyproject.toml [tool.mypy] → /defaults/mypy.ini
 
-ARG BASE_IMAGE=example-docker-snapshot-dependencies.packages.example.com/python:3.12-slim
+ARG BASE_IMAGE=python:3.12-slim
 
-FROM ${BASE_IMAGE}
-
-# Build arguments for proxy configuration
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY=localhost,127.0.0.1,packages.example.com
+FROM python:3.12-slim AS public
 
 WORKDIR /workspace
 
-# Configure package registry apt mirror, install CA cert — shared script keeps this DRY across all SA tool images.
-# Uses BuildKit secrets so credentials are never baked into image layers.
+RUN pip install --no-cache-dir mypy
+
+ENV PYTHONIOENCODING=utf-8
+ENV PYTHONUTF8=1
+ENV MYPY_CACHE_DIR=/tmp/.mypy_cache
+
+COPY mypy/mypy-default.ini /defaults/mypy.ini
+COPY mypy/mypy-entrypoint.sh /usr/local/bin/mypy-entrypoint.sh
+RUN chmod +x /usr/local/bin/mypy-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/mypy-entrypoint.sh"]
+CMD ["--help"]
+
+FROM ${BASE_IMAGE} AS corp
+
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG PIP_INDEX_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/setup-corp-apt.sh
 
-# Install mypy via package registry PyPI mirror.
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/install-pypi-tool.sh mypy
 
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV PYTHONIOENCODING=utf-8
 ENV PYTHONUTF8=1
-# Redirect mypy cache to /tmp — /workspace is mounted read-only so mypy cannot
-# write to /workspace/.mypy_cache. The container is ephemeral (--rm) so the
-# cache provides no benefit; /tmp is always writable.
 ENV MYPY_CACHE_DIR=/tmp/.mypy_cache
 
-# Baked-in fallback config — used when the repo has no mypy.ini or pyproject.toml [tool.mypy].
-# Lenient by design: ignore_missing_imports avoids noise from unstubbed third-party packages.
-# Repos with their own mypy.ini override this entirely.
-RUN --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/mypy/mypy-default.ini,target=/tmp/mypy-default.ini,ro /bin/sh -ec 'mkdir -p /defaults; cp /tmp/mypy-default.ini /defaults/mypy.ini'
-
-# Entrypoint: detects repo config, sets MYPYPATH for src-layout, then runs mypy.
-# Receives the list of changed files as positional arguments from run-sa-tool.sh.
-RUN --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/mypy/mypy-entrypoint.sh,target=/tmp/mypy-entrypoint.sh,ro /bin/sh -ec 'cp /tmp/mypy-entrypoint.sh /usr/local/bin/mypy-entrypoint.sh; chmod +x /usr/local/bin/mypy-entrypoint.sh'
+COPY mypy/mypy-default.ini /defaults/mypy.ini
+COPY mypy/mypy-entrypoint.sh /usr/local/bin/mypy-entrypoint.sh
+RUN chmod +x /usr/local/bin/mypy-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/mypy-entrypoint.sh"]
 CMD ["--help"]

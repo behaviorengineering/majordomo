@@ -2,6 +2,9 @@
 
 *Majordomo — repository operations for evolving software.*
 
+> **Historical — Jenkins retired.** This document predates removal of Jenkinsfiles, Groovy stages, and `.majordomo-config.groovy`. Behaviour below is a porting spec for the Go/GHA control tower — see [PLAN — Control Tower, GitHub Actions, and Go](../PLAN-control-tower-github-go.md).
+
+
 **Status:** Exploratory  
 **Date:** 2026-05-07  
 **Problem:** Pipeline failures before `Ensure Images` completes leave Bitbucket status notifications undelivered.

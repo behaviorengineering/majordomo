@@ -2,7 +2,7 @@
 
 *Majordomo — repository operations for evolving software.*
 
-All customisation goes in the `pipelines` block of *`.majordomo-config.groovy`*. Omit any key to keep the submodule default.
+Configuration lives in the **control-tower repo** (`majordomo-central-config/<repo-slug>.yaml` merged with `_defaults.yaml`). Per-repo overrides replace org defaults; omit keys to inherit.
 
 The pipeline ships **eight built-in skills** across three categories. Only `pr-review-code` is **routed by default** — all other skills require explicit routing configuration.
 
@@ -38,239 +38,135 @@ The pipeline ships **eight built-in skills** across three categories. Only `pr-r
 
 ## ⚙️ Configuration Overrides
 
-### Override credentials (central pipeline only)
+### Credentials and registry (control tower)
 
-Four credential keys are configurable per repo. All are optional — omit any key to inherit the org-wide value from `_defaults.groovy`.
+Store secrets in the control-tower repo (GitHub Actions secrets / org secrets). Reference them from per-repo YAML — never commit tokens.
 
-| Key | When to override |
-|---|---|
-| `githubCopilotCredentialsId` | Repo needs a different GitHub Copilot token (e.g. different enterprise seat or scoped PAT) |
-| `bitbucketSshCredentialsId` | Repo lives in a Bitbucket project that requires a different SSH key for checkout |
-| `package-registryCredentialsId` | Repo needs a different package registry token (e.g. different registry access tier) |
-| `bitbucketTokenCredentialsId` | Repo uses a different service account to post PR comments (e.g. repo is in a restricted Bitbucket project) |
+```yaml
+# majordomo-central-config/payments-api.yaml (example shape — see PLAN doc)
+registry:
+  pullDomain: docker-pull.example.com
+  pushDomain: docker-push.example.com
 
-```groovy
-credentials: [
-    githubCopilotCredentialsId:  '<repo-specific-github-copilot-secret-text-credential-id>',
-    bitbucketSshCredentialsId:   '<repo-specific-ssh-credential-id>',
-    package-registryCredentialsId:    '<repo-specific-package-registry-credential-id>',
-    bitbucketTokenCredentialsId: '<repo-specific-bitbucket-token-credential-id>',
-],
+packageRegistry:
+  host: packages.example.com
+  caCertUrl: https://packages.example.com/generic/security/certificates/corp-ca.pem
+  debianRepoPath: debian-repo
+  pipIndexPath: api/pypi/pypi-virtual/simple
+  npmVirtualPath: api/npm/npm-virtual/
+
+secrets:
+  githubCopilot: GITHUB_COPILOT_TOKEN      # env name in tower workflow
+  scmToken: SCM_TOKEN
+  registryUser: REGISTRY_USER
+  registryToken: REGISTRY_TOKEN
 ```
+
+Corp Docker builds use `packageRegistry` + registry credentials. Open/GitHub-hosted runners omit `packageRegistry` and build with `--target public`.
 
 ---
 
 ### Override which files each skill receives
 
-`git-diff-prep.py` classifies each changed file using glob patterns. **First matching glob wins.**
+`git-diff-prep.py` (or `majordomo prep`) classifies each changed file using glob patterns. **First matching glob wins.**
 
-Simple form — globs only:
-
-```groovy
-pipelines: [
-    'pr-review': [
-        routing: [
-            'pr-review-docs': ['**/*.md', '**/*.rst'],
-            'pr-review-conf': ['**/*.yml', '**/*.yaml', '**/*.toml', '**/*.json', 'docs/**'],
-            'pr-review-code': ['**'],  // catch-all — must be last
-        ],
-    ],
-],
+```yaml
+pipelines:
+  pr-review:
+    routing:
+      pr-review-docs:
+        - "**/*.md"
+        - "**/*.rst"
+      pr-review-conf:
+        - "**/*.yml"
+        - "**/*.yaml"
+        - "docs/**"
+      pr-review-code:
+        - "**"   # catch-all — must be last
 ```
 
-Extended form — add an optional `persona` per skill to control reviewer tone and behaviour. The persona file is loaded from disk at staging time and injected as a behavioural preamble into the agent prompt before the diff:
-
-```groovy
-pipelines: [
-    'pr-review': [
-        routing: [
-            'pr-review-docs': [globs: ['**/*.md', '**/*.rst'], persona: '.majordomo/personas/doc-reviewer.md'],
-            'pr-review-code': [globs: ['**'],                  persona: '.majordomo/personas/strict-security.md'],
-            'pr-review-conf': ['**/*.yml', '**/*.yaml'],        // no persona — short form still valid
-        ],
-    ],
-],
-```
-
-A missing or empty persona file fails the build immediately. Omit the `persona` key to use the agent's built-in tone.
+Pass a routing JSON file to prep with `--routing` when the orchestrator materialises config at runtime.
 
 ---
 
 ### Inject team or domain context into the reviewer
 
-`agentContext` tells the review agent domain-specific facts before it reads the diff. Use it to steer the reviewer toward the standards and constraints that matter for a given area of the codebase.
-
-Two formats are supported:
-
-**Global context** — applies to every reviewed file:
-
-```groovy
-pipelines: [
-    'pr-review': [
-        agentContext: [
-            global: [
-                customRules: [
-                    'No credentials hardcoded in source or configuration.',
-                ],
-            ],
-        ],
-    ],
-],
+```yaml
+pipelines:
+  pr-review:
+    agentContext:
+      global:
+        customRules:
+          - "No hardcoded credentials."
+      scoped:
+        "services/payments-api/**":
+          techStack: [python, fastapi, openapi]
+          reviewFocus: [openapi-contract, auth]
+          customRules:
+            - file: .majordomo/rules/mesh-api-contract.md
+            - "FastAPI must use exception_handlers, not Flask-style decorators."
 ```
 
-**Glob-scoped context** — first matching glob wins, merged on top of global:
-
-```groovy
-pipelines: [
-    'pr-review': [
-        agentContext: [
-            global: [
-                customRules: [
-                    [file: '.majordomo/rules/shared/security-baseline.md'],
-                ],
-            ],
-            scoped: [
-                'services/payments-api/**': [
-                    techStack:   ['python', 'fastapi', 'openapi'],
-                    reviewFocus: ['openapi-contract', 'auth'],
-                    customRules: [
-                        [file: '.majordomo/rules/mesh/mesh-api-contract.md'],
-                        'FastAPI error handling must use exception_handlers, not Flask-style decorators.',
-                    ],
-                ],
-                'sops/**': [
-                    techStack:   ['docs', 'runbooks'],
-                    reviewFocus: ['procedural-accuracy', 'rollback-completeness'],
-                    customRules: [
-                        'Every operational procedure must include rollback or recovery guidance.',
-                    ],
-                ],
-            ],
-        ],
-    ],
-],
-```
-
-**`customRules` supports two entry types:**
-
-| Type | Example | Description |
-|---|---|---|
-| Inline string | `'No hardcoded credentials.'` | Rule text embedded directly in the config |
-| File reference | `[file: '.majordomo/rules/mesh-api.md']` | Content loaded from disk at staging time |
-
-File references are resolved relative to the app repo root. A missing or empty file fails the build immediately with a clear error — no silent fallback.
-
-**Merge behaviour:**
-- `global.customRules` are prepended to any scoped `customRules` for the matched file.
-- Scoped keys (`techStack`, `reviewFocus`) override the global value for that key entirely.
-- Files with no matching scoped glob receive only global context.
-
-The resolved context is embedded in each task's manifest entry and injected into the review prompt as a preamble before the diff.
+---
 
 ### Override a skill's review rules
 
 Point to your own skill directory (must contain a `SKILL.md`):
 
-```groovy
-pipelines: [
-    'pr-review': [
-        skills: [
-            'pr-review-conf': 'agents/skills/my-conf',  // path relative to your app repo root
-            'pr-review-docs': null,
-            'pr-review-code': null,                      // null = use submodule default
-        ],
-    ],
-],
+```yaml
+pipelines:
+  pr-review:
+    skills:
+      pr-review-docs: agents/skills/my-docs   # path relative to app repo checkout
+      pr-review-code: null                    # null = use submodule default
 ```
+
+---
 
 ### Override the orchestrator agent
 
-Replace the shared review protocol itself:
-
-```groovy
-pipelines: [
-    'pr-review': [
-        agent: 'agents/my-pr-review.agent.md',  // path relative to your app repo root
-    ],
-],
-```
-
-### Override the model
-
-Four independent model keys control different pipeline phases. The org-wide defaults live in `majordomo-central-config/_defaults.groovy`. A per-repo config only needs to set the keys it wants to change — deep merge inherits the rest.
-
-| Key | Modes | Fallback |
-|-----|-------|---------|
-| `model` | file-review batches, finalize, prose | — |
-| `summaryModel` | summary synthesis | `model` |
-| `technicalModel` | technical + technical-deep | `model` |
-| `scoreModel` | score + tech-score | — |
-
-**Central pipeline (per-repo config):**
-```groovy
-pipelines: [
-    'pr-review': [
-        model:          'gpt-5-mini',
-        summaryModel:   'claude-sonnet-4.5',
-        technicalModel: 'claude-sonnet-4.6',
-        scoreModel:     'auto',
-    ],
-],
-```
-
-**Submodule / per-repo pipeline (`.majordomo-config.groovy`):**
-```groovy
-pipelines: [
-    'pr-review': [
-        model:          'gpt-5-mini',
-        summaryModel:   'claude-sonnet-4.5',
-        technicalModel: 'claude-sonnet-4.6',
-        scoreModel:     'auto',
-    ],
-],
-```
-
-All keys are optional. Omit any key to keep the org-wide default.
-
----
-
-## � Caching Configuration
-
-To save LLM tokens and accelerate build times, the pipeline clusters changed files and caches analysis/markdown outputs inside a dedicated git branch per project. Caching behaviors are configured under the `cache` block.
-
-### Caching Configuration Options
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `cacheRepo` | `'project' \| 'central'` | `'project'` | Where the cache branch lives. `'project'` uses the app repo; `'central'` uses the central repo. |
-| `enableSkips` | `boolean` | `true` | When true, skips analysis entirely for unchanged file clusters and restores cached reports. |
-| `enableContinuousRuns` | `boolean` | `false` | When true, new commits update the PR summary rather than bypassing the review. |
-| `lockResource` | `string` | `'copilot-cache-{projectId}'` | Shared lock template for serializing concurrent cache flushes. Supports `{projectId}` and `{cacheBranch}` placeholders. |
-| `cacheTokenCredentialsId` | `string` | `bitbucketTokenCredentialsId` | Target credentials ID inside Jenkins for pushing cache updates. |
-| `retentionDays` | `int` | `180` | Number of days to retain cached entries before pruning. (Floor limit of 30 days is enforced). |
-
-### Caching Configuration Example
-
-Configure overrides in your **`.majordomo-config.groovy`** or the central config **`majordomo-central-config/<repo-slug>.groovy`**:
-
-```groovy
-cache: [
-    cacheRepo: 'project',
-    enableSkips: true,
-    enableContinuousRuns: false,
-    lockResource: 'copilot-cache-{projectId}',
-    retentionDays: 90
-]
+```yaml
+pipelines:
+  pr-review:
+    agent: agents/my-pr-review.agent.md
 ```
 
 ---
 
-## �📦 Adding a New Pipeline
+### Models and cache (org defaults + per-repo overrides)
 
-Add an entry under `pipelines` with its own orchestrator, skills, and routing. Create the corresponding `SKILL.md` files in your app repo and the dispatcher picks them up **automatically**. **No changes to the submodule required.**
+```yaml
+pipelines:
+  pr-review:
+    model: claude-sonnet-4.5
+    scoreModel: gpt-5.4-mini
+
+cache:
+  cacheRepo: project          # project | central
+  enableSkips: false
+  retentionDays: 120
+```
+
+See [PLAN — Control Tower, GitHub Actions, and Go](../PLAN-control-tower-github-go.md) for the full YAML schema as it lands in the Go loader.
 
 ---
 
-## ⚠️ Exclusion Filters
+### Static analysis tools
 
-The exclusion filters for which files are sent to any skill are in `scripts/git-diff-prep.py` under `EXCLUDE_PATTERNS`. Add patterns there to skip generated files, lock files, or other paths that **don't need review**.
+```yaml
+staticAnalysis:
+  - dockerfile: dockerfiles/sa-tools/ruff.Dockerfile
+    command: check --output-format=concise
+    glob: "**/*.py"
+  - image: ghcr.io/org/sa-custom:1.0.0    # BYO — no build step
+    command: lint
+    glob: "**/*.go"
+```
+
+---
+
+## 🔗 Related
+
+- [05.1 Staging and Classification](05.1-staging-and-classification.md)
+- [09 — Example routing in README](../README.md#-customising-the-review)
+- [PLAN — Control Tower](../PLAN-control-tower-github-go.md)

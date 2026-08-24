@@ -24,5 +24,5 @@ File orchestration has three phases. Staging prepares reviewable inputs, cluster
 
 ## 🔗 Related Docs
 
-- [Pipeline Stages Reference](04.1-pipeline-stages-reference.md) - The four Jenkins stages and where orchestration runs
+- [Pipeline Stages Reference](04.1-pipeline-stages-reference.md) - Review phases and where orchestration runs
 - [PR Summary Flow](06-pr-summary-flow.md) - How summary and technical scoring loops work

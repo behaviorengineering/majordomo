@@ -45,27 +45,22 @@ The target is:
 
 ---
 
-## Current state
+## Current state (this repository)
 
 ```text
-App repo (Bitbucket)
-  └── webhook → Jenkins (per-repo OR central job)
+majordomo (this repo)
+  ├── agents/                        (skills + personas — active)
+  ├── pipelines/scripts/             (staging, dispatch, publish — active)
+  ├── dockerfiles/                   (public/corp images — active)
+  ├── .github/workflows/             (image CI on GHA — active)
+  ├── cmd/majordomo + internal/      (Go control plane — in progress)
+  └── docs/PLAN-control-tower-…      (target architecture)
 
-Central Jenkins job SCM = pipeline / control-tower repo
-  ├── .majordomo/                    (submodule — this repo)
-  ├── majordomo-central-config/
-  │     ├── _defaults.groovy
-  │     └── <repo-slug>.groovy
-  └── MajordomoReview.Central.CI.Jenkinsfile
-
-Runtime
-  ├── stages/*.groovy                (orchestration)
-  ├── pipelines/scripts/*.py|.sh     (staging, dispatch, publish)
-  ├── dockerfiles/copilot-cli        (Node + Python + Copilot CLI)
-  └── agents/skills/                 (markdown — unchanged long-term)
+Removed: Jenkinsfiles, Groovy stages/lib, setup-majordomo*.py, groovy config examples.
+Behaviour described in older advanced docs is a porting reference for Go/GHA, not a supported Jenkins path.
 ```
 
-See [02 — Setup](02-setup.md) and [04 — How the Review Works](04-how-the-review-works.md) for legacy behaviour to preserve in the Go port.
+See [02 — Setup](02-setup.md) for what still runs locally, and the rest of this plan for the control-tower target.
 
 ---
 
@@ -510,26 +505,30 @@ Relationship mirrors the old Jenkins central model: tower owns config and GHA en
 
 ## Decommission: Jenkins and Groovy
 
-The following are **removed**, not maintained alongside the new stack. Port their behaviour into Go + GitHub Actions, then delete.
+**Status (2026-08-25):** Removed from this repository. Behaviour is ported incrementally to Go + GitHub Actions in the control tower.
 
-| Path | Disposition |
-|------|-------------|
-| `pipelines/MajordomoReview*.Jenkinsfile` | Delete after `majordomo-review.yml` + `majordomo orchestrate` |
-| `stages/*.groovy` | Delete — logic lives in `internal/orchestrate/` |
-| `lib/*.groovy` | Delete |
-| `scripts/setup-majordomo.py` | Delete — replaced by pull-mode onboarding in this plan |
-| `scripts/setup-majordomo-central.py` | Delete |
-| `example.majordomo-config.groovy` | Delete — replaced by YAML example |
-| `example.majordomo-central-config/*.groovy` | Delete — replaced by YAML |
-| `copilot/setup-majordomo-*.prompt.md` | Rewrite for GitHub/control-tower setup (no Jenkins credential IDs) |
-| `docs/02-setup.md` (Jenkins sections) | Rewrite for control-tower pull-mode onboarding |
+| Path | Status |
+|------|--------|
+| `pipelines/MajordomoReview*.Jenkinsfile` | **Deleted** |
+| `.jenkins-local/` | **Deleted** |
+| `stages/*.groovy`, `lib/*.groovy` | **Deleted** |
+| `scripts/setup-majordomo*.py` | **Deleted** |
+| `example.majordomo-config.groovy`, `example.majordomo-central-config/` | **Deleted** |
+| `copilot/setup-majordomo-*.prompt.md` | **Deleted** |
+| `docs/02-setup.md`, `04.1`, `09`, `01` | **Rewritten** for GHA / control tower |
+| `docs/PROPOSAL-*`, `08`, `REVISIONS-*` | **Archived** (historical banner) |
+| `.github/workflows/sa-tools.yml`, `copilot-cli.yml` | **Added** (public image CI) |
 
-**Keep temporarily as porting reference** until the Go equivalent has tests:
+**Still to port** before full review on GHA:
 
-- `stages/copilot-review.groovy` → `internal/orchestrate/`
-- `pipelines/scripts/*.py` → Go subcommands (then delete Python)
+- `majordomo orchestrate` ← wave/checkpoint logic from deleted `copilot-review.groovy`
+- Control-tower `majordomo-poll.yml` + `majordomo-review.yml`
+- YAML config examples in `majordomo-central-config/` (tower repo)
 
-**Docs to update or archive:** Jenkins-specific setup guides, pipeline stages reference tied to Groovy, `04.1-pipeline-stages-reference.md` (rewrite for GHA + Go).
+**Keep as CI-agnostic helpers** (called by Go/GHA orchestrator):
+
+- `pipelines/scripts/*.py`, `pipelines/scripts/*.sh`
+- `agents/`, `dockerfiles/`
 
 ---
 
@@ -648,7 +647,7 @@ Port deterministic pipeline logic to Go. Tower poll/workflows stay stubs until t
 
 **1d — Retire Python/Groovy for ported paths**
 
-- [ ] Delete `stages/*.groovy`, `lib/*.groovy`, Jenkinsfiles, setup-majordomo scripts once Go parity is proven
+- [x] Delete `stages/*.groovy`, `lib/*.groovy`, Jenkinsfiles, setup-majordomo scripts (2026-08-25)
 - [ ] Keep `pipelines/scripts/*.py` only until each subcommand is covered by tests
 
 ### Phase 2 — Pull mode end-to-end (tower wiring)
@@ -679,7 +678,7 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 - [ ] Port remaining cache edge cases from `review-cache.py` / `push-to-cache.py`
 - [ ] Checks API annotations from JUnit
 - [ ] **Delete** remaining `pipelines/scripts/*.py` and bash orchestration
-- [ ] Rewrite `docs/02-setup.md` and archive Jenkins-specific docs
+- [x] Rewrite `docs/02-setup.md` and archive Jenkins-specific docs (2026-08-25)
 
 ---
 

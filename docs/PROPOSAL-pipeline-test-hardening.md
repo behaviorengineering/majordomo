@@ -2,6 +2,9 @@
 
 *Majordomo — repository operations for evolving software.*
 
+> **Historical — Jenkins retired.** This document predates removal of Jenkinsfiles, Groovy stages, and `.majordomo-config.groovy`. Behaviour below is a porting spec for the Go/GHA control tower — see [PLAN — Control Tower, GitHub Actions, and Go](../PLAN-control-tower-github-go.md).
+
+
 ## Purpose
 
 Capture the next high-value tests that should be added to reduce regressions across staging, cache, push, publish, and reporting flows.

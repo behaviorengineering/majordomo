@@ -11,11 +11,11 @@ Usage:
 Arguments:
     base-branch   Git branch to diff against (e.g. master)
     staging-dir   Directory to write staging files into
-    --routing     Optional path to a routing JSON file produced by the pipeline
-                  from .majordomo-config.groovy. When absent, built-in
-                  tier-keyword defaults are used.
+    --routing     Optional path to a routing JSON file produced by the orchestrator
+                  (control-tower / Go CLI). When absent, built-in tier-keyword defaults
+                  are used.
     --agent-context Optional path to an agent context JSON file produced by the
-                  pipeline from .majordomo-config.groovy.
+                  orchestrator.
 
 Exit codes:
     0  Staging complete — at least one reviewable task written to manifest.json
@@ -106,13 +106,13 @@ _CROSS_SKILL_BATCH_NUM: str = "000"
 
 # Default routing — explicit code extensions only.
 # Files not matching any pattern are excluded (not routed to any agent).
-# To review docs/config files, configure explicit routing in .majordomo-config.groovy:
+# To review docs/config files, configure explicit routing in the control-tower
+# config (YAML) or pass a routing JSON to --routing. Example shape:
 #
-#   routing: [
-#       'pr-review-docs': ['**/*.md'],
-#       'pr-review-conf': ['**/*.yml', 'docs/**'],
-#       'pr-review-code': ['src/**', 'lib/**'],
-#   ]
+#   routing:
+#     pr-review-docs: ["**/*.md"]
+#     pr-review-conf: ["**/*.yml", "docs/**"]
+#     pr-review-code: ["src/**", "lib/**"]
 DEFAULT_ROUTING: list[tuple[str, list[str]]] = [
     (
         "pr-review-docs",
@@ -965,7 +965,7 @@ def _setup_git(
 ) -> tuple[str, Path, list[str], dict[str, str], list[tuple[str, str]]]:
     """Configure git, compute the refspec, and return changed file data.
 
-    Marks the workspace as git-safe (required in Jenkins containers), logs
+    Marks the workspace as git-safe (required in some CI containers), logs
     environment info, and returns the list of files changed in the PR along
     with their status codes.
 
@@ -996,10 +996,9 @@ def _setup_git(
     log("INFO", f"Staging dir:  {staging_dir}")
 
     # Log whether the clone is shallow — informational only.
-    # Fetch operations are intentionally omitted here: this script runs inside a Docker
-    # container that has no SSH agent, so any git fetch would fail.
-    # The Jenkinsfile 'Checkout PR Branch' stage handles branch switching on the host agent
-    # before Docker starts, where SSH credentials are available.
+    # Fetch operations are intentionally omitted here: this script often runs inside a
+    # container without SCM credentials, so any git fetch would fail. The host orchestrator
+    # (control-tower workflow / Go CLI) must check out the PR branch before invoking prep.
     shallow_result = subprocess.run(
         ["git", "rev-parse", "--is-shallow-repository"],
         capture_output=True,
@@ -1198,7 +1197,7 @@ def _stage_skill_batches(
     refspec: str,
     batch_size: int,
 ) -> tuple[list[dict[str, object]], list[str]]:
-    """Write per-skill and per-batch manifests for Jenkins wave orchestration.
+    """Write per-skill and per-batch manifests for wave orchestration.
 
     Each batch dir is self-contained: its manifest.json plus all referenced
     input .txt files, so copilot-dispatch.sh only needs the batch dir path.

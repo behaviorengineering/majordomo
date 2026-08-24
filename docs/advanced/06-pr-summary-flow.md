@@ -5,8 +5,7 @@
 This guide is for engineers running or tuning the PR summary pipeline. It explains the generate/score loop, what each pass does, and how to configure thresholds and iteration limits.
 
 The loop repeats until the summary meets a quality threshold or the
-attempt cap is reached. The final `summary.md` is archived as a Jenkins build artefact (a file attached to the build record and downloadable from the Jenkins UI) alongside
-the detailed per-file findings.
+attempt cap is reached. The final `summary.md` is uploaded as a workflow artifact (or published to the SCM) alongside the detailed per-file findings.
 
 ## 🧭 What You'll Learn
 
@@ -92,7 +91,7 @@ graph TD
         MORE -- no --> ACCEPT
     end
 
-    ACCEPT --> ARTIFACT([summary.md archived\nas Jenkins artefact])
+    ACCEPT --> ARTIFACT([summary.md published\nas workflow artifact / SCM])
 ```
 
 </details>
@@ -132,7 +131,7 @@ its own line so `grep` can extract it reliably in the loop script.
 
 ## ⚙️ Tuning the Loop
 
-Two environment variables control loop behaviour. Set them on the Jenkins job.
+Two environment variables control loop behaviour. Set them on the control-tower workflow or review job.
 
 | Variable | Default | Effect |
 |---|---|---|

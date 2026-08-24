@@ -1,27 +1,39 @@
 # SA tool image — shellcheck (shell script analyser)
-# Triggered by: Changes to this Dockerfile
 #
-# Runs as: docker run --rm -v <workspace>:/workspace sa-shellcheck:<tag> -S warning -f gcc /workspace/path/to/file.sh
+# GitHub CI / open internet:
+#   docker build --target public -t sa-shellcheck -f shellcheck.Dockerfile .
 #
-# Base image pulled via package registry pull-through cache to avoid Docker Hub rate limits
+# Corp (default stage): pass PACKAGE_REGISTRY_* build-args + BuildKit secrets.
+#
+# Runs as: docker run --rm -v <workspace>:/workspace sa-shellcheck -S warning -f gcc /workspace/path/to/file.sh
 
-ARG BASE_IMAGE=example-docker-snapshot-dependencies.packages.example.com/debian:bookworm-slim
+ARG BASE_IMAGE=debian:bookworm-slim
 
-FROM ${BASE_IMAGE}
-
-# Build arguments for proxy configuration
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY=localhost,127.0.0.1,packages.example.com
+FROM debian:bookworm-slim AS public
 
 WORKDIR /workspace
 
-# Configure package registry apt mirror, install CA cert and shellcheck — shared script keeps this DRY across all SA tool images.
-# Extra apt packages passed as positional args (shellcheck here).
-# Uses BuildKit secrets so credentials are never baked into image layers.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends shellcheck \
+    && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["shellcheck"]
+CMD ["--help"]
+
+FROM ${BASE_IMAGE} AS corp
+
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/setup-corp-apt.sh shellcheck
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

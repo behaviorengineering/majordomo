@@ -1,0 +1,45 @@
+name: copilot-cli
+
+on:
+  pull_request:
+    paths:
+      - "dockerfiles/copilot-cli.Dockerfile"
+      - "dockerfiles/sa-tools/scripts/**"
+      - "pyproject.toml"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/copilot-cli.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "dockerfiles/copilot-cli.Dockerfile"
+      - "dockerfiles/sa-tools/scripts/**"
+      - "pyproject.toml"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/copilot-cli.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build copilot-cli (public target)
+        env:
+          DOCKER_BUILD_TARGET: public
+          SKIP_PUSH: "true"
+        run: |
+          bash ./pipelines/scripts/build-copilot-image.sh \
+            local \
+            copilot-cli \
+            "gha-${{ github.sha }}" \
+            dockerfiles/copilot-cli.Dockerfile
+
+      - name: Smoke copilot-cli
+        run: |
+          docker run --rm "local/copilot-cli:gha-${{ github.sha }}" \
+            sh -c 'node --version && python3 --version && copilot --help >/dev/null && echo OK'

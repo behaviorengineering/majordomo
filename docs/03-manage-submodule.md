@@ -21,41 +21,30 @@ This guide is for engineers who maintain the `.majordomo` submodule in applicati
 
 ---
 
-## 🔐 Jenkins Access to Bitbucket
+## 🔐 CI access to the submodule remote
 
-To use this pipeline from Jenkins, Jenkins must be able to authenticate to Bitbucket and pull the submodule.
+Your CI identity (GitHub Actions deploy key, machine user, or service account) must be able to clone this repository when resolving `.majordomo`.
 
 Recommended approach:
-Complete this access setup before running first-time submodule commands.
-- Create an SSH key pair for Jenkins (or your CI identity).
-- Add the public key to Bitbucket.
-- Add the private key to Jenkins credentials and use it for Git checkout.
-
-If your team already has a Bitbucket service account, you can use that account's SSH key instead.
+- Create an SSH key or fine-scoped token for CI.
+- Grant it read access to the majordomo remote.
+- Store it in the control-tower / app-repo secrets used by checkout.
 
 ---
 
 ## 📦 First-time setup (adding the submodule)
 
-Only needed once when setting up a new app repo.
+Only needed once when setting up a new app repo (legacy submodule consumers). New onboardings should prefer the [control-tower model](PLAN-control-tower-github-go.md) so app repos stay clean.
 
 ```bash
 cd <your-app-repo>
-git submodule add ssh://git@bitbucket.example.com/example-project/majordomo.git .majordomo
+git submodule add ssh://git@bitbucket.example.com/scm/tooling/majordomo.git .majordomo
 git add .gitmodules .majordomo
-git commit -m "Add .majordomo pipeline as submodule"
+git commit -m "Add .majordomo as submodule"
 git push origin <your-branch>
 ```
 
-Then create your config file from the template:
-
-```bash
-cp .majordomo/example.majordomo-config.groovy .majordomo-config.groovy
-# Edit .majordomo-config.groovy with your registry and credential values
-git add .majordomo-config.groovy
-git commit -m "Add Jenkins pipeline config"
-git push origin <your-branch>
-```
+Org config and workflows live in the control tower — see [PLAN — Control Tower](PLAN-control-tower-github-go.md).
 
 ---
 
@@ -63,7 +52,7 @@ git push origin <your-branch>
 
 ```bash
 # Fresh clone: includes the .majordomo submodule automatically
-git clone --recurse-submodules ssh://git@bitbucket.example.com/.../<your-app-repo>.git
+git clone --recurse-submodules ssh://git@bitbucket.example.com/scm/.../<your-app-repo>.git
 ```
 
 If you already cloned without `--recurse-submodules`, the `.majordomo` folder exists but is empty. Initialize the submodule:
@@ -211,7 +200,7 @@ Run these commands manually from the **root of your app repo**. Replace submodul
 git rm -r --cached .majordomo
 
 # Re-register them (--force overwrites any stale .gitmodules entries)
-git submodule add --force ssh://git@bitbucket.example.com/example-project/majordomo.git .majordomo
+git submodule add --force ssh://git@bitbucket.example.com/scm/tooling/majordomo.git .majordomo
 
 git add .gitmodules .majordomo
 git commit -m "Fix broken submodule registrations"

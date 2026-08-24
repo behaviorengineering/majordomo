@@ -1,5 +1,5 @@
 #!/bin/sh
-# Shared package registry username sanitizer.
+# Shared package-registry username sanitizer.
 # Input may be either bare login (ci-user) or email (ci-user@example.com).
 # Output is always the login/local-part.
 

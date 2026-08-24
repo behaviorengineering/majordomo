@@ -13,7 +13,7 @@ Required environment variables:
                           (e.g. MYPROJECT or ~username for personal repos)
     BB_REPO_SLUG          Repository slug (e.g. my-repo)
     BITBUCKET_TOKEN       Personal access token with repository write permission
-    BUILD_URL             Jenkins build URL
+    BUILD_URL             CI run URL (e.g. GitHub Actions workflow run)
     BB_BUILD_KEY          Stable pipeline identity key (e.g. job name) — used as
                           ``parent``; per-run ``key`` becomes
                           ``BB_BUILD_KEY#BB_BUILD_NUMBER``.
@@ -123,7 +123,7 @@ def post_build_status(
         key: Per-run build key (e.g. ``{job_name}#{build_number}``).
         parent: Stable pipeline identity matched by required-build merge checks.
         name: Human-readable build name displayed in the Bitbucket UI.
-        build_url: URL to the Jenkins build for drill-down.
+        build_url: URL to the CI run for drill-down.
         description: Short status description shown in the tooltip.
         build_number: Included as ``buildNumber`` in the payload when non-empty.
         ref: Git ref being built (e.g. ``refs/heads/main``); included when non-empty.

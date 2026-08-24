@@ -8,7 +8,7 @@ Arguments:
     output.html  Path to write the rendered HTML file.
 
 The output is a fully self-contained HTML document with inline CSS — no
-external assets — suitable for use as a Jenkins build artifact link.
+external assets — suitable for use as a CI build artifact link.
 
 Exit codes:
     0  Converted successfully.

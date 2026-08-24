@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shared bash utilities for .jenkins/scripts/
+# Shared bash utilities for pipelines/scripts/
 # Source this file: source "${SCRIPT_DIR}/lib/common.sh"
 
 log_info() {

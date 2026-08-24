@@ -5,139 +5,116 @@
 ## 🧭 What You'll Learn
 
 **Getting Started:**
-- [What is the pattern](#what-is-the-pattern) - Core model: shared pipeline repo plus consuming project repo
-- [Why use it](#why-use-it) - Why teams adopt this pattern for reuse, isolation, and safer rollout
+- [What is the pattern](#what-is-the-pattern) - Core model: shared pipeline repo plus control tower
+- [Why use it](#why-use-it) - Reuse, isolation, and safer rollout
 
 **Implementation:**
-- [How it works](#how-it-works) - End-to-end runtime flow from checkout to config-driven execution
-- [Versioning the pipeline](#versioning-the-pipeline) - How submodule pinning controls upgrades per project
-- [Project-specific customization](#project-specific-customization) - How projects adapt behavior without forking pipeline code
+- [How it works](#how-it-works) - End-to-end flow from poll/webhook to config-driven review
+- [Versioning the pipeline](#versioning-the-pipeline) - Pin `.majordomo/` in the control tower
+- [Project-specific customization](#project-specific-customization) - Per-repo YAML without forking pipeline code
 
 **Advanced Usage:**
-- [Best practices](#best-practices) - Governance and rollout habits that keep the pattern stable
-- [Related docs](#related-docs) - Where to go next for setup, submodule ops, and stage internals
+- [Best practices](#best-practices) - Governance and rollout habits
+- [Related docs](#related-docs) - Setup, submodule ops, stage internals
 
 ---
 
 ## 🔍 What is the pattern
 
-This guide is for engineers integrating a shared Jenkins pipeline into an application repository using a Git submodule. It explains the runtime model, versioning strategy, and project-level customization points.
+This guide explains how Majordomo separates **reusable pipeline code** (this repository, vendored as `.majordomo/`) from **org configuration** (control-tower YAML) and **application source** (served repos stay clean).
 
-This pattern separates reusable pipeline code from project-owned configuration. The Jenkinsfile (the pipeline definition file Jenkins executes) lives in a shared pipeline repository and is consumed as a Git submodule (a repository embedded at a fixed commit) in each project. Each consuming project stores its own pipeline config file at the repository root on its pipeline branch, not on master. Master stays free of pipeline code and pipeline config.
+**Default (pull mode):** A control-tower GitHub Actions workflow polls SCM APIs for open PRs. Served app repos add nothing — no workflows, no config files, no submodule in the app repo.
+
+**Legacy submodule mode:** Some consumers still vendor `.majordomo/` inside an app repo for local scripts or transitional Jenkins setups. That path is optional and shrinking — the tower model is canonical.
 
 **Placeholder mapping:**
-- `<pipeline-submodule-dir>`: Relative path to the shared pipeline submodule inside a consuming repository
-- `<pipeline-config-file>`: Project-owned pipeline config file in the consuming repository
-- `<script-path>`: Jenkinsfile path inside the shared pipeline submodule
+- `<pipeline-submodule-dir>`: Path to pinned majordomo code in the control tower (typically `.majordomo/`)
+- `<repo-config>`: `majordomo-central-config/<repo-slug>.yaml`
 
 ---
 
-## ✅ Why use it
+## 💡 Why use it
 
-**Master branch stays clean.** We don't commit pipeline code to master. Only app code and project config live there. Pipeline updates don't require commits to your app repo.
-
-**Reusable across projects.** The same pipeline logic can be consumed by many repositories.
-
-**One source of truth.** Pipeline improvements reach all projects when they update their submodule reference.
-
-**Experiment safely.** New features go on pipeline branches. Projects opt in by switching their submodule reference or pinning a commit.
+- **Reuse:** One review engine, many repos.
+- **Isolation:** Bump the tower's `.majordomo` pin without touching every app repo.
+- **Safer rollout:** Test pipeline changes on the tower branch before org-wide pin updates.
+- **No pollution:** Default onboarding does not merge CI files into application default branches.
 
 ---
 
-## 🔄 How it works
-
-Jenkins starts from the consuming project's pipeline branch, loads pipeline logic from a pinned submodule (fixed to an explicit commit or branch ref), then applies project-specific config from the consuming repository.
-
-**Shared pipeline repository** - This is the single source of reusable pipeline code and can evolve on its own branches.
-
-**Consuming project repository** - This repository references the shared pipeline as a submodule at <pipeline-submodule-dir> and keeps project-owned settings in <pipeline-config-file> on its pipeline branch, not on master.
+## ⚙️ How it works
 
 ```text
-consuming-project-repo
+SCM (GitHub / GitLab / Bitbucket / self-hosted)
+        |
+        v
+Control-tower repo (GitHub Actions)
+  ├── .majordomo/  @ pinned commit  (this repo)
+  ├── majordomo-central-config/
+  │     ├── _defaults.yaml
+  │     └── <repo-slug>.yaml
+  └── .github/workflows/
+        majordomo-poll.yml
+        majordomo-review.yml
 
-    <pipeline-branch>                                 <app-change-branch>
-    +--------------------------------------------+    +-----------------------------+
-    | <pipeline-submodule-dir>/ (submodule pin)  |    | src/, tests/, app changes   |
-    | <pipeline-config-file>                     |    |                             |
-    +--------------------------------------------+    +-----------------------------+
+        |
+        v
+Clone target repo @ PR head
+Run majordomo prep → SA → orchestrate → publish
 ```
 
-```text
-[Jenkins startup]
-    checkout <pipeline-branch> + <pipeline-submodule-dir>/ at pinned ref
-    load Jenkinsfile from <pipeline-submodule-dir>/<script-path>
-
-[pipeline checkout stage]
-    1. checkout scm
-         workspace = <pipeline-branch> + <pipeline-submodule-dir>/ at pinned ref
-    2. checkout <app-change-branch> with submodule updates disabled
-         app code (src/, tests/) = <app-change-branch>
-         <pipeline-submodule-dir>/ stays pinned from <pipeline-branch>
-    3. optional guard
-         fail if branch policy says submodule wiring must not exist on app branches
-
-[pipeline execution]
-    read <pipeline-config-file> from workspace root
-    run shared stages against app code from <app-change-branch>
-```
-
-In the sequence above, `scm` means Source Control Management checkout and `pinned ref` means a fixed Git revision.
-
-The runtime sequence above is the canonical flow for this pattern.
-
-**Important:** Pipeline code is owned by the shared pipeline repository. Local edits inside <pipeline-submodule-dir> in a consuming project are temporary and should not be used for durable change management.
+The orchestrator reads `<repo-config>`, checks out the PR branch, runs scripts from `.majordomo/pipelines/scripts/`, and publishes results via SCM adapters.
 
 ---
 
 ## 🎯 Versioning the pipeline
 
-Each consuming repository controls which pipeline version runs by pinning the submodule to a branch or commit. That same pipeline branch carries the project pipeline config file. Master stays untouched while teams can stay on stable, move to experimental branches, or lock to a known-good version. The shared pipeline repository versions independently, so new features do not force simultaneous upgrades across projects.
+The control tower pins `.majordomo/` to an explicit commit. Bump the submodule pointer in the tower repo to roll out pipeline changes — served app repos do not need merges for default pull mode.
 
-See your submodule management guide for commands.
+For legacy app-repo submodules, see [03 — Manage Submodule](03-manage-submodule.md).
 
 ---
 
 ## 🛠️ Project-specific customization
 
-Customize the pipeline by defining project-owned values in <pipeline-config-file>. Keep behavior switches, credential references, naming rules, and tool thresholds in that file instead of modifying shared pipeline code.
+Customize per repo in `majordomo-central-config/<repo-slug>.yaml`. Deep-merge with `_defaults.yaml`. Keep credential **names** in YAML; store secret **values** in GitHub Actions secrets.
 
-```groovy
-// <pipeline-config-file>
-return [
-    registry: [
-        pullDomain:    'registry-pull-domain',
-        pushDomain:    'registry-push-domain',
-        credentialsId: 'registry-credentials-id',
-    ],
-    imageNaming: [
-        runtimeImagePrefix: 'project-runtime',
-        buildImageSuffix:   'deps',
-    ],
-    qualityGates: [
-        lintThreshold:  'error',
-        testReportPath: 'reports/tests.xml',
-    ],
-]
+```yaml
+registry:
+  pullDomain: registry-pull.example.com
+  pushDomain: registry-push.example.com
+
+pipelines:
+  pr-review:
+    routing:
+      pr-review-code: ["**"]
+    model: claude-sonnet-4.5
+
+staticAnalysis:
+  - dockerfile: dockerfiles/sa-tools/ruff.Dockerfile
+    command: check --output-format=concise
+    glob: "**/*.py"
 ```
 
-The shared stages remain reusable because each project provides only data, not stage logic.
+Shared scripts stay reusable because each project supplies data, not orchestration logic.
 
 ---
 
 ## 📌 Best practices
 
-**Submodule versioning:** Pin submodules to specific branches per project (master, stable, etc.). Version the pipeline repository independently with semantic versioning.
+**Pin explicitly:** Tower submodule pin is the release lever — tag or SHA, not floating branches in production.
 
-**Config is project-owned:** Keep example config contracts in a shared reference file and keep project-specific values in each consuming repository. Never commit consumer-specific settings to the shared pipeline repository.
+**Config is org-owned:** Per-repo YAML lives in the control tower, not in application repos (default mode).
 
-**Pipeline changes go upstream:** Make durable pipeline code changes in the shared pipeline repository, not in a checked-out submodule copy inside a consuming repository. Local submodule edits are temporary and should not be treated as release changes.
+**Pipeline changes go upstream:** Durable changes land in this repository (`behaviorengineering/majordomo`), then the tower bumps its pin.
 
-**Test on branches:** Test pipeline changes on a pipeline repository branch before merging to master. Every consuming project picks up the changes when they update their submodule reference.
+**Test on branches:** Run tower workflows against fixture repos before bumping the org-wide pin.
 
 ---
 
 ## 🔗 Related docs
 
-- Setup guide in your consuming repository docs: onboarding this pattern
-- Submodule management guide in your consuming repository docs: pinning, updating, and rollback workflows
-- Module structure conventions guide in your consuming repository docs: layout and naming standards
+- [02 — Setup](02-setup.md) — what runs today (scripts, images, Go CLI)
+- [03 — Manage Submodule](03-manage-submodule.md) — legacy app-repo vendoring
+- [04.1 — Pipeline stages](advanced/04.1-pipeline-stages-reference.md) — script map
+- [PLAN — Control Tower, GitHub Actions, and Go](PLAN-control-tower-github-go.md)

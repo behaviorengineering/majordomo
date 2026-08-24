@@ -134,7 +134,7 @@ def test_get_submodule_exclusions_parses_cached_status(monkeypatch) -> None:
 
     patterns = prep.get_submodule_exclusions()
 
-    assert any(pattern.search(".majordomo/stages/copilot-review.groovy") for pattern in patterns)
+    assert any(pattern.search(".majordomo/pipelines/scripts/git-diff-prep.py") for pattern in patterns)
     assert any(pattern.search("vendor/lib/src/main.py") for pattern in patterns)
 
 

@@ -1,6 +1,6 @@
-"""Convert Copilot PR review markdown reports to JUnit XML for Jenkins.
+"""Convert Copilot PR review markdown reports to JUnit XML for CI.
 
-Walks the review output directory produced by copilot-review.groovy:
+Walks the review output directory produced by the review orchestrator:
 
     <review-output-dir>/
       <pipeline-name>/
@@ -16,7 +16,7 @@ One JUnit XML file is written per pipeline/skill pair:
     <junit-output-dir>/copilot-review-<pipeline>-<skill>.xml
 
 Finding classification → JUnit mapping:
-  [CRITICAL] / [WARN] → <failure>   (makes build unstable in Jenkins)
+  [CRITICAL] / [WARN] → <failure>   (typically marks the CI run as unstable)
   [INFO]              → <skipped>   (tracked; does not affect build status)
   No findings in file → passing <testcase> with no child element
 """

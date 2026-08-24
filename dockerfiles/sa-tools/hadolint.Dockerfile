@@ -1,33 +1,50 @@
 # SA tool image — hadolint (Dockerfile linter)
-# Triggered by: Changes to this Dockerfile
 #
-# Runs as: docker run --rm -v <workspace>:/workspace sa-hadolint:<tag> --no-color /workspace/path/to/Dockerfile
+# GitHub CI / open internet:
+#   docker build --target public -t sa-hadolint -f hadolint.Dockerfile .
 #
-# Base image pulled via package registry pull-through cache to avoid Docker Hub rate limits
-# hadolint is a statically linked Haskell binary — copy from its official image into debian-slim.
+# Corp (default stage): pass BASE_IMAGE, HADOLINT_IMAGE, PACKAGE_REGISTRY_* + secrets.
+#
+# Runs as: docker run --rm -v <workspace>:/workspace sa-hadolint --no-color /workspace/path/to/Dockerfile
 
-ARG BASE_IMAGE=example-docker-snapshot-dependencies.packages.example.com/debian:bookworm-slim
-ARG HADOLINT_IMAGE=example-docker-snapshot-dependencies.packages.example.com/hadolint/hadolint:latest-debian
+ARG BASE_IMAGE=debian:bookworm-slim
+ARG HADOLINT_IMAGE=hadolint/hadolint:latest-debian
 
-FROM ${HADOLINT_IMAGE} AS hadolint-bin
+FROM hadolint/hadolint:latest-debian AS hadolint-bin-public
 
-FROM ${BASE_IMAGE}
-
-# Build arguments for proxy configuration
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY=localhost,127.0.0.1,packages.example.com
+FROM debian:bookworm-slim AS public
 
 WORKDIR /workspace
 
-# Copy hadolint binary from official image
-COPY --from=hadolint-bin /bin/hadolint /usr/local/bin/hadolint
+COPY --from=hadolint-bin-public /bin/hadolint /usr/local/bin/hadolint
 
-# Configure package registry apt mirror, install CA cert — shared script keeps this DRY across all SA tool images.
-# Uses BuildKit secrets so credentials are never baked into image layers.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
+ENTRYPOINT ["hadolint"]
+CMD ["--help"]
+
+FROM ${HADOLINT_IMAGE} AS hadolint-bin-corp
+
+FROM ${BASE_IMAGE} AS corp
+
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
+COPY --from=hadolint-bin-corp /bin/hadolint /usr/local/bin/hadolint
+
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/setup-corp-apt.sh
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt

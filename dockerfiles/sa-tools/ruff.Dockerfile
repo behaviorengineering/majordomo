@@ -1,41 +1,68 @@
 # SA tool image — ruff (Python linter/formatter)
-# Triggered by: Changes to this Dockerfile
 #
-# Runs as: docker run --rm -v <workspace>:/workspace sa-ruff:<tag> check --output-format=concise /workspace
+# GitHub CI / open internet (public indexes, no registry secrets):
+#   docker build --target public -t sa-ruff dockerfiles/sa-tools -f dockerfiles/sa-tools/ruff.Dockerfile
 #
-# Base image pulled via package registry pull-through cache to avoid Docker Hub rate limits
+# Corp (default stage): CA + pip from the corporate package registry.
+#   DOCKER_BUILDKIT=1 docker build \
+#     --build-arg BASE_IMAGE=<DOCKER_PULL_DOMAIN>/python:3.12-slim \
+#     --build-arg PACKAGE_REGISTRY_HOST=<PACKAGE_REGISTRY_HOST> \
+#     --build-arg CORP_CA_CERT_URL=<CORP_CA_CERT_URL> \
+#     --build-arg DEBIAN_REPO_PATH=<DEBIAN_REPO_PATH> \
+#     --build-arg PIP_INDEX_PATH=<PIP_INDEX_PATH> \
+#     --secret id=username,env=REGISTRY_USER \
+#     --secret id=token,env=REGISTRY_TOKEN \
+#     -t sa-ruff -f ruff.Dockerfile .
+#
+# Runs as: docker run --rm -v <workspace>:/workspace sa-ruff check --output-format=concise /workspace
 
-ARG BASE_IMAGE=example-docker-snapshot-dependencies.packages.example.com/python:3.12-slim
+# ---------------------------------------------------------------------------
+# public — Hub + PyPI (GitHub Actions, no proxy/corp registry)
+# ---------------------------------------------------------------------------
+ARG BASE_IMAGE=python:3.12-slim
 
-FROM ${BASE_IMAGE}
-
-# Build arguments for proxy configuration
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY=localhost,127.0.0.1,packages.example.com
+FROM python:3.12-slim AS public
 
 WORKDIR /workspace
 
-# Configure package registry apt mirror, install CA cert — shared script keeps this DRY across all SA tool images.
-# Uses BuildKit secrets so credentials are never baked into image layers.
+RUN pip install --no-cache-dir ruff
+
+ENV PYTHONIOENCODING=utf-8
+ENV PYTHONUTF8=1
+ENV RUFF_CACHE_DIR=/tmp/.ruff_cache
+
+ENTRYPOINT ["ruff"]
+CMD ["--help"]
+
+# ---------------------------------------------------------------------------
+# corp — corporate pull-through base + package registry (default final stage)
+# ---------------------------------------------------------------------------
+FROM ${BASE_IMAGE} AS corp
+
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG PIP_INDEX_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/setup-corp-apt.sh
 
-# Install ruff via package registry PyPI mirror.
 RUN --mount=type=secret,id=username \
     --mount=type=secret,id=token \
-    --mount=type=bind,source=.majordomo/dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    --mount=type=bind,source=scripts,target=/tmp/sa-scripts,ro \
     /bin/sh /tmp/sa-scripts/install-pypi-tool.sh ruff
 
 ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV PYTHONIOENCODING=utf-8
 ENV PYTHONUTF8=1
-# Redirect ruff cache to /tmp — /workspace is mounted read-only so ruff cannot
-# write to /workspace/.ruff_cache. The container is ephemeral (--rm) so the
-# cache provides no benefit; /tmp is always writable.
 ENV RUFF_CACHE_DIR=/tmp/.ruff_cache
 
 ENTRYPOINT ["ruff"]

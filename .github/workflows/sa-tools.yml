@@ -1,0 +1,51 @@
+name: sa-tools
+
+on:
+  pull_request:
+    paths:
+      - "dockerfiles/sa-tools/**"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/sa-tools.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "dockerfiles/sa-tools/**"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/sa-tools.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [eslint, hadolint, ruff, shellcheck, bandit, mypy]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.tool }} (public target)
+        env:
+          DOCKER_BUILD_TARGET: public
+          SKIP_PUSH: "true"
+        run: |
+          bash ./pipelines/scripts/build-copilot-image.sh \
+            local \
+            "sa-${{ matrix.tool }}" \
+            "gha-${{ github.sha }}" \
+            "dockerfiles/sa-tools/${{ matrix.tool }}.Dockerfile"
+
+      - name: Smoke ${{ matrix.tool }}
+        run: |
+          case "${{ matrix.tool }}" in
+            eslint)     docker run --rm "local/sa-eslint:gha-${{ github.sha }}" --version ;;
+            hadolint)   docker run --rm "local/sa-hadolint:gha-${{ github.sha }}" --version ;;
+            ruff)       docker run --rm "local/sa-ruff:gha-${{ github.sha }}" --version ;;
+            shellcheck) docker run --rm "local/sa-shellcheck:gha-${{ github.sha }}" --version ;;
+            bandit)     docker run --rm "local/sa-bandit:gha-${{ github.sha }}" --version ;;
+            mypy)       docker run --rm "local/sa-mypy:gha-${{ github.sha }}" --version ;;
+          esac

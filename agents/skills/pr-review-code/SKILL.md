@@ -36,10 +36,10 @@ Classify every finding:
 
   **Credential exposure carve-out:** A string value that resolves to a credential at runtime
   via an external lookup is NOT a credential exposure - it is an indirection reference.
-  This includes: Jenkins `credentialsId` values, `withCredentials` blocks, Vault paths,
+  This includes: CI `credentialsId` values, credential-injection blocks, Vault paths,
   AWS Secrets Manager names, Kubernetes secret names, and **any map key whose string value
   is clearly a credential ID or reference name rather than an actual secret** (e.g.
-  `package-registryCredentialsId: 'my-package-registry-cred'`, `githubCopilotCredentialsId: 'copilot-pat'`).
+  `registryCredentialsId: 'my-registry-cred'`, `githubCopilotCredentialsId: 'copilot-pat'`).
 
   **Apply this test:** If the string value looks like a credential store lookup key
   (short identifier, no spaces, does not resemble a token/password format), it is an

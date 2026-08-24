@@ -2,9 +2,12 @@
 
 *Majordomo — repository operations for evolving software.*
 
+> **Historical — Jenkins retired.** This document predates removal of Jenkinsfiles, Groovy stages, and `.majordomo-config.groovy`. Behaviour below is a porting spec for the Go/GHA control tower — see [PLAN — Control Tower, GitHub Actions, and Go](../PLAN-control-tower-github-go.md).
+
+
 **Date:** 2026-05-07  
 **Reviewed:** 2026-05-22  
-**Scope:** MajordomoReview.CI.Jenkinsfile, shared stages, lib utilities  
+**Scope (archived):** Former `MajordomoReview.CI.Jenkinsfile`, `stages/*.groovy`, `lib/*.groovy` — all removed  
 **Status:** All findings resolved or accepted
 
 ---
@@ -117,16 +120,16 @@ Apply the same fallback pattern to logger and executor, or document that they **
 environment {
     HTTP_PROXY   = 'http://proxy.example.com:8080'
     HTTPS_PROXY  = 'http://proxy.example.com:8080'
-    NO_PROXY     = 'localhost,127.0.0.1,.example.com,packages.example.com'
+    NO_PROXY     = 'localhost,127.0.0.1,.internal.example.com,packages.example.com'
 }
 ```
 
 These values are corporate-specific and should not be in source control.
 
 **Recommendation:**
-Move proxy config to `.majordomo-config.groovy` or Jenkins global environment variables. Ensure defaults are provided so non-corporate deployments don't fail when the proxy is unavailable.
+Move proxy config to orchestrator environment variables or control-tower secrets. Ensure defaults are provided so deployments without a corporate proxy don't fail when proxy env vars are unset.
 
-**Resolution (2026-05-22):** Accepted. This pipeline targets corporate infrastructure only. A clarifying comment was added noting the override path via Jenkins global env vars or config.
+**Resolution (2026-05-22):** Accepted as deployment-specific; override via orchestrator env or tower config.
 
 ---
 

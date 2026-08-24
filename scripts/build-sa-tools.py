@@ -1,11 +1,13 @@
 """Build SA tool Docker images locally to validate Dockerfiles before CI.
 
-Usage (run from anywhere inside the repo):
-    python .majordomo/scripts/build-sa-tools.py [--dry-run] [-v]
+Usage (run from the majordomo repo root, or a parent that vendors .majordomo/):
+    python scripts/build-sa-tools.py [--dry-run] [-v] [--corp]
 
-Required env vars:
-    REGISTRY_USER                package registry username (email or bare name — domain is stripped automatically)
-    ARTIFACTORY_ACCESS_TOKEN  package registry token
+Modes:
+    public (default) — Hub + public indexes; no registry secrets (GitHub Actions).
+    --corp           — corporate package registry; requires PACKAGE_REGISTRY_* env
+                       and REGISTRY_USER + REGISTRY_TOKEN
+                       (and typically DOCKER_PULL_DOMAIN).
 
 Exit code: 0 if all images built successfully, 1 if any failed.
 """
@@ -19,203 +21,115 @@ import subprocess
 import sys
 from pathlib import Path
 
-_SA_TOOLS_DIR = Path(".majordomo/dockerfiles/sa-tools")
-_REGISTRY = "example-docker-snapshot-dependencies.packages.example.com"
+_SCRIPT_PATH = Path(__file__).resolve()
+# scripts/build-sa-tools.py → repo root is parent of scripts/
+_REPO_ROOT = _SCRIPT_PATH.parent.parent
+_SA_TOOLS_DIR = _REPO_ROOT / "dockerfiles" / "sa-tools"
+# When this repo is vendored as .majordomo/, also accept that layout for discovery.
+_VENDORED_SA_TOOLS = _REPO_ROOT.parent / ".majordomo" / "dockerfiles" / "sa-tools"
+
+
+def _sa_tools_dir() -> Path:
+    """Return the sa-tools directory for this checkout."""
+    if _SA_TOOLS_DIR.is_dir():
+        return _SA_TOOLS_DIR
+    if _VENDORED_SA_TOOLS.is_dir():
+        return _VENDORED_SA_TOOLS
+    return _SA_TOOLS_DIR
 
 
 def _workspace_root() -> Path:
-    """Return the repository workspace root (parent of the submodule directory).
+    """Return the directory used as the process cwd for builds.
 
-    This script lives inside the submodule at .majordomo/scripts/, so
-    the workspace root is two levels up — the parent repo that contains the
-    submodule and provides the Podman build context.
-
-    Returns:
-        Absolute path to the workspace root.
+    For a direct majordomo checkout this is the repo root. For a vendored
+    `.majordomo/` submodule layout, prefer the parent workspace when present.
     """
-    return Path(__file__).parent.parent.parent.resolve()
+    if (_REPO_ROOT / "dockerfiles" / "sa-tools").is_dir():
+        return _REPO_ROOT
+    parent = _REPO_ROOT.parent
+    if (parent / ".majordomo" / "dockerfiles" / "sa-tools").is_dir():
+        return parent
+    return _REPO_ROOT
 
 
 def _discover_dockerfiles(sa_tools_dir: Path) -> list[Path]:
-    """Find all Dockerfile files inside the SA tools directory.
-
-    Args:
-        sa_tools_dir: Absolute path to the sa-tools directory.
-
-    Returns:
-        Sorted list of absolute Dockerfile paths.
-    """
+    """Find all Dockerfile files inside the SA tools directory."""
     return sorted(sa_tools_dir.glob("*.Dockerfile"))
 
 
 def _tool_name(dockerfile: Path) -> str:
-    """Derive the SA tool name from its Dockerfile path.
-
-    Args:
-        dockerfile: Path to the Dockerfile.
-
-    Returns:
-        Tool name string, e.g. 'ruff' from 'ruff.Dockerfile'.
-    """
+    """Derive the SA tool name from its Dockerfile path."""
     return dockerfile.stem
 
 
 def _image_tag(tool: str) -> str:
-    """Compose a local test image tag for the given SA tool.
-
-    Args:
-        tool: SA tool name.
-
-    Returns:
-        Image tag string suitable for local use only.
-    """
+    """Compose a local test image tag for the given SA tool."""
     return f"sa-{tool}:local-test"
 
 
-def _write_wsl_secret(name: str, value: str) -> str:
-    """Write a secret value to a WSL-native temp file accessible by Podman.
-
-    Windows temp paths are not reachable by Podman's WSL backend when using
-    --secret src=. Writing via 'wsl -- sh -c' creates the file in the Linux
-    filesystem where Podman inside WSL can read it directly.
-
-    Args:
-        name: Secret identifier, used as part of the filename.
-        value: Secret value to write.
-
-    Returns:
-        Linux path to the created secret file.
-    """
-    linux_path = f"/tmp/sa-secret-{name}"
-    subprocess.run(
-        ["wsl", "--", "sh", "-c", f"printf '%s' '{value}' > {linux_path} && chmod 600 {linux_path}"],
-        check=True,
-        capture_output=True,
-    )
-    result = subprocess.run(
-        ["wsl", "--", "test", "-f", linux_path],
-        check=True,
-        capture_output=True,
-    )
-    return linux_path
-
-
-def _delete_wsl_secret(name: str) -> None:
-    """Remove a WSL secret file.
-
-    Args:
-        name: Secret identifier used when creating the file.
-    """
-    subprocess.run(
-        ["wsl", "--", "rm", "-f", f"/tmp/sa-secret-{name}"],
-        capture_output=True,
-    )
-
-
-def _to_wsl_path(path: Path) -> str:
-    """Convert a Windows path to an absolute WSL path.
-
-    Args:
-        path: Windows path.
-
-    Returns:
-        Absolute Linux path in WSL, e.g. /mnt/c/....
-    """
-    path_str = str(path.resolve()).replace("\\", "/")
-    if len(path_str) < 2 or path_str[1] != ":":
-        return path_str
-    drive = path_str[0].lower()
-    remainder = path_str[2:]
-    return f"/mnt/{drive}{remainder}"
+def _build_script() -> Path:
+    """Path to build-copilot-image.sh (majordomo or vendored)."""
+    candidates = [
+        _REPO_ROOT / "pipelines" / "scripts" / "build-copilot-image.sh",
+        _workspace_root() / ".majordomo" / "pipelines" / "scripts" / "build-copilot-image.sh",
+        _workspace_root() / "pipelines" / "scripts" / "build-copilot-image.sh",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    return candidates[0]
 
 
 def _run_build(
     dockerfile: Path,
     workspace_root: Path,
-    username_path: str,
-    token_path: str,
     tag: str,
+    *,
+    corp: bool,
 ) -> tuple[bool, list[str]]:
-    """Execute podman build for one SA tool Dockerfile.
-
-    Build context is the workspace root so bind-mounted helper files
-    (e.g. setup-corp-apt.sh) resolve via their relative source paths.
-
-    The build is executed via Podman inside WSL. This avoids the Windows
-    Podman client bug where --secret src= can fail with
-    "podman-build-secret... no such file or directory".
-
-    Secrets are passed as src= Linux paths under /tmp.
-
-    A temporary .dockerignore is written before the build and removed after so
-    that Podman only tars .majordomo/ — avoids 'archive/tar: write too
-    long' errors from long Windows paths in the rest of the workspace.
-
-    Args:
-        dockerfile: Absolute path to the Dockerfile.
-        workspace_root: Absolute path to the workspace root.
-        username_path: WSL Linux path to the username secret file.
-        token_path: WSL Linux path to the token secret file.
-        tag: Image tag to apply on success.
-
-    Returns:
-        Tuple of (success, output_lines).
-    """
-    ignorefile = workspace_root / ".dockerignore-sa-test"
-    ignorefile.write_text("*\n!.majordomo/**\n", encoding="utf-8")
+    """Build one SA tool image via build-copilot-image.sh."""
+    build_sh = _build_script()
+    tool = _tool_name(dockerfile)
+    # Prefer path relative to workspace so the shell script's sa-tools detection works.
     try:
-        workspace_wsl = _to_wsl_path(workspace_root)
-        dockerfile_wsl = _to_wsl_path(dockerfile)
-        ignorefile_wsl = _to_wsl_path(ignorefile)
-        cmd_str = (
-            "unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy && "
-            f"cd {shlex.quote(workspace_wsl)} && "
-            f"podman build "
-            f"--file {shlex.quote(dockerfile_wsl)} "
-            f"--ignorefile {shlex.quote(ignorefile_wsl)} "
-            f"--secret id=username,src={shlex.quote(username_path)} "
-            f"--secret id=token,src={shlex.quote(token_path)} "
-            f"--tag {shlex.quote(tag)} ."
-        )
-        result = subprocess.run(
-            ["wsl", "--", "sh", "-lc", cmd_str],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-        )
-    finally:
-        ignorefile.unlink(missing_ok=True)
-    stdout_text = result.stdout or ""
-    stderr_text = result.stderr or ""
-    output = (stdout_text + stderr_text).splitlines()
-    return result.returncode == 0, output
+        dockerfile_arg = str(dockerfile.relative_to(workspace_root))
+    except ValueError:
+        dockerfile_arg = str(dockerfile)
 
+    env = os.environ.copy()
+    env["DOCKER_BUILD_TARGET"] = "corp" if corp else "public"
+    env["SKIP_PUSH"] = "true"
+    if not corp:
+        # Ensure accidental corp env on the developer machine does not flip the target.
+        env.pop("PACKAGE_REGISTRY_HOST", None)
 
-def _wsl_podman_login(registry: str, username: str, password: str) -> None:
-    """Log in to a registry using Podman inside WSL.
-
-    Args:
-        registry: Registry hostname.
-        username: Registry username.
-        password: Registry password or access token.
-    """
-    subprocess.run(
-        [
-            "wsl",
-            "--",
-            "podman",
-            "login",
-            "--username",
-            username,
-            "--password-stdin",
-            registry,
-        ],
-        input=password,
-        text=True,
+    cmd = [
+        "bash",
+        str(build_sh),
+        "local",
+        f"sa-{tool}",
+        "local-test",
+        dockerfile_arg,
+    ]
+    result = subprocess.run(
+        cmd,
+        cwd=str(workspace_root),
+        env=env,
         capture_output=True,
-        check=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
+    output = ((result.stdout or "") + (result.stderr or "")).splitlines()
+    # Retag to the historical local name if the script used local/sa-tool:local-test
+    if result.returncode == 0:
+        full = f"local/sa-{tool}:local-test"
+        subprocess.run(
+            ["docker", "tag", full, tag],
+            capture_output=True,
+            check=False,
+        )
+    return result.returncode == 0, output
 
 
 def _print_result(
@@ -225,14 +139,7 @@ def _print_result(
     *,
     verbose: bool,
 ) -> None:
-    """Print the build result for one SA tool.
-
-    Args:
-        tool: SA tool name.
-        success: Whether the build succeeded (exit code 0).
-        output: Build output lines.
-        verbose: When True, always print full output.
-    """
+    """Print the build result for one SA tool."""
     status = "PASS" if success else "FAIL"
     marker = "\u2713" if success else "\u2717"
     print(f"  {marker} sa-{tool}: {status}")
@@ -242,27 +149,25 @@ def _print_result(
 
 
 def main() -> None:
-    """Discover and build all SA tool Dockerfiles, then report results.
-
-    Reads REGISTRY_USER and ARTIFACTORY_ACCESS_TOKEN from environment variables.
-    """
+    """Discover and build all SA tool Dockerfiles, then report results."""
     dry_run = "--dry-run" in sys.argv
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
+    corp = "--corp" in sys.argv
 
-    username = os.environ.get("REGISTRY_USER", "").split("@")[0]
-    token = os.environ.get("ARTIFACTORY_ACCESS_TOKEN", "")
+    if corp:
+        if not dry_run and (
+            not os.environ.get("REGISTRY_USER")
+            or not os.environ.get("REGISTRY_TOKEN")
+            or not os.environ.get("PACKAGE_REGISTRY_HOST")
+        ):
+            print(
+                "Error: --corp requires PACKAGE_REGISTRY_HOST, REGISTRY_USER, and REGISTRY_TOKEN."
+            )
+            sys.exit(1)
 
-    if not dry_run and (not username or not token):
-        missing = [v for v, val in (("REGISTRY_USER", username), ("ARTIFACTORY_ACCESS_TOKEN", token)) if not val]
-        missing_str = ", ".join(missing)
-        print(f"Error: required env vars not set: {missing_str}")
-        print("Set REGISTRY_USER and ARTIFACTORY_ACCESS_TOKEN before running.")
-        sys.exit(1)
-
-    mode = "full build"
-
+    mode = "corp" if corp else "public"
     workspace_root = _workspace_root()
-    sa_tools_dir = workspace_root / _SA_TOOLS_DIR
+    sa_tools_dir = _sa_tools_dir()
     dockerfiles = _discover_dockerfiles(sa_tools_dir)
 
     if not dockerfiles:
@@ -270,48 +175,32 @@ def main() -> None:
         sys.exit(1)
 
     tools_str = ", ".join(_tool_name(d) for d in dockerfiles)
-    header = inspect.cleandoc(f"""
+    header = inspect.cleandoc(
+        f"""
         SA Tool Image Builder
         Mode:      {mode}
         Context:   {workspace_root}
         Tools:     {tools_str}
         Dry-run:   {dry_run}
-    """)
+        """
+    )
     print(header)
     print()
 
     if dry_run:
         for dockerfile in dockerfiles:
             tool = _tool_name(dockerfile)
-            print(f"  [dry-run] would build sa-{tool} from {dockerfile}")
+            print(f"  [dry-run] would build sa-{tool} ({mode}) from {dockerfile}")
         sys.exit(0)
 
-    try:
-        _wsl_podman_login(_REGISTRY, username, token)
-    except subprocess.CalledProcessError as err:
-        stderr = err.stderr.strip() if err.stderr else ""
-        print("Error: failed to log in WSL Podman to package registry registry.")
-        if stderr:
-            print(stderr)
-        sys.exit(1)
-
     results: dict[str, bool] = {}
-
-    username_path = _write_wsl_secret("username", username)
-    token_path = _write_wsl_secret("token", token)
-    try:
-        for dockerfile in dockerfiles:
-            tool = _tool_name(dockerfile)
-            tag = _image_tag(tool)
-            print(f"Building {tag} ...")
-            success, output = _run_build(
-                dockerfile, workspace_root, username_path, token_path, tag
-            )
-            results[tool] = success
-            _print_result(tool, success, output, verbose=verbose)
-    finally:
-        _delete_wsl_secret("username")
-        _delete_wsl_secret("token")
+    for dockerfile in dockerfiles:
+        tool = _tool_name(dockerfile)
+        tag = _image_tag(tool)
+        print(f"Building {tag} ({mode}) ...")
+        success, output = _run_build(dockerfile, workspace_root, tag, corp=corp)
+        results[tool] = success
+        _print_result(tool, success, output, verbose=verbose)
 
     print()
     passed = sum(1 for ok in results.values() if ok)
@@ -319,10 +208,12 @@ def main() -> None:
     result_lines = "\n".join(
         f"  {'PASS' if ok else 'FAIL'}  sa-{t}" for t, ok in sorted(results.items())
     )
-    summary = inspect.cleandoc(f"""
+    summary = inspect.cleandoc(
+        f"""
         Results: {passed}/{total} passed
         {result_lines}
-    """)
+        """
+    )
     print(summary)
 
     if passed < total:

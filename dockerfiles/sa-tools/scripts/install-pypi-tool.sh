@@ -1,16 +1,11 @@
 #!/bin/sh
-# Shared PyPI tool installer for Python-based SA images.
+# Shared PyPI tool installer for Python-based SA image corp stages.
 #
-# Why this is a shell script:
-# - It runs inside multiple container images during Docker build.
-# - Shell is the common runtime available in those build environments.
-#
-# Required BuildKit secrets:
-# - username
-# - token
+# Required BuildKit secrets: username, token
+# Required env (from Dockerfile ARG): PACKAGE_REGISTRY_HOST, PIP_INDEX_PATH
 #
 # Usage:
-#   /bin/sh /tmp/install-pypi-tool.sh <package-name>
+#   /bin/sh /tmp/sa-scripts/install-pypi-tool.sh <package-name>
 
 set -e
 
@@ -20,6 +15,9 @@ if [ -z "$TOOL_NAME" ]; then
     exit 2
 fi
 
+PACKAGE_REGISTRY_HOST="${PACKAGE_REGISTRY_HOST:?PACKAGE_REGISTRY_HOST is required}"
+PIP_INDEX_PATH="${PIP_INDEX_PATH:?PIP_INDEX_PATH is required}"
+
 if [ ! -f /tmp/sa-scripts/registry-user.sh ]; then
     echo "install-pypi-tool.sh: missing /tmp/sa-scripts/registry-user.sh" >&2
     exit 2
@@ -27,22 +25,10 @@ fi
 
 . /tmp/sa-scripts/registry-user.sh
 
-REGISTRY_USER_SANITIZED=$(read_registry_user_sanitized /run/secrets/username)
+REGISTRY_USER=$(read_registry_user_sanitized /run/secrets/username)
 REGISTRY_TOKEN=$(tr -d '\r\n' < /run/secrets/token)
 
-cleanup() {
-    rm -f /root/.netrc
-}
-trap cleanup EXIT
-
-cat > /root/.netrc <<EOF
-machine packages.example.com
-login ${REGISTRY_USER_SANITIZED}
-password ${REGISTRY_TOKEN}
-EOF
-
-chmod 600 /root/.netrc
-
 pip install --no-cache-dir \
-    --index-url "https://packages.example.com/package-registry/api/pypi/example-pypi-snapshot-dependencies/simple" \
+    --index-url "https://${REGISTRY_USER}:${REGISTRY_TOKEN}@${PACKAGE_REGISTRY_HOST}/${PIP_INDEX_PATH}" \
+    --trusted-host "${PACKAGE_REGISTRY_HOST}" \
     "$TOOL_NAME"

@@ -124,7 +124,7 @@ func TestGetSubmoduleExclusionsParsesCachedStatus(t *testing.T) {
 	matchedMajordomo := false
 	matchedVendor := false
 	for _, p := range patterns {
-		if p.MatchString(".majordomo/stages/copilot-review.groovy") {
+		if p.MatchString(".majordomo/pipelines/scripts/git-diff-prep.py") {
 			matchedMajordomo = true
 		}
 		if p.MatchString("vendor/lib/src/main.py") {
