@@ -51,7 +51,7 @@ DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
 
 Corp agents/forge: pass `PACKAGE_REGISTRY_HOST`, `CORP_CA_CERT_URL`, `DEBIAN_REPO_PATH`, `NPM_VIRTUAL_PATH` (agent only), `DOCKER_PULL_DOMAIN`, and registry credentials — see Dockerfile headers.
 
-**OpenCode LLM auth (agent job, per-run):** inject a provider API key as a secret/env into the agent container. Do not bake keys into the image. `agent-dispatch.sh` requires at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` (use the last for custom OpenAI-compatible gateways, with `baseURL` in `opencode.json` / `OPENCODE_CONFIG_CONTENT` via `{env:OPENCODE_PROVIDER_API_KEY}`). SCM tokens (`GITHUB_TOKEN`, etc.) stay separate for clone/publish/status.
+**OpenCode LLM auth (agent job, per-run):** inject a provider API key as a secret/env into the agent container. Do not bake keys into the image. `agent-dispatch.sh` requires at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` (use the last for custom OpenAI-compatible gateways, with `baseURL` in `opencode.json` / `OPENCODE_CONFIG_CONTENT` via `{env:OPENCODE_PROVIDER_API_KEY}`). Served-repo SCM tokens are separate: `GH_TOKEN_<OWNER>` / `GITLAB_TOKEN_<OWNER>` (optional `MAJORDOMO_CREDENTIAL_<REPO_ID>`). Do not use unqualified `GH_TOKEN` / `GITLAB_TOKEN` for served repos.
 
 **Publish (GitHub/GitLab):** run the review job inside `majordomo-gh` or `majordomo-glab` so `gh` / `glab` are on PATH. Build `./majordomo` in the job workspace; `majordomo publish --scm github|gitlab` shells to the forge CLI. Bitbucket publish remains HTTP.
 

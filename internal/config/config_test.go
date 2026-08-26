@@ -10,10 +10,13 @@ func TestCacheBranch(t *testing.T) {
 	}
 }
 
-func TestPollCacheBranch(t *testing.T) {
-	got := PollCacheBranch("payments-api")
-	want := "majordomo-poll-cache/payments-api"
-	if got != want {
-		t.Fatalf("PollCacheBranch = %q, want %q", got, want)
+func TestCacheSkipsDefaultOn(t *testing.T) {
+	c := Cache{}
+	if !c.SkipsEnabled() {
+		t.Fatal("skips should be on by default")
+	}
+	c.DisableSkips = true
+	if c.SkipsEnabled() {
+		t.Fatal("disableSkips should turn skips off")
 	}
 }

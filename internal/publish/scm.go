@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/config"
 )
 
 func publishGitHub(opts Options, summary string) error {
 	if opts.GitHubToken == "" || opts.GitHubOwner == "" || opts.GitHubRepo == "" {
-		return fmt.Errorf("github publish requires GITHUB_TOKEN and owner/repo (GITHUB_REPOSITORY)")
+		return fmt.Errorf("github publish requires token and owner/repo (set %s)",
+			config.CredentialHint(opts.RepoID, "github", opts.GitHubOwner))
 	}
 	repo := opts.GitHubOwner + "/" + opts.GitHubRepo
 	env := append([]string{}, os.Environ()...)
@@ -81,7 +84,8 @@ func ghViewBody(opts Options, env []string, repo string) (string, error) {
 
 func publishGitLab(opts Options, summary string) error {
 	if opts.GitLabToken == "" {
-		return fmt.Errorf("gitlab publish requires GITLAB_TOKEN (or GLAB_TOKEN)")
+		return fmt.Errorf("gitlab publish requires token (set %s)",
+			config.CredentialHint(opts.RepoID, "gitlab", opts.GitHubOwner))
 	}
 	repo := gitlabRepoSpec(opts)
 	if repo == "" {

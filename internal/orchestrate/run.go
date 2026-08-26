@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/agent"
+	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/report"
 	"github.com/behaviorengineering/majordomo/internal/staging"
 )
@@ -32,6 +33,11 @@ type Options struct {
 	RoutingPath       string
 	AgentContextPath  string
 	SummaryConfigPath string
+
+	// ConfigDir + RepoID load majordomo-central-config and materialize routing/agentContext
+	// when RoutingPath / AgentContextPath are empty.
+	ConfigDir string
+	RepoID    string
 
 	// BatchTimeout for a single dispatch; 0 → COPILOT_BATCH_TIMEOUT_MINUTES or 8m.
 	BatchTimeout time.Duration
@@ -75,12 +81,23 @@ func Run(opts Options) error {
 		if opts.BaseBranch == "" {
 			return fmt.Errorf("--base-branch required unless --skip-prep")
 		}
+		routingPath, agentContextPath, cfg, err := config.ResolvePrepPaths(
+			opts.ConfigDir, opts.RepoID, opts.Pipeline,
+			config.MaterializeDirForStaging(opts.StagingDir),
+			opts.RoutingPath, opts.AgentContextPath,
+		)
+		if err != nil {
+			return fmt.Errorf("central config: %w", err)
+		}
+		if opts.ConfigDir != "" && opts.RepoID != "" {
+			config.ApplyPipelineModelEnv(cfg, opts.Pipeline)
+		}
 		logf("INFO", "Running prep against %s → %s", opts.BaseBranch, opts.StagingDir)
-		err := staging.Run(staging.Options{
+		err = staging.Run(staging.Options{
 			BaseBranch:        opts.BaseBranch,
 			StagingDir:        opts.StagingDir,
-			RoutingPath:       opts.RoutingPath,
-			AgentContextPath:  opts.AgentContextPath,
+			RoutingPath:       routingPath,
+			AgentContextPath:  agentContextPath,
 			SummaryConfigPath: opts.SummaryConfigPath,
 			RepoRoot:          opts.RepoRoot,
 		})
@@ -91,6 +108,12 @@ func Run(opts Options) error {
 			}
 			return fmt.Errorf("prep: %w", err)
 		}
+	} else if opts.ConfigDir != "" && opts.RepoID != "" {
+		cfg, err := config.LoadMerged(opts.ConfigDir, opts.RepoID)
+		if err != nil {
+			return fmt.Errorf("central config: %w", err)
+		}
+		config.ApplyPipelineModelEnv(cfg, opts.Pipeline)
 	}
 
 	planPath := filepath.Join(opts.StagingDir, "batch-plan.json")

@@ -9,11 +9,13 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/agent"
 	"github.com/behaviorengineering/majordomo/internal/cache"
+	"github.com/behaviorengineering/majordomo/internal/config"
 	diffpkg "github.com/behaviorengineering/majordomo/internal/diff"
 	"github.com/behaviorengineering/majordomo/internal/orchestrate"
 	"github.com/behaviorengineering/majordomo/internal/poll"
 	"github.com/behaviorengineering/majordomo/internal/publish"
 	"github.com/behaviorengineering/majordomo/internal/report"
+	"github.com/behaviorengineering/majordomo/internal/sa"
 	"github.com/behaviorengineering/majordomo/internal/satools"
 	"github.com/behaviorengineering/majordomo/internal/staging"
 	"github.com/behaviorengineering/majordomo/internal/status"
@@ -47,6 +49,7 @@ See docs/PLAN-control-tower-github-go.md.`,
 	root.AddCommand(newCacheCmd())
 	root.AddCommand(newReportCmd())
 	root.AddCommand(newBuildSAToolsCmd())
+	root.AddCommand(newSACmd())
 	root.AddCommand(newSubmoduleCmd())
 
 	return root
@@ -96,17 +99,24 @@ func newPollCmd() *cobra.Command {
 }
 
 func newPrepCmd() *cobra.Command {
-	var routing, agentContext, summaryConfig string
+	var routing, agentContext, summaryConfig, configDir, repoID, pipeline string
 	cmd := &cobra.Command{
 		Use:   "prep <base-branch> <staging-dir>",
 		Short: "Classify diffs, cluster files, write staging manifest",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			matDir := config.MaterializeDirForStaging(args[1])
+			routingPath, agentContextPath, _, err := config.ResolvePrepPaths(
+				configDir, repoID, pipeline, matDir, routing, agentContext,
+			)
+			if err != nil {
+				return err
+			}
 			opts := staging.Options{
 				BaseBranch:        args[0],
 				StagingDir:        args[1],
-				RoutingPath:       routing,
-				AgentContextPath:  agentContext,
+				RoutingPath:       routingPath,
+				AgentContextPath:  agentContextPath,
 				SummaryConfigPath: summaryConfig,
 			}
 			return staging.Run(opts)
@@ -115,6 +125,9 @@ func newPrepCmd() *cobra.Command {
 	cmd.Flags().StringVar(&routing, "routing", "", "path to routing JSON")
 	cmd.Flags().StringVar(&agentContext, "agent-context", "", "path to agent context JSON")
 	cmd.Flags().StringVar(&summaryConfig, "summary-config", "", "path to summary config JSON")
+	cmd.Flags().StringVar(&configDir, "config-dir", "", "majordomo-central-config dir (materialize routing/agentContext)")
+	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id under config-dir")
+	cmd.Flags().StringVar(&pipeline, "pipeline", "pr-review", "pipelines.<name> key when using --config-dir")
 	return cmd
 }
 
@@ -174,7 +187,7 @@ func newDispatchCmd() *cobra.Command {
 func newOrchestrateCmd() *cobra.Command {
 	var (
 		pr, stagingDir, outputDir, baseBranch, pipeline, scriptsDir, repoRoot string
-		routing, agentContext, summaryConfig                                  string
+		routing, agentContext, summaryConfig, configDir, repoID               string
 		concurrency                                                           int
 		skipPrep, skipDeep, skipReport                                        bool
 		timeoutMin                                                            int
@@ -209,6 +222,8 @@ func newOrchestrateCmd() *cobra.Command {
 				RoutingPath:       routing,
 				AgentContextPath:  agentContext,
 				SummaryConfigPath: summaryConfig,
+				ConfigDir:         configDir,
+				RepoID:            repoID,
 				BatchTimeout:      timeout,
 			})
 		},
@@ -223,6 +238,8 @@ func newOrchestrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&routing, "routing", "", "routing JSON for prep")
 	cmd.Flags().StringVar(&agentContext, "agent-context", "", "agent context JSON for prep")
 	cmd.Flags().StringVar(&summaryConfig, "summary-config", "", "summary config JSON for prep")
+	cmd.Flags().StringVar(&configDir, "config-dir", "", "majordomo-central-config dir")
+	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id under config-dir")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 0, "max parallel batches (default COPILOT_CONCURRENCY or 6)")
 	cmd.Flags().IntVar(&timeoutMin, "batch-timeout-minutes", 0, "per-batch timeout (default 8)")
 	cmd.Flags().BoolVar(&skipPrep, "skip-prep", false, "assume staging already prepared")
@@ -234,8 +251,35 @@ func newOrchestrateCmd() *cobra.Command {
 	return cmd
 }
 
+func newSACmd() *cobra.Command {
+	var configDir, repoID, repoRoot, baseBranch, scriptsDir, imagePrefix string
+	cmd := &cobra.Command{
+		Use:   "sa",
+		Short: "Run staticAnalysis tools from central config into .sa/",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return sa.Run(sa.Options{
+				ConfigDir:   configDir,
+				RepoID:      repoID,
+				RepoRoot:    repoRoot,
+				BaseBranch:  baseBranch,
+				ScriptsDir:  scriptsDir,
+				ImagePrefix: imagePrefix,
+			})
+		},
+	}
+	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id (required)")
+	cmd.Flags().StringVar(&repoRoot, "repo-root", "", "served repo checkout (default: cwd)")
+	cmd.Flags().StringVar(&baseBranch, "base-branch", "", "base branch for changed-file list (required)")
+	cmd.Flags().StringVar(&scriptsDir, "scripts-dir", "", "pipelines/scripts with run-sa-tool.sh")
+	cmd.Flags().StringVar(&imagePrefix, "image-prefix", "", "registry prefix when tool has no image (or MAJORDOMO_SA_IMAGE_PREFIX)")
+	_ = cmd.MarkFlagRequired("repo-id")
+	_ = cmd.MarkFlagRequired("base-branch")
+	return cmd
+}
+
 func newPublishCmd() *cobra.Command {
-	var scm, owner, repo, gitlabHost, gitlabProjectID string
+	var scm, owner, repo, repoID, gitlabHost, gitlabProjectID string
 	cmd := &cobra.Command{
 		Use:   "publish <pr-number> <summary-file> <mode>",
 		Short: "Publish summary to PR/MR (github|gitlab via gh/glab; bitbucket HTTP)",
@@ -246,6 +290,7 @@ func newPublishCmd() *cobra.Command {
 				PRNumber:        args[0],
 				SummaryFile:     args[1],
 				Mode:            publish.Mode(args[2]),
+				RepoID:          repoID,
 				GitHubOwner:     owner,
 				GitHubRepo:      repo,
 				GitLabHost:      gitlabHost,
@@ -256,6 +301,7 @@ func newPublishCmd() *cobra.Command {
 	cmd.Flags().StringVar(&scm, "scm", "github", "scm forge: github|gitlab|bitbucket")
 	cmd.Flags().StringVar(&owner, "owner", "", "GitHub/GitLab owner or group path")
 	cmd.Flags().StringVar(&repo, "repo", "", "GitHub/GitLab project name")
+	cmd.Flags().StringVar(&repoID, "repo-id", "", "central-config id (MAJORDOMO_CREDENTIAL_ override; or MAJORDOMO_REPO_ID)")
 	cmd.Flags().StringVar(&gitlabHost, "gitlab-host", "", "GitLab host (default gitlab.com; or GITLAB_HOST)")
 	cmd.Flags().StringVar(&gitlabProjectID, "gitlab-project-id", "", "GitLab numeric project id (or GITLAB_PROJECT_ID)")
 	return cmd

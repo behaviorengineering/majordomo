@@ -80,7 +80,7 @@ For legacy app-repo submodules, see [03 — Manage Submodule](03-manage-submodul
 
 ## 🛠️ Project-specific customization
 
-Customize per repo in `majordomo-central-config/<repo-slug>.yaml`. Deep-merge with `_defaults.yaml`. Keep credential **names** in YAML; store secret **values** in GitHub Actions secrets.
+Customize per repo in `majordomo-central-config/<repo-slug>.yaml`. Deep-merge with `_defaults.yaml`. Keep credential **names** in YAML comments; store secret **values** in GitHub Actions secrets as `GH_TOKEN_<OWNER>` / `GITLAB_TOKEN_<OWNER>` (optional `MAJORDOMO_CREDENTIAL_<REPO_ID>` override).
 
 ```yaml
 registry:

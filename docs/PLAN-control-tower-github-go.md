@@ -3,7 +3,7 @@
 *Majordomo — repository operations for evolving software.*
 
 **Status:** In progress (Phases 1–3 and most of Phase 5 done; Bitbucket poll and a few Phase 4 items remain)  
-**Date:** 2026-08-22 (progress updated 2026-08-26)  
+**Date:** 2026-08-22 (progress updated 2026-08-27)  
 **Audience:** Maintainers and contributors planning the next major evolution of Majordomo.
 
 ---
@@ -111,9 +111,10 @@ See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for 
 
 | # | Topic | Decision |
 |---|-------|----------|
-| 1 | Review cache location | **On the served repo** (same as today). Cluster analysis cache branches live in the app repo under review. Poll cache (PR `head_sha` cursors) also lives on the served repo — not on the control-tower. |
-| 2 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
-| 3 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
+| 1 | Review cache location | **On the served repo.** Cluster analysis cache branches live in the app repo under review (`majordomo-pr-reviewer-cache/<project-id>`). |
+| 2 | Poll cursor location (v1) | **GitHub Actions cache** on the control-tower job (directory `.poll-cache/`, files `.poll-cache/<repo-id>/poll-cursor.json`). Not on the served repo yet. Durable enough for pilot; see Phase 5 for optional served-repo git branch hardening. |
+| 3 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
+| 4 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
 
 ### Control-tower repository
 
@@ -168,12 +169,13 @@ cache:
   repo: served              # only supported mode in v1
   dir: .majordomo-review-cache/payments-api   # optional; defaults per legacy rules
   retentionDays: 120
-  enableSkips: false
+  # Analysis-cache skips are on by default; set disableSkips: true to force re-analysis.
+  # disableSkips: true
 ```
 
 Go port: `majordomo cache` implements the git-branch storage model (`precheck` / `lookup` / `store` / `restore` / `push`).
 
-**Poll cache** (separate branch): `majordomo-poll-cache/<repo-id>` with `poll-cursor.json` — see [Poll cache](#poll-cache-where-poll-compares-head_sha).
+**Poll cursor (v1):** separate from review cache. Stored under tower job `.poll-cache/` via Actions cache — see [Poll cache](#poll-cache-where-poll-compares-head_sha).
 
 ---
 
@@ -214,7 +216,11 @@ All SCM adapters must produce this shape (JSON) before triggering the control-to
 
 ## Central config schema (draft)
 
-Per-repo config lives in YAML: `majordomo-central-config/<repo_id>.yaml`.
+Per-repo config lives in YAML: `majordomo-central-config/<repo_id>.yaml`. Org defaults in `_defaults.yaml` are deep-merged; per-repo keys win.
+
+### Loaded by Go today (`internal/config`)
+
+Includes SCM, trigger, review, cache, **pipelines**, and **staticAnalysis**.
 
 ```yaml
 # majordomo-central-config/payments-api.yaml
@@ -223,15 +229,18 @@ scm: gitlab   # github | gitlab | bitbucket | generic
 
 repository:
   id: payments-api
+  owner: acme                 # required for org token lookup (GH_TOKEN_* / GITLAB_TOKEN_*)
+  name: payments-api
   cloneUrl: https://gitlab.com/acme/payments-api.git
 
 scmApi:
   baseUrl: https://gitlab.com
   projectId: "12345"
-  # Credentials: control-tower secret GITLAB_TOKEN__payments-api
+  # Credentials: MAJORDOMO_CREDENTIAL_payments-api (override) or GITLAB_TOKEN_ACME (org/group).
 
 review:
   publishMode: auto    # auto | comment | description | check | off
+  # false: one review per PR/MR (cursor remembers the number). true: re-queue when head_sha changes.
   enableContinuousRuns: false
 
 trigger:
@@ -240,29 +249,39 @@ trigger:
   push:
     mode: none             # none | workflow | webhook
 
-staticAnalysis:
-  - tool: ruff
-    glob: "**/*.py"
-
-pipelines:
-  pr-review:
-    model: ...
-    routing: ...
-    agentContext: ...
-
 cache:
   repo: served           # review cache branches live on the served repo
   retentionDays: 120
-  enableSkips: false
+  # disableSkips: true   # opt out of analysis-cache skips (skips are on by default)
 
 pollCache:
-  repo: served           # poll cursor branch on the same served repo
-  branch: majordomo-poll-cache/<repo-id>   # holds poll-cursor.json
+  repo: served           # reserved; v1 cursor is Actions .poll-cache (see Decisions #2)
+  # branch defaults to majordomo-poll-cache/<repo-id> when/if served-repo cursor lands
+
+pipelines:
+  pr-review:
+    model: anthropic/claude-sonnet-4-5   # sets COPILOT_MODEL if unset
+    scoreModel: auto                     # sets COPILOT_SCORE_MODEL if unset
+    routing:                             # materialized to routing.json for prep
+      pr-review-docs:
+        - "**/*.md"
+      pr-review-code:
+        - "**"
+    agentContext:                        # materialized to agent-context.json
+      global:
+        customRules:
+          - "No hardcoded credentials."
+
+staticAnalysis:                          # majordomo sa → .sa/<tool>.txt before prep
+  - tool: ruff
+    image: ghcr.io/org/sa-ruff:latest    # or dockerfile: + MAJORDOMO_SA_IMAGE_PREFIX
+    command: check --output-format=concise
+    glob: "**/*.py"
 ```
 
-Org defaults in `majordomo-central-config/_defaults.yaml` are deep-merged; per-repo keys win.
+Legacy top-level `publishMode:` is still accepted as a fallback for `review.publishMode`.
 
-Config keys in [09 — Customising the Review](advanced/09-customising-the-review.md) should map 1:1 where possible.
+`prep` / `orchestrate` accept `--config-dir` + `--repo-id` to load this YAML (explicit `--routing` / `--agent-context` still win). `majordomo sa` runs `staticAnalysis` via `run-sa-tool.sh`.
 
 ---
 
@@ -270,7 +289,7 @@ Config keys in [09 — Customising the Review](advanced/09-customising-the-revie
 
 ### Pull poll = universal reconciliation
 
-`majordomo-poll.yml` runs on a **5-minute cron** (GitHub’s minimum) for **every onboarded repo**. It asks the SCM API: *which open PRs/MRs have a `head_sha` we haven’t reviewed yet?*
+`majordomo-poll.yml` runs on a **5-minute cron** (GitHub’s minimum) for **every onboarded repo**. It asks the SCM API which open PRs/MRs need review, then applies the poll cursor and `review.enableContinuousRuns` (see [Poll algorithm](#poll-algorithm)).
 
 ```text
                     ┌─────────────────────────────────┐
@@ -291,7 +310,7 @@ Config keys in [09 — Customising the Review](advanced/09-customising-the-revie
 | **Beginner default** | No served-repo files, no hosting, corp-friendly — poll is the only trigger. |
 | **Reconciliation** | Catches missed, duplicate, or out-of-order webhook/workflow events. |
 | **Source of truth** | SCM API state wins over “did we receive an event?” |
-| **Dedup** | Skip review if `head_sha` already reviewed — push and poll share the same `review_id`. |
+| **Dedup** | Skip when the poll cursor says this PR is done (same head, or already reviewed once if continuous runs are off). Push and poll share the same `review_id` concurrency group. |
 
 Push modes don’t replace poll — they **front-run** it. If a webhook fires and review completes, the next poll sees `head_sha` already done and skips.
 
@@ -338,15 +357,33 @@ trigger:
 
 All steps happen in the **control-tower** repo and platform admin consoles — not in the served repo.
 
-1. **Platform admin** (customer or yours) creates a machine user or fine-grained PAT with:
+1. **Platform admin** (customer or yours) creates a machine identity with:
    - Read access to the served repo (clone + list open PRs/MRs)
    - Write access to post PR/MR comments (and optional check/status)
-2. Store token in control-tower secrets: `MAJORDOMO_CREDENTIAL__<repo_id>`.
-3. Add `majordomo-central-config/<repo_id>.yaml` (clone URL, SCM API base; `trigger.push.mode: none` is fine).
-4. Ensure the GHA runner can reach the SCM API (public SaaS or **self-hosted runner** on corp network for internal Bitbucket).
-5. `majordomo-poll.yml` cron runs → discovers open PRs with new `head_sha` → runs review → publishes.
+   - GitHub: fine-grained PAT for **one** resource owner (org), or a GitHub App install
+   - GitLab: group access token (or bot PAT) for the group that owns the project
+2. Store token in control-tower secrets (prefer one per org/group):
+   - GitHub: `GH_TOKEN_<OWNER>` (Actions forbids secret names starting with `GITHUB_`)
+   - GitLab: `GITLAB_TOKEN_<OWNER>` (nested `group/sub` → `GROUP_SUB`)
+   - Optional per-repo override: `MAJORDOMO_CREDENTIAL_<REPO_ID>`
+3. Add `majordomo-central-config/<repo_id>.yaml` (clone URL, SCM API base, `repository.owner`; `trigger.push.mode: none` is fine).
+4. Ensure the GHA runner can reach the SCM API (public SaaS or **self-hosted runner** on corp network for internal Bitbucket). Map org secrets into the poll/review job env (Actions cannot resolve secret names dynamically).
+5. `majordomo-poll.yml` cron runs → discovers work → queues `majordomo-review` → publishes.
+6. For LLM review output: inject provider API key(s) into the review job and run with the agent image (or a runner that has OpenCode + keys). Prep alone is not a successful pilot.
 
 No webhook URL. No merge to `main` on the served repo.
+
+### Pilot definition of done (pull mode)
+
+A pilot is complete only when all of the following are true:
+
+1. **Submodule pin** — tower `.majordomo` points at a majordomo SHA that includes org credentials + `review.*` loader.
+2. **Org secrets** — tower has `GH_TOKEN_<OWNER>` and/or `GITLAB_TOKEN_<OWNER>` (plus optional `MAJORDOMO_CREDENTIAL_<REPO_ID>`), mapped into poll/review job `env:`.
+3. **Repo YAML** — `majordomo-central-config/<repo_id>.yaml` with `scm`, `repository.owner` / `name` / `cloneUrl`, and `scmApi` as needed.
+4. **Continuous policy** — `review.enableContinuousRuns` set intentionally (`false` = one review per PR; `true` = re-queue on new `head_sha`).
+5. **Agent runtime** — review job can run OpenCode (`majordomo-agent` image or equivalent) with at least one of `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENCODE_PROVIDER_API_KEY`.
+6. **End-to-end proof** — poll discovers an open change, review produces `summary.md`, publish posts to the PR/MR (or documents artifact-only if publish mode is `off`).
+7. **No served-repo Majordomo files** — pull mode only.
 
 ### Push mode (optional accelerator)
 
@@ -375,48 +412,53 @@ majordomo-review.yml (on repository_dispatch — when push.mode is workflow|webh
   └─ same review path; poll dedupes on next cycle if duplicate
 ```
 
-### Poll cache (where poll compares `head_sha`)
+### Poll cache (where poll compares cursors)
 
-Every poll cycle asks: *for this served repo, which PRs have a new `head_sha` since we last reviewed?* That comparison uses the **poll cache** — a small cursor file, separate from cluster review cache.
+Every poll cycle asks which open PRs/MRs need a review run. That uses the **poll cursor**, separate from the cluster review cache.
 
 ```text
-PR #42  →  last reviewed head_sha: abc123
-          current head_sha from API: abc123  → skip
-          current head_sha from API: def456  → queue review, update cache
+review.enableContinuousRuns: true
+  PR #42 last head abc123, API still abc123  → skip
+  PR #42 last head abc123, API now def456    → queue review, update cursor after success
+
+review.enableContinuousRuns: false (default)
+  PR #42 never in cursor                     → queue once
+  PR #42 already in cursor (any head)        → skip until cursor cleared
 ```
 
-| Cache | Location (served repo) | Skips |
-|-------|------------------------|-------|
-| **Poll cache** | Git branch `majordomo-poll-cache/<repo-id>` (or `poll-cursor.json` on the review-cache branch — TBD at implementation) | **Whole review runs** when PR head unchanged |
-| **Review cache** | Git branch `majordomo-pr-reviewer-cache/<project-id>` | **Cluster AI work** inside a run |
+| Cache | Location (v1) | Skips |
+|-------|---------------|-------|
+| **Poll cursor** | Tower Actions cache → `.poll-cache/<repo-id>/poll-cursor.json` | Whole review job (see continuous policy above) |
+| **Review cache** | Served-repo git branch `majordomo-pr-reviewer-cache/<project-id>` | Cluster AI work inside a run |
 
-Both live on the **served repo** (same decision as review cache). The control-tower does not hold per-repo poll cursors — only config and the submodule pin.
+**v1 store of truth for poll:** GitHub Actions `actions/cache` on poll and review jobs (restore before poll / after review cursor update). Eviction (~7 days unused) may re-queue; acceptable for pilot. Optional Phase 5: move cursor to served-repo branch `majordomo-poll-cache/<repo-id>` for multi-runner durability.
 
-**Poll cache file shape** (`poll-cursor.json` on the poll-cache branch):
+**Poll cursor file shape** (`.poll-cache/<repo-id>/poll-cursor.json`):
 
 ```json
 {
   "repo_id": "payments-api",
-  "updated_at": "2026-08-23T00:12:00Z",
-  "prs": {
-    "42": { "head_sha": "abc123...", "reviewed_at": "...", "run_id": "12345" }
+  "updated": "2026-08-27T00:12:00Z",
+  "heads": {
+    "42": "abc123..."
   }
 }
 ```
 
+<a id="poll-algorithm"></a>
+
 **Poll algorithm:**
 
-1. List open PRs/MRs from SCM API (read credential from tower secrets).
-2. Clone or fetch `majordomo-poll-cache/<repo-id>` from the **served repo** (or start empty if branch missing).
-3. Read `poll-cursor.json`; for each PR, compare `head_sha` to cached value.
-4. Queue review for any PR with new or missing sha.
-5. After review succeeds, commit updated `poll-cursor.json` and push to the served repo poll-cache branch.
+1. List open PRs/MRs from SCM API (credential: `MAJORDOMO_CREDENTIAL_<REPO_ID>` or `GH_TOKEN_<OWNER>` / `GITLAB_TOKEN_<OWNER>`).
+2. Restore `.poll-cache/` from Actions cache (or start empty).
+3. Read `.poll-cache/<repo-id>/poll-cursor.json`.
+4. For each open PR:
+   - If `review.enableContinuousRuns` is **false** (default): queue only when the PR number is absent from `heads`.
+   - If **true**: queue when the PR is absent **or** `heads[pr] !=` current `head_sha`.
+5. Emit pending reviews JSON; tower queues `majordomo-review` per item.
+6. After a successful review, write the PR → `head_sha` into the cursor and save Actions cache.
 
-Uses the same write-capable token as review cache publish (already required for comments + cache push).
-
-**Not poll cache:** GitHub Actions cache is optional for in-run speed only — evicts after ~7 days and is not the comparison source of truth.
-
-**Concurrency:** `majordomo-review` uses `concurrency: group: majordomo-${{ review_id }}` so push + poll don’t double-run; poll cache updates after success.
+**Concurrency:** `majordomo-review` uses `concurrency: group: majordomo-${{ review_id }}` so push + poll don’t double-run.
 
 ---
 
@@ -426,8 +468,8 @@ Poll, clone, and publish are SCM-specific; trigger mode is independent.
 
 | SCM | Pull (list PRs) | Clone | Publish |
 |-----|-----------------|-------|---------|
-| **GitHub** | `GET /repos/{owner}/{repo}/pulls` | PAT or deploy key | PR comment, description, Checks API |
-| **GitLab** | MR API | `GITLAB_TOKEN` or deploy key | MR note, pipeline status |
+| **GitHub** | `GET /repos/{owner}/{repo}/pulls` | `GH_TOKEN_<OWNER>` (or per-repo override) | PR comment, description, Checks API |
+| **GitLab** | MR API | `GITLAB_TOKEN_<OWNER>` (or per-repo override) | MR note, pipeline status |
 | **Bitbucket** | PR API (Server/Cloud) | SSH key or token from config | REST comment/description (Go port of existing script) |
 | **Generic** | Manual / `workflow_dispatch` only | Deploy key / PAT | Optional — artifact-only mode |
 
@@ -451,6 +493,7 @@ Built from this repo (new top-level `cmd/` and `internal/`). Distributed as `ghc
 | `majordomo report all-diffs` | Concatenate staging diffs for synthesis |
 | `majordomo cache` | Review-cache + poll-cursor helpers |
 | `majordomo poll` | SCM API poll; default trigger ingress |
+| `majordomo sa` | Run `staticAnalysis` tools into `.sa/` from central config |
 | `majordomo build-sa-tools` | Local SA image smoke builds |
 | `majordomo submodule` | Interactive vendored-submodule manager |
 
@@ -566,7 +609,7 @@ jobs:
 
       - name: Clone served repository
         run: |
-          # git clone using MAJORDOMO_CREDENTIAL__<repo_id> from secrets
+          # git clone using MAJORDOMO_CREDENTIAL_<repo_id> or GH_TOKEN_<OWNER> / GITLAB_TOKEN_<OWNER>
 
       - name: Run review
         run: |
@@ -592,7 +635,7 @@ jobs:
 ### Phase 0 — Document and scaffold (done)
 
 - [x] Architecture plan (this document)
-- [ ] Agree on `repo_id` naming, payload schema, YAML config shape (can land with first pilot)
+- [x] Agree on `repo_id` naming, payload schema, YAML config shape (loader fields listed under Central config; pipelines/SA still flag-driven)
 - [x] Create control-tower repo skeleton (`xynova/majordomo-tower`)
 - [x] Init Go module (`go.mod`, `cmd/majordomo`, package stubs; `go test ./...` green)
 - [x] Rename review cache branch to `majordomo-pr-reviewer-cache/<project-id>`
@@ -631,8 +674,9 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 
 - [x] Wire `majordomo-poll.yml` to build/run Go binary from `.majordomo`
 - [x] Wire `majordomo-review.yml` to `majordomo orchestrate` + `publish`
-- [ ] One pilot served repo on **pull mode** — no files in served repo
 - [x] Document beginner onboarding (credentials + YAML)
+- [ ] Wire agent image + LLM provider secrets into `majordomo-review` (required for real review output)
+- [ ] One pilot served repo on **pull mode** — meet [Pilot definition of done](#pilot-definition-of-done-pull-mode)
 
 ### Phase 3 — OpenCode + slim images
 
@@ -652,8 +696,10 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 ### Phase 5 — Cache hardening and polish
 
 - [x] Cluster cache precheck / lookup / store / restore
+- [ ] Optional: move poll cursor from Actions cache to served-repo branch `majordomo-poll-cache/<repo-id>`
 - [ ] Checks API annotations from JUnit
 - [x] Docs refreshed for Go + OpenCode
+- [x] Load `pipelines` / `staticAnalysis` from central YAML into Go (`majordomo sa` + prep materialize)
 
 ---
 
@@ -671,12 +717,18 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 
 ## Open questions
 
-1. **Credential model** — one org secret per SCM vs `MAJORDOMO_CREDENTIAL__<repo_id>` convention?
+_(none blocking pilot)_
+
+Deferred (tracked under Phase 4 / 5 checkboxes): Bitbucket poll, push triggers, served-repo poll cursor, Checks annotations.
 
 ## Resolved decisions
 
 | Topic | Decision |
 |-------|----------|
+| **Poll cursor (v1)** | Actions cache + `.poll-cache/<repo-id>/poll-cursor.json` on the tower. Served-repo git branch is optional Phase 5 hardening, not required for pilot. |
+| **Credential model** | One forge token **per org/group** in tower secrets: `GH_TOKEN_<OWNER>` (GitHub; never `GITHUB_TOKEN_*` — Actions forbids that prefix) or `GITLAB_TOKEN_<OWNER>` (GitLab). Optional per-repo override `MAJORDOMO_CREDENTIAL_<REPO_ID>`. Lookup order: per-repo → org. **No** unqualified `GH_TOKEN` / `GITLAB_TOKEN` / `GITHUB_TOKEN` for served-repo access (tower Actions `GITHUB_TOKEN` remains for operating on the tower itself). Map secrets into job env explicitly. |
+| **Continuous runs** | `review.enableContinuousRuns` default **false** (one review per PR number). Set **true** to re-queue when `head_sha` changes. |
+| **Cache skips** | Analysis-cache skips **on by default**; opt out with `cache.disableSkips: true`. |
 | **OpenCode auth** | Provider API keys are **per-run job secrets/env** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` for custom OpenAI-compatible gateways). Never bake keys into the agent image. Optional non-secret provider config (`baseURL`, provider id) via `opencode.json` / `OPENCODE_CONFIG_CONTENT` with `{env:...}`. SCM tokens remain separate from LLM auth. `agent-dispatch.sh` preflights provider keys; it no longer requires `GITHUB_TOKEN` for Copilot CLI. |
 | **Forge publish** | GitHub/GitLab publish uses **`gh` / `glab` on PATH** inside separate job containers (`majordomo-gh`, `majordomo-glab`). Majordomo Go binary is built in-job and not baked into forge images. Bitbucket publish stays HTTP until a Bitbucket CLI path exists. Poll remains Go HTTP. |
 
@@ -709,3 +761,8 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 | 2026-08-26 | OpenCode auth resolved: runtime provider API keys |
 | 2026-08-26 | Forge CLI images `majordomo-gh` / `majordomo-glab`; publish via `gh`/`glab` on PATH |
 | 2026-08-26 | Pipeline Python removed; historical proposal/revision docs deleted |
+| 2026-08-26 | Credential model: per-org `GH_TOKEN_*` / `GITLAB_TOKEN_*` + optional `MAJORDOMO_CREDENTIAL_*`; no unqualified served-repo tokens |
+| 2026-08-27 | Wire nested `review.publishMode` / `review.enableContinuousRuns` into config + poll |
+| 2026-08-27 | Cache skips default on; opt out with `cache.disableSkips: true` (replaces `enableSkips`) |
+| 2026-08-27 | Plan sync: poll cursor = Actions `.poll-cache` (v1); schema vs loader split; pilot DoD + agent requirement; continuous-runs in poll algorithm |
+| 2026-08-27 | Load `pipelines` + `staticAnalysis` in Go; materialize for prep; `majordomo sa` + tower review step |

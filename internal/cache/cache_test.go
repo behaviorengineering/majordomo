@@ -33,10 +33,17 @@ func TestClusterFilesHashStable(t *testing.T) {
 
 func TestPollCursorShouldReview(t *testing.T) {
 	c := &PollCursor{Heads: map[string]string{"1": "abc"}}
-	if ShouldReview(c, "1", "abc") {
-		t.Fatal("same head should skip")
+
+	if ShouldReview(c, "1", "abc", true) {
+		t.Fatal("continuous: same head should skip")
 	}
-	if !ShouldReview(c, "1", "def") {
-		t.Fatal("new head should review")
+	if !ShouldReview(c, "1", "def", true) {
+		t.Fatal("continuous: new head should review")
+	}
+	if ShouldReview(c, "1", "def", false) {
+		t.Fatal("one-shot: already reviewed PR should skip even on new head")
+	}
+	if !ShouldReview(c, "2", "zzz", false) {
+		t.Fatal("one-shot: unseen PR should review")
 	}
 }

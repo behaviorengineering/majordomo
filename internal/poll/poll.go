@@ -34,10 +34,9 @@ type Result struct {
 
 // Options configures a poll run.
 type Options struct {
-	ConfigDir   string
-	CursorDir   string // local cursor store (Actions cache); default .poll-cache
-	OutPath     string // write JSON here; empty → stdout
-	GitHubToken string // optional fallback token (also used when no per-repo / SCM env is set)
+	ConfigDir string
+	CursorDir string // local cursor store (Actions cache); default .poll-cache
+	OutPath   string // write JSON here; empty → stdout
 	// ListPRs injectable for tests
 	ListPRs func(cfg config.RepoConfig, token string) ([]openPR, error)
 }
@@ -89,15 +88,23 @@ func Run(opts Options) error {
 		if scm == "" {
 			scm = "github"
 		}
-		token := credentialFor(cfg.Repository.ID, scm, opts.GitHubToken)
+
+		owner, name := cfg.Repository.Owner, cfg.Repository.Name
+		if owner == "" || name == "" {
+			o2, n2 := splitOwnerName(parseClonePath(cfg.Repository.CloneURL))
+			if owner == "" {
+				owner = o2
+			}
+			if name == "" {
+				name = n2
+			}
+		}
+
+		token := config.ResolveCredential(cfg.Repository.ID, scm, owner)
 		// When ListPRs is injected (tests), allow empty token.
 		if token == "" && !listInjected {
-			hint := "GITHUB_TOKEN"
-			if scm == "gitlab" {
-				hint = "GITLAB_TOKEN"
-			}
-			logf("WARN", "%s: no credential (set %s or %s) — skipping",
-				cfg.Repository.ID, config.CredentialEnvName(cfg.Repository.ID), hint)
+			logf("WARN", "%s: no credential (set %s) — skipping",
+				cfg.Repository.ID, config.CredentialHint(cfg.Repository.ID, scm, owner))
 			continue
 		}
 
@@ -116,15 +123,15 @@ func Run(opts Options) error {
 		}
 		cursor.RepoID = cfg.Repository.ID
 
-		owner, name := cfg.Repository.Owner, cfg.Repository.Name
-		if owner == "" || name == "" {
-			owner, name = splitOwnerName(parseClonePath(cfg.Repository.CloneURL))
-		}
-
 		for _, pr := range prs {
 			prNum := fmt.Sprintf("%d", pr.Number)
-			if !cache.ShouldReview(cursor, prNum, pr.HeadSHA) {
-				logf("INFO", "%s#%s: head unchanged (%s)", cfg.Repository.ID, prNum, short(pr.HeadSHA))
+			continuous := cfg.Review.ContinuousRunsEnabled()
+			if !cache.ShouldReview(cursor, prNum, pr.HeadSHA, continuous) {
+				if continuous {
+					logf("INFO", "%s#%s: head unchanged (%s)", cfg.Repository.ID, prNum, short(pr.HeadSHA))
+				} else {
+					logf("INFO", "%s#%s: already reviewed (enableContinuousRuns=false)", cfg.Repository.ID, prNum)
+				}
 				continue
 			}
 			clone := cfg.Repository.CloneURL
@@ -142,7 +149,7 @@ func Run(opts Options) error {
 				BaseBranch:  pr.BaseBranch,
 				CloneURL:    clone,
 				ReviewID:    reviewID,
-				PublishMode: first(cfg.PublishMode, "auto"),
+				PublishMode: cfg.EffectivePublishMode(),
 			})
 			logf("INFO", "%s#%s: needs review @ %s", cfg.Repository.ID, prNum, short(pr.HeadSHA))
 		}
@@ -170,27 +177,6 @@ func Run(opts Options) error {
 		return fmt.Errorf("poll incomplete: %d repo list failure(s): %s", len(listErrs), strings.Join(listErrs, "; "))
 	}
 	return nil
-}
-
-func credentialFor(repoID, scm, fallback string) string {
-	if v := os.Getenv(config.CredentialEnvName(repoID)); v != "" {
-		return v
-	}
-	switch strings.ToLower(scm) {
-	case "gitlab":
-		return first(fallback, os.Getenv("GITLAB_TOKEN"), os.Getenv("GITLAB_PAT"), os.Getenv("PRIVATE_TOKEN"))
-	default:
-		return first(fallback, os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
-	}
-}
-
-func first(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
 }
 
 func short(sha string) string {
