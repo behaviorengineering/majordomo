@@ -1,0 +1,74 @@
+---
+description: >-
+  Instructs how to write Cursor project rules (.mdc) and Agent Skills (SKILL.md)
+  under .cursor/. Apply when creating or editing files in .cursor/rules/ or
+  .cursor/skills/.
+globs:
+  - .cursor/rules/**/*.mdc
+  - .cursor/skills/**/SKILL.md
+alwaysApply: false
+---
+
+# Authoring project rules and skills
+
+## Roles
+
+- **Rules** (`.cursor/rules/**/*.mdc`): repo **constraints**; use `alwaysApply` and/or `globs`.
+- **Skills** (`.cursor/skills/**/SKILL.md`): **task workflows** and domain how-tos.
+- MUST NOT paste the same guidance in both; use path pointers. MUST link across rules and skills when they overlap.
+
+---
+
+## Rules (`.cursor/rules/**/*.mdc`)
+
+### Front matter
+
+- MUST include YAML with `description` (third person: what the rule does and when it applies; include trigger terms).
+- MUST set either `alwaysApply: true` for global rules OR `globs: <pattern>` for path-scoped rules. MUST NOT rely on empty front matter.
+- For scoped rules: MUST use `globs` that match only intended paths (for example `content/**/*.md`).
+
+### Wording
+
+- MUST use imperative directives: **MUST**, **MUST NOT**, **MAY**, **SHOULD** where obligation varies.
+- MUST use short bullets. MUST NOT add long tables of contents unless the file is a reference index (for example LoveIt doc line maps).
+- MUST write in English only.
+- MUST avoid filler, narrative rationale, and duplicate lists that repeat the same obligation.
+
+### Content design
+
+- MUST keep one main concern per file; split large topics into separate `.mdc` files.
+- SHOULD keep the body under roughly 80 lines unless the file is intentionally a lookup index.
+- MUST NOT paste full copies of other project docs; use file paths and one-line pointers instead.
+- When a rule overlaps a skill, MUST point to `.cursor/skills/<name>/SKILL.md` instead of duplicating.
+
+### Exceptions
+
+- Index-style rules (for example theme documentation with line ranges) MAY use structured sections and long lists; still MUST keep the opening section imperative so the model knows how to use the index.
+
+---
+
+## Skills (`.cursor/skills/**/SKILL.md`)
+
+### Location
+
+- MUST store project skills only under `.cursor/skills/<skill-name>/SKILL.md`.
+- MUST NOT create or edit skills under `~/.cursor/skills-cursor/` (reserved for Cursor).
+
+### Front matter
+
+- MUST include YAML with:
+  - `name`: lowercase ASCII, hyphens, max 64 characters, unique in the project.
+  - `description`: third person; state **what** the skill does and **when** to apply it; include trigger terms (max 1024 characters).
+- MUST NOT omit `name` or `description`.
+
+### Body
+
+- MUST write instructions in English only.
+- MUST assume the model is capable; add only domain facts, workflows, templates, and constraints it would not infer.
+- MUST prefer short bullets and steps; MUST NOT add long tutorials unless the task is fragile.
+- SHOULD keep `SKILL.md` under roughly 500 lines; MUST put deep reference material in `reference.md` or `examples.md` in the same skill directory and link one level deep.
+- MUST NOT duplicate full content from `.cursor/rules/` if a path pointer suffices.
+
+### Optional assets
+
+- MAY add `reference.md`, `examples.md`, or `scripts/` under the skill folder. MUST document how to run scripts in one or two lines if present.

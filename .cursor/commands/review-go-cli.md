@@ -1,0 +1,1 @@
+Run the **review-go-cli** skill (`.cursor/skills/review-go-cli/SKILL.md`). Use when adding or changing `majordomo` subcommands or flags. Default scope: `cmd/majordomo` and `internal/cli/`. Say **and fix** to apply fixes.

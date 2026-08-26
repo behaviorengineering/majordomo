@@ -1,0 +1,36 @@
+---
+alwaysApply: true
+description: AI protocol for Majordomo. Conversation before implementation, English-only code/docs, no em dash, tmp clones for upstream debug.
+---
+
+# AI protocol
+
+## Conversation before implementation
+
+- MUST NOT implement, fix, or edit code when the user only asks a question or raises a concern without a clear implementation request.
+- MUST answer with analysis, options, and clarifying questions first.
+- MUST implement only after explicit requests (for example: "implement this", "fix this", "make these changes").
+
+## Before setup or environment changes
+
+- MUST state the planned action, cite which rules apply, and list next steps before running commands that change setup.
+
+## Language (code and docs)
+
+- MUST use English only for code, identifiers, comments, strings, paths, and documentation.
+- MUST use **US English** spelling in chat and docs when not quoting the author.
+- MUST use simple words, short sentences, and one consistent English term per concept.
+- MUST NOT use non-English text in the codebase.
+- Example: use `userName` and `getData()`; do not use mixed-language identifiers or comments.
+
+## Punctuation (all written output)
+
+- MUST NOT use the em dash character (U+2014) in any written output: chat responses, generated files, `tmp/`, or docs. Use comma, semicolon, colon, or parentheses instead.
+
+## Library source for debugging
+
+- MAY clone upstream into `tmp/<library-name>` to read or debug. MUST NOT modify or commit to upstream repos. MUST keep clones out of unrelated paths.
+
+## Documentation
+
+- Prefer skills or executable tooling for operational how-tos. Keep human `docs/` and `README.md` as short pitch and design narrative, not duplicated runbooks.

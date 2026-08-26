@@ -1,0 +1,1 @@
+Run the **code-review-staged** skill (`.cursor/skills/code-review-staged/SKILL.md`) and prefer maintainability / smell-oriented stages from the menu. Ask the user for target path(s) (default: `internal/`). Say **and fix** only after the review handoff if they want refactors applied.
