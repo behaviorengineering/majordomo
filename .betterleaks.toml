@@ -1,8 +1,9 @@
-title = "majordomo gitleaks config"
+title = "majordomo betterleaks config"
 
 [extend]
 useDefault = true
 
+# Legacy allowlist form is still accepted; Betterleaks translates it to filters.
 [allowlist]
 description = "Allow known-safe example placeholders and test fixtures"
 paths = [
