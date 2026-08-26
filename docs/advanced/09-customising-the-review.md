@@ -56,7 +56,7 @@ packageRegistry:
   npmVirtualPath: api/npm/npm-virtual/
 
 secrets:
-  githubCopilot: GITHUB_COPILOT_TOKEN      # env name in tower workflow
+  llmProviderKey: OPENAI_API_KEY           # or ANTHROPIC_API_KEY / OPENCODE_PROVIDER_API_KEY
   scmToken: SCM_TOKEN
   registryUser: REGISTRY_USER
   registryToken: REGISTRY_TOKEN
@@ -68,7 +68,7 @@ Corp Docker builds use `packageRegistry` + registry credentials. Open/GitHub-hos
 
 ### Override which files each skill receives
 
-`git-diff-prep.py` (or `majordomo prep`) classifies each changed file using glob patterns. **First matching glob wins.**
+`majordomo prep` classifies each changed file using glob patterns. **First matching glob wins.**
 
 ```yaml
 pipelines:

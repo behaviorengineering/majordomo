@@ -1,0 +1,117 @@
+# Majordomo agent image — OpenCode + git (no Python orchestration stack).
+#
+# GitHub CI / open internet:
+#   docker build --target public -t majordomo-agent -f dockerfiles/Dockerfile.agent .
+#
+# Corp (default final stage when built without --target):
+#   DOCKER_BUILDKIT=1 docker build \
+#     --build-arg BASE_IMAGE=<DOCKER_PULL_DOMAIN>/node:20-slim \
+#     --build-arg PACKAGE_REGISTRY_HOST=<PACKAGE_REGISTRY_HOST> \
+#     --build-arg CORP_CA_CERT_URL=<CORP_CA_CERT_URL> \
+#     --build-arg DEBIAN_REPO_PATH=<DEBIAN_REPO_PATH> \
+#     --build-arg NPM_VIRTUAL_PATH=<NPM_VIRTUAL_PATH> \
+#     --secret id=username,env=REGISTRY_USER \
+#     --secret id=token,env=REGISTRY_TOKEN \
+#     -t majordomo-agent -f dockerfiles/Dockerfile.agent .
+#
+# Runtime: provider API keys via env / `opencode auth` (see https://opencode.ai/docs).
+
+ARG BASE_IMAGE=node:20-slim
+
+# ---------------------------------------------------------------------------
+# public — Hub + public apt/npm
+# ---------------------------------------------------------------------------
+FROM node:20-slim AS public
+
+WORKDIR /workspace
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        locales \
+        git \
+        jq \
+        ripgrep \
+        fd-find \
+        less \
+        procps \
+        bash \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+ENV OPENCODE_DISABLE_AUTOUPDATE=1
+
+# npm package name is opencode-ai; binary is `opencode`
+RUN npm install -g opencode-ai@latest \
+    && opencode --version \
+    && rm -rf /root/.npm
+
+# Convenience: majordomo skills live under /opt/majordomo when the image is
+# built with the monorepo context (optional COPY below is a no-op layer if absent).
+COPY agents /opt/majordomo/agents
+COPY pipelines/scripts /opt/majordomo/pipelines/scripts
+ENV MAJORDOMO_SCRIPTS=/opt/majordomo/pipelines/scripts
+ENV MAJORDOMO_AGENTS=/opt/majordomo/agents
+
+CMD ["opencode"]
+
+# ---------------------------------------------------------------------------
+# corp — corporate pull-through base + package registry
+# ---------------------------------------------------------------------------
+FROM ${BASE_IMAGE} AS corp
+
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG NPM_VIRTUAL_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
+RUN --mount=type=secret,id=username \
+    --mount=type=secret,id=token \
+    --mount=type=bind,source=dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    /bin/sh /tmp/sa-scripts/setup-corp-apt.sh \
+        locales \
+        git \
+        jq \
+        ripgrep \
+        fd-find \
+        less \
+        procps \
+        bash \
+        curl \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+ENV OPENCODE_DISABLE_AUTOUPDATE=1
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
+
+RUN --mount=type=secret,id=username \
+    --mount=type=secret,id=token \
+    --mount=type=bind,source=dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    /bin/sh /tmp/sa-scripts/install-npm-tool.sh opencode-ai@latest \
+    && opencode --version
+
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV NO_PROXY=
+
+COPY agents /opt/majordomo/agents
+COPY pipelines/scripts /opt/majordomo/pipelines/scripts
+ENV MAJORDOMO_SCRIPTS=/opt/majordomo/pipelines/scripts
+ENV MAJORDOMO_AGENTS=/opt/majordomo/agents
+
+CMD ["opencode"]

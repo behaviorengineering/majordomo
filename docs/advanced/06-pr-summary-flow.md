@@ -35,7 +35,7 @@ what is low-risk to approve, and where a human judgment call is needed.
 ## ⚡ How the Loop Works
 
 Each iteration has two AI invocations. The first writes the summary using the diff, manifest
-metadata (the file list and routing information produced by `git-diff-prep.py`), and any feedback from the previous attempt. The second scores the result in a separate invocation with no shared state from the writer pass. It has no memory of the writer's reasoning, only the finished document
+metadata (the file list and routing information produced by `majordomo prep`), and any feedback from the previous attempt. The second scores the result in a separate invocation with no shared state from the writer pass. It has no memory of the writer's reasoning, only the finished document
 and the rubric. This separation prevents the model from rating its own work charitably.
 
 The loop runs up to five times by default. If the score reaches the pass threshold the loop exits early. If
@@ -55,17 +55,17 @@ The generate/score loop is the central path. The feedback file is only written w
 graph TD
     PR([PR opened / updated]) --> PREP
 
-    subgraph PREP ["git-diff-prep.py"]
+    subgraph PREP ["majordomo prep"]
         DIFF[Stage changed file diffs] --> MANIFEST[Build manifest\nbatch_000/manifest.json]
         MANIFEST --> SA[Embed static analysis\nresults into manifest]
     end
 
     PREP --> LOOP_START
 
-    subgraph LOOP ["summary-loop.py  —  up to 5 iterations"]
+    subgraph LOOP ["orchestrate summary loop  —  up to 5 iterations"]
         LOOP_START([Start iteration N]) --> GENERATE
 
-        subgraph GENERATE ["copilot-dispatch.sh --summary"]
+        subgraph GENERATE ["agent-dispatch.sh --summary"]
             READ_FEEDBACK{score_feedback.md\nexists?}
             READ_FEEDBACK -- yes --> APPLY[Apply per-FAIL\ncorrection constraints]
             READ_FEEDBACK -- no --> WRITE
@@ -74,7 +74,7 @@ graph TD
 
         WRITE --> SCORE
 
-        subgraph SCORE ["copilot-dispatch.sh --score"]
+        subgraph SCORE ["agent-dispatch.sh --score"]
             READ_SUMMARY[Read summary.md\nfresh context window]
             READ_SUMMARY --> RUBRIC[Score rubric items]
             RUBRIC --> WRITE_SCORE[Write score.md\nSCORE: N on line 1]
@@ -100,15 +100,15 @@ graph TD
 
 ## 📦 Components
 
-The flow is split across six files.
+The flow is split across the Go orchestrator, dispatch, and skill files.
 
-`summary-loop.py` is the **loop driver**. It calls `copilot-dispatch.sh` twice per iteration
+`majordomo orchestrate` (summary loop in `internal/agent`) is the **loop driver**. It calls `agent-dispatch.sh` twice per iteration
 (once with `--summary`, once with `--score`), parses the score, decides whether to iterate,
 and writes `score_feedback.md` when it does.
 
-`copilot-dispatch.sh` is the **Copilot CLI invocation wrapper**. It handles auth,
+`agent-dispatch.sh` is the **OpenCode invocation wrapper**. It handles auth,
 staging directory layout, model selection, and session file naming for all modes: file-review,
-finalize, summary, and score.
+finalize, summary, and score. Summary mode runs `majordomo report all-diffs --cap 50` first.
 
 `pr-review-summary` skill is the **writer**. It reads the diff, runs a structured 5-step
 analysis in working memory (Why, What Got Built, Low-Risk, Requires Human Judgment, Where to
@@ -125,7 +125,7 @@ the H3/code-block structure within them. The skill fills in the slots; the templ
 the shape.
 
 `templates/score.md` is the **scorer output skeleton**. It guarantees `SCORE: N` appears on
-its own line so `grep` can extract it reliably in the loop script.
+its own line so the loop can extract it reliably.
 
 ---
 
@@ -146,8 +146,8 @@ Set `SUMMARY_PASS_SCORE` to the scorer's maximum to always run all iterations re
 ## 🔗 How Feedback Reaches the Writer
 
 When the loop decides to retry, it copies `score.md` to `score_feedback.md` in the staging
-batch directory. On the next iteration `copilot-dispatch.sh --summary` passes that directory
-as `--add-dir` (flag that injects an additional directory into the agent's file context) to the Copilot CLI. The writer skill's `§Feedback Integration` section checks
+batch directory. On the next iteration `agent-dispatch.sh --summary` passes that directory
+into the agent's file context. The writer skill's `§Feedback Integration` section checks
 for `score_feedback.md` at the start of execution.
 
 For each FAIL item in the score report, the skill applies a specific correction constraint

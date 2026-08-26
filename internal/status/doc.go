@@ -1,2 +1,2 @@
-// Package status posts commit/check status to SCM forges.
+// Package status posts commit/build status to GitHub and Bitbucket Server.
 package status

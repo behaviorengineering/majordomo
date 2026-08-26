@@ -12,9 +12,17 @@ const (
 
 // Trigger is how the control tower discovers work for a served repo.
 type Trigger struct {
-	Poll     bool            `yaml:"poll"`
+	Poll     *bool           `yaml:"poll"`
 	Interval string          `yaml:"interval"`
 	Push     TriggerPush     `yaml:"push"`
+}
+
+// PollEnabled returns whether poll is on (default true).
+func (t Trigger) PollEnabled() bool {
+	if t.Poll == nil {
+		return true
+	}
+	return *t.Poll
 }
 
 // TriggerPush is the optional fast path; poll still reconciles.

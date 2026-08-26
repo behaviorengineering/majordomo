@@ -1,7 +1,7 @@
 # PR Summary Score Skill
 
 This skill scores a completed `summary.md` against the structural and prose rules defined
-by the `pr-review-summary` skill. It is invoked by `summary-loop.sh` after each generation
+by the `pr-review-summary` skill. It is invoked by the orchestrate summary loop after each generation
 pass. It does NOT rewrite the summary — it only evaluates and records findings.
 
 This skill runs as `mode:score` — it produces a single `score.md` file.

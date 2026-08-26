@@ -11,7 +11,7 @@ This guide is for engineers who maintain the `.majordomo` submodule in applicati
 - [How to clone the repo including submodules](#how-to-clone-the-repo-including-submodules) - Clone with submodules included
 
 **Maintenance:**
-- [How the script works](#how-the-script-works) - Two-stage flow, keypress navigation, and smart push behaviour
+- [How `majordomo submodule` works](#how-majordomo-submodule-works) - Two-stage flow, menu choices, and smart push behaviour
 - [Updating the submodule reference to the latest version](#updating-the-submodule-reference-to-the-latest-version) - Pull latest commits on the current branch
 - [Switching the submodule to a different branch](#switching-the-submodule-to-a-different-branch) - Move the submodule to a different pipeline branch
 - [Pinning the submodule to a specific commit](#pinning-the-submodule-to-a-specific-commit) - Lock the submodule to an exact SHA
@@ -63,15 +63,15 @@ git submodule update --init
 
 ---
 
-## ⚙️ How the script works
+## ⚙️ How `majordomo submodule` works
 
-Run the script from the root of your app repo:
+Run from the root of your app repo (with `majordomo` on `PATH`, built from this repo):
 
 ```bash
-python .majordomo/scripts/submodule.py
+majordomo submodule
 ```
 
-**Stage 1 — context check (off-branch only).** If your parent repo is not on the `pipelines` branch, the script shows a warning and asks how to proceed:
+**Stage 1 — context check (off-branch only).** If your parent repo is not on the `pipelines` branch, the command shows a warning and asks how to proceed:
 
 ```
 ⚠️  OFF-BRANCH WARNING  ⚠️
@@ -90,7 +90,7 @@ q. Quit
 
 If the parent repo is already on `pipelines`, stage 1 is skipped entirely.
 
-**Stage 2 — operations menu.** A single-keypress menu — no Enter needed:
+**Stage 2 — operations menu.** Type a choice and press Enter:
 
 ```
 1. Update to latest (pull current branch)
@@ -99,19 +99,19 @@ If the parent repo is already on `pipelines`, stage 1 is skipped entirely.
 q. Quit
 ```
 
-**Smart push behaviour.** The script only offers "Push to origin and exit?" after an operation that actually changed something. If the submodule was already up to date, the prompt is skipped.
+**Smart push behaviour.** The command only offers "Push to origin and exit?" after an operation that actually changed something. If the submodule was already up to date, the prompt is skipped.
 
 ---
 
 ## ⚙️ Updating the submodule reference to the latest version
 
-Run the script and press **1**:
+Run the command and press **1**:
 
 ```bash
-python .majordomo/scripts/submodule.py
+majordomo submodule
 ```
 
-The script pulls the latest commits on the current branch. If the parent repo pointer changed, it commits the update and offers to push. If the submodule was already up to date, it exits silently.
+The command pulls the latest commits on the current branch. If the parent repo pointer changed, it commits the update and offers to push. If the submodule was already up to date, it exits silently.
 
 <details>
 <summary><strong>Manual git commands</strong> (click to expand)</summary>
@@ -131,13 +131,13 @@ git push
 
 ## ⚙️ Switching the submodule to a different branch
 
-Run the script and press **2**:
+Run the command and choose **2**:
 
 ```bash
-python .majordomo/scripts/submodule.py
+majordomo submodule
 ```
 
-The script fetches remote branches, presents a numbered list, checks out the selected branch, and commits the parent repo pointer change.
+The command fetches remote branches, presents a numbered list, checks out the selected branch, and commits the parent repo pointer change.
 
 <details>
 <summary><strong>Manual git commands</strong> (click to expand)</summary>
@@ -158,10 +158,10 @@ git push
 
 ## ⚙️ Pinning the submodule to a specific commit
 
-Run the script, press **2** to switch to the target branch, then press **3** to pin:
+Run the command, choose **2** to switch to the target branch, then **3** to pin:
 
 ```bash
-python .majordomo/scripts/submodule.py
+majordomo submodule
 ```
 
 The parent repo records the exact commit SHA.
@@ -185,7 +185,7 @@ git push
 
 ## 🔧 Fixing broken submodules
 
-If submodule state becomes corrupted (detached HEAD (Git state where HEAD points directly to a commit instead of a branch), wrong remote, missing `.git` dir inside the submodule folder), the `submodule.py` script cannot be used; it lives inside `.majordomo` which is the broken submodule itself.
+If submodule state becomes corrupted (detached HEAD (Git state where HEAD points directly to a commit instead of a branch), wrong remote, missing `.git` dir inside the submodule folder), `majordomo submodule` cannot be used from that broken checkout; fix the submodule folder first.
 
 **Common causes:**
 - SSH key not set up before running initial `git submodule add`: remote becomes unreachable

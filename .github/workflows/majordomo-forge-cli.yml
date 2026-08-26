@@ -1,0 +1,67 @@
+name: majordomo-forge-cli
+
+on:
+  pull_request:
+    paths:
+      - "dockerfiles/Dockerfile.gh"
+      - "dockerfiles/Dockerfile.glab"
+      - "dockerfiles/sa-tools/scripts/**"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/majordomo-forge-cli.yml"
+  push:
+    branches: [main, master, feat/**]
+    paths:
+      - "dockerfiles/Dockerfile.gh"
+      - "dockerfiles/Dockerfile.glab"
+      - "dockerfiles/sa-tools/scripts/**"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/majordomo-forge-cli.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-gh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build majordomo-gh (public)
+        env:
+          DOCKER_BUILD_TARGET: public
+          SKIP_PUSH: "true"
+        run: |
+          bash ./pipelines/scripts/build-copilot-image.sh \
+            local \
+            majordomo-gh \
+            "gha-${{ github.sha }}" \
+            dockerfiles/Dockerfile.gh
+
+      - name: Smoke gh
+        run: |
+          docker run --rm "local/majordomo-gh:gha-${{ github.sha }}" \
+            sh -c 'gh --version && echo OK'
+
+  build-glab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build majordomo-glab (public)
+        env:
+          DOCKER_BUILD_TARGET: public
+          SKIP_PUSH: "true"
+        run: |
+          bash ./pipelines/scripts/build-copilot-image.sh \
+            local \
+            majordomo-glab \
+            "gha-${{ github.sha }}" \
+            dockerfiles/Dockerfile.glab
+
+      - name: Smoke glab
+        run: |
+          docker run --rm "local/majordomo-glab:gha-${{ github.sha }}" \
+            sh -c 'glab --version && echo OK'

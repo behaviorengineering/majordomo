@@ -1,31 +1,33 @@
-# Portable Submodule Pipeline Pattern
+# Portable Control-Plane Pattern
 
 *Majordomo — repository operations for evolving software.*
 
 ## 🧭 What You'll Learn
 
 **Getting Started:**
-- [What is the pattern](#what-is-the-pattern) - Core model: shared pipeline repo plus control tower
+- [What is the pattern](#what-is-the-pattern) - Shared engine plus control tower; served repos stay clean
 - [Why use it](#why-use-it) - Reuse, isolation, and safer rollout
 
 **Implementation:**
-- [How it works](#how-it-works) - End-to-end flow from poll/webhook to config-driven review
-- [Versioning the pipeline](#versioning-the-pipeline) - Pin `.majordomo/` in the control tower
-- [Project-specific customization](#project-specific-customization) - Per-repo YAML without forking pipeline code
+- [How it works](#how-it-works) - Poll → clone → run jobs → publish
+- [Versioning the engine](#versioning-the-engine) - Pin `.majordomo/` in the control tower
+- [Project-specific customization](#project-specific-customization) - Per-repo YAML without forking engine code
 
 **Advanced Usage:**
 - [Best practices](#best-practices) - Governance and rollout habits
-- [Related docs](#related-docs) - Setup, submodule ops, stage internals
+- [Related docs](#related-docs) - Setup, submodule ops, review deep dives
 
 ---
 
 ## 🔍 What is the pattern
 
-This guide explains how Majordomo separates **reusable pipeline code** (this repository, vendored as `.majordomo/`) from **org configuration** (control-tower YAML) and **application source** (served repos stay clean).
+Majordomo is a **control plane for evolving repositories**. This guide explains how it separates **reusable engine code** (this repository, vendored as `.majordomo/`) from **org configuration** (control-tower YAML) and **application source** (served repos stay clean).
 
-**Default (pull mode):** A control-tower GitHub Actions workflow polls SCM APIs for open PRs. Served app repos add nothing — no workflows, no config files, no submodule in the app repo.
+Jobs (poll, prep, orchestrate, publish, cache, and more) share that plane. **PR review is one workflow** built on it, not the definition of the product.
 
-**Legacy submodule mode:** Some consumers still vendor `.majordomo/` inside an app repo for local scripts or transitional Jenkins setups. That path is optional and shrinking — the tower model is canonical.
+**Default (pull mode):** A control-tower GitHub Actions workflow polls SCM APIs for work (today: open PRs that need review). Served app repos add nothing — no workflows, no config files, no submodule in the app repo.
+
+**Legacy submodule mode:** Some consumers still vendor `.majordomo/` inside an app repo for local tooling. That path is optional and shrinking — the tower model is canonical.
 
 **Placeholder mapping:**
 - `<pipeline-submodule-dir>`: Path to pinned majordomo code in the control tower (typically `.majordomo/`)
@@ -35,10 +37,11 @@ This guide explains how Majordomo separates **reusable pipeline code** (this rep
 
 ## 💡 Why use it
 
-- **Reuse:** One review engine, many repos.
+- **Reuse:** One control plane, many repos and jobs.
 - **Isolation:** Bump the tower's `.majordomo` pin without touching every app repo.
-- **Safer rollout:** Test pipeline changes on the tower branch before org-wide pin updates.
+- **Safer rollout:** Test engine changes on the tower branch before org-wide pin updates.
 - **No pollution:** Default onboarding does not merge CI files into application default branches.
+- **Room to grow:** New jobs plug into the same poll / config / cache / publish edges.
 
 ---
 
@@ -55,21 +58,21 @@ Control-tower repo (GitHub Actions)
   │     └── <repo-slug>.yaml
   └── .github/workflows/
         majordomo-poll.yml
-        majordomo-review.yml
+        majordomo-review.yml   # example job: PR review
 
         |
         v
-Clone target repo @ PR head
-Run majordomo prep → SA → orchestrate → publish
+Clone target repo @ change head
+Run majordomo jobs (e.g. prep → SA → orchestrate → publish)
 ```
 
-The orchestrator reads `<repo-config>`, checks out the PR branch, runs scripts from `.majordomo/pipelines/scripts/`, and publishes results via SCM adapters.
+The tower reads `<repo-config>`, checks out the target revision, runs `majordomo` jobs, and posts results via SCM adapters (`gh` / `glab` / Bitbucket HTTP). Agent-backed steps use `agent-dispatch.sh` (OpenCode).
 
 ---
 
-## 🎯 Versioning the pipeline
+## 🎯 Versioning the engine
 
-The control tower pins `.majordomo/` to an explicit commit. Bump the submodule pointer in the tower repo to roll out pipeline changes — served app repos do not need merges for default pull mode.
+The control tower pins `.majordomo/` to an explicit commit. Bump the submodule pointer in the tower repo to roll out engine changes — served app repos do not need merges for default pull mode.
 
 For legacy app-repo submodules, see [03 — Manage Submodule](03-manage-submodule.md).
 
@@ -96,7 +99,7 @@ staticAnalysis:
     glob: "**/*.py"
 ```
 
-Shared scripts stay reusable because each project supplies data, not orchestration logic.
+Shared engine code stays reusable because each project supplies config data, not orchestration code.
 
 ---
 
@@ -106,7 +109,7 @@ Shared scripts stay reusable because each project supplies data, not orchestrati
 
 **Config is org-owned:** Per-repo YAML lives in the control tower, not in application repos (default mode).
 
-**Pipeline changes go upstream:** Durable changes land in this repository (`behaviorengineering/majordomo`), then the tower bumps its pin.
+**Engine changes go upstream:** Durable changes land in this repository (`behaviorengineering/majordomo`), then the tower bumps its pin.
 
 **Test on branches:** Run tower workflows against fixture repos before bumping the org-wide pin.
 
@@ -114,7 +117,8 @@ Shared scripts stay reusable because each project supplies data, not orchestrati
 
 ## 🔗 Related docs
 
-- [02 — Setup](02-setup.md) — what runs today (scripts, images, Go CLI)
-- [03 — Manage Submodule](03-manage-submodule.md) — legacy app-repo vendoring
-- [04.1 — Pipeline stages](advanced/04.1-pipeline-stages-reference.md) — script map
+- [02 — Setup](02-setup.md) — CLI, images, local builds
+- [03 — Manage Submodule](03-manage-submodule.md) — legacy app-repo vendoring (`majordomo submodule`)
+- [04 — How the Review Works](04-how-the-review-works.md) — PR review workflow deep dive
+- [04.1 — Pipeline stages](advanced/04.1-pipeline-stages-reference.md) — review stage map
 - [PLAN — Control Tower, GitHub Actions, and Go](PLAN-control-tower-github-go.md)

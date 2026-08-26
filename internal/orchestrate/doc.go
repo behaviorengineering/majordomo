@@ -1,2 +1,2 @@
-// Package orchestrate runs review waves, checkpoints, and finalize.
+// Package orchestrate runs review waves, checkpoints, finalize, and synthesis loops.
 package orchestrate

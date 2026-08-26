@@ -1,3 +1,3 @@
-// Package cache reads and writes cluster review cache on the served repo
-// (branch majordomo-pr-reviewer-cache/<project-id>).
+// Package cache reads and writes review-cache and poll-cursor data on the
+// served repo (branches majordomo-pr-reviewer-cache/<id> and majordomo-poll-cache/<id>).
 package cache

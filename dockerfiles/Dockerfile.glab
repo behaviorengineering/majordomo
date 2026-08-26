@@ -1,0 +1,99 @@
+# Majordomo forge image — GitLab CLI (glab) only (no majordomo binary, no OpenCode).
+#
+# Public:
+#   docker build --target public -t majordomo-glab -f dockerfiles/Dockerfile.glab .
+#
+# Corp:
+#   DOCKER_BUILDKIT=1 docker build --target corp \
+#     --build-arg BASE_IMAGE=<DOCKER_PULL_DOMAIN>/debian:bookworm-slim \
+#     --build-arg PACKAGE_REGISTRY_HOST=... --build-arg CORP_CA_CERT_URL=... \
+#     --build-arg DEBIAN_REPO_PATH=... \
+#     --secret id=username,env=REGISTRY_USER --secret id=token,env=REGISTRY_TOKEN \
+#     -t majordomo-glab -f dockerfiles/Dockerfile.glab .
+
+ARG BASE_IMAGE=debian:bookworm-slim
+ARG GLAB_VERSION=1.55.0
+
+FROM debian:bookworm-slim AS public
+
+ARG TARGETARCH
+ARG GLAB_VERSION
+ARG GLAB_DOWNLOAD_BASE=https://gitlab.com/gitlab-org/cli/-/releases
+
+WORKDIR /workspace
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        jq \
+        bash \
+        locales \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+RUN arch="${TARGETARCH}" \
+    && case "${arch}" in amd64|arm64) ;; *) echo "unsupported arch ${arch}"; exit 1 ;; esac \
+    && curl -fsSL "${GLAB_DOWNLOAD_BASE}/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${arch}.tar.gz" \
+        | tar -xz -C /tmp \
+    && if [ -f /tmp/bin/glab ]; then mv /tmp/bin/glab /usr/local/bin/glab; \
+       elif [ -f /tmp/glab ]; then mv /tmp/glab /usr/local/bin/glab; \
+       else find /tmp -name glab -type f | head -1 | xargs -I{} mv {} /usr/local/bin/glab; fi \
+    && chmod +x /usr/local/bin/glab \
+    && glab --version
+
+CMD ["glab"]
+
+FROM ${BASE_IMAGE} AS corp
+
+ARG TARGETARCH
+ARG GLAB_VERSION
+ARG GLAB_DOWNLOAD_BASE=https://gitlab.com/gitlab-org/cli/-/releases
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
+RUN --mount=type=secret,id=username \
+    --mount=type=secret,id=token \
+    --mount=type=bind,source=dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    /bin/sh /tmp/sa-scripts/setup-corp-apt.sh \
+        locales \
+        git \
+        jq \
+        bash \
+        curl \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
+
+RUN arch="${TARGETARCH}" \
+    && case "${arch}" in amd64|arm64) ;; *) echo "unsupported arch ${arch}"; exit 1 ;; esac \
+    && curl -fsSL "${GLAB_DOWNLOAD_BASE}/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${arch}.tar.gz" \
+        | tar -xz -C /tmp \
+    && if [ -f /tmp/bin/glab ]; then mv /tmp/bin/glab /usr/local/bin/glab; \
+       elif [ -f /tmp/glab ]; then mv /tmp/glab /usr/local/bin/glab; \
+       else find /tmp -name glab -type f | head -1 | xargs -I{} mv {} /usr/local/bin/glab; fi \
+    && chmod +x /usr/local/bin/glab \
+    && glab --version
+
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV NO_PROXY=
+
+CMD ["glab"]

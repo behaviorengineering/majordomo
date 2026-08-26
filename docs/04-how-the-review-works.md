@@ -11,10 +11,10 @@
 ---
 
 ```
-  PR opened
+  PR opened (or control-tower poll)
        │
        ▼
-  ① STAGING        git-diff-prep.py — classify → cluster → batch
+  ① STAGING        majordomo prep — classify → cluster → batch
        │
        ├─────────────────────────────────────┐
        ▼                                     ▼
@@ -31,8 +31,10 @@
        └──────────────┬──────────────────────┘
                       ▼
                ④ PUBLISH
-                  summary.md → Bitbucket PR comment
+                  majordomo publish → PR comment / description / check
 ```
+
+`majordomo orchestrate` drives stages ②–③ (waves, checkpoints, finalize, prose, summary/tech loops, optional technical deep). Dispatch shells to `agent-dispatch.sh` (OpenCode).
 
 ---
 
@@ -42,9 +44,9 @@
 PR branch diff
        │
        ▼
-  git-diff-prep.py
+  majordomo prep
        │
-       ├─ classify ──► route to skill (code / docs / tests)
+       ├─ classify ──► route to skill (code / docs / conf / tests)
        ├─ size ──────► full_and_diff │ diff_only │ diff_chunk
        └─ cluster ───► group related files into batches
        │
@@ -71,8 +73,6 @@ If a file is too large for `full_and_diff`, the agent only sees the diff — mit
 └──────────────────────────────┘   └──────────────────────────────┘
          both start in round 1, no dependency between them
 ```
-
-
 
 ---
 
@@ -140,4 +140,4 @@ When the cap is hit without a pass, the highest-scoring attempt is kept.
 
 ---
 
-→ For script-level detail on each stage: [advanced/04.1-pipeline-stages-reference.md](advanced/04.1-pipeline-stages-reference.md)
+→ For stage-level detail: [advanced/04.1-pipeline-stages-reference.md](advanced/04.1-pipeline-stages-reference.md)

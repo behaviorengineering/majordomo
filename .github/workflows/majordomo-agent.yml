@@ -1,0 +1,47 @@
+name: majordomo-agent
+
+on:
+  pull_request:
+    paths:
+      - "dockerfiles/Dockerfile.agent"
+      - "dockerfiles/sa-tools/scripts/**"
+      - "agents/**"
+      - "pipelines/scripts/agent-dispatch.sh"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/majordomo-agent.yml"
+  push:
+    branches: [main, master, feat/**]
+    paths:
+      - "dockerfiles/Dockerfile.agent"
+      - "dockerfiles/sa-tools/scripts/**"
+      - "agents/**"
+      - "pipelines/scripts/agent-dispatch.sh"
+      - "pipelines/scripts/build-copilot-image.sh"
+      - ".github/workflows/majordomo-agent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build majordomo-agent (public target)
+        env:
+          DOCKER_BUILD_TARGET: public
+          SKIP_PUSH: "true"
+        run: |
+          bash ./pipelines/scripts/build-copilot-image.sh \
+            local \
+            majordomo-agent \
+            "gha-${{ github.sha }}" \
+            dockerfiles/Dockerfile.agent
+
+      - name: Smoke OpenCode
+        run: |
+          docker run --rm "local/majordomo-agent:gha-${{ github.sha }}" \
+            sh -c 'node --version && opencode --version && opencode --help >/dev/null && echo OK'

@@ -2,26 +2,28 @@
 
 *Majordomo — repository operations for evolving software.*
 
-**Status:** Draft  
-**Date:** 2026-08-22  
+**Status:** In progress (Phases 1–3 and most of Phase 5 done; Bitbucket poll and a few Phase 4 items remain)  
+**Date:** 2026-08-22 (progress updated 2026-08-26)  
 **Audience:** Maintainers and contributors planning the next major evolution of Majordomo.
 
 ---
 
 ## Summary
 
-Majordomo today is a **Jenkins + Bitbucket** pipeline delivered as a **git submodule**, with review logic in **Python/bash** and agents invoked via **GitHub Copilot CLI** inside a fat Docker image.
+Majordomo is a **control plane for evolving repositories**: durable org config, SCM adapters, cache, and a Go job runner. **PR review is one workflow** on that plane (prep → agent waves → publish), not the product boundary.
 
-The target is:
+**Current stack (this repo):** Go CLI (`majordomo`) owns poll, prep, orchestrate, dispatch, publish, status, cache, and report. Agents run via OpenCode (`agent-dispatch.sh`). Remaining bash is dispatch and image build.
+
+**Target architecture:**
 
 1. **Control-tower repo** — one place for org config and a pinned `.majordomo/` submodule; served repos stay clean (no workflow files by default).
 2. **GitHub Actions minutes** — all pipeline compute runs on GitHub-hosted runners in the control tower.
-3. **Any git host** — review repos on GitHub, GitLab, Bitbucket, or self-hosted git; SCM API adapters for poll, clone, and publish.
-4. **Go control plane** — port deterministic pipeline logic to a single static binary; keep agent and SA tooling in focused containers.
-5. **OpenCode** — replace Copilot CLI as the agent runtime (skills/personas remain file-based).
+3. **Any git host** — operate on GitHub, GitLab, Bitbucket, or self-hosted git; SCM API adapters for poll, clone, and publish.
+4. **Go control plane** — deterministic job logic in a single static binary; agent and SA tooling in focused containers.
+5. **OpenCode** — agent runtime for jobs that need LLM skills (skills/personas remain file-based).
 6. **Pull poll (reconciliation)** — `majordomo-poll.yml` runs on every onboarded repo regardless of push config. Push triggers are optional speed boosts. See [Trigger modes and onboarding](#trigger-modes-and-onboarding).
 
-**Jenkins and Groovy are decommissioned.** They are reference material for porting behaviour to Go and GitHub Actions, not a parallel supported path. Bitbucket (and other SCMs) remain valid **targets** for review via webhook adapters — only the Jenkins runtime goes away.
+Bitbucket (and other SCMs) remain valid **targets** for repository operations.
 
 ---
 
@@ -29,19 +31,20 @@ The target is:
 
 | Goal | Description |
 |------|-------------|
+| **Evolve with the repo** | Durable config, cursors, and cache so jobs compound over time — not one-shot scripts. |
 | **No repo pollution** | Served repos do not add `.github/workflows/`, `.majordomo/`, or Majordomo config (default pull mode). |
 | **Central onboarding** | Add `majordomo-central-config/<repo>.yaml` + store SCM credential in tower secrets; no app-repo merge required. |
-| **Submodule versioning** | Control tower pins `.majordomo` at a commit; bump pointer to roll out pipeline changes. |
-| **SCM-agnostic core** | Same review engine for any git remote; adapters for trigger + publish only. |
-| **Fast, portable binary** | Go for staging, orchestration, cache, publish — one small container on GHA. |
-| **Agent swap** | OpenCode in a slim agent image; no Node/Python orchestration image. |
+| **Submodule versioning** | Control tower pins `.majordomo` at a commit; bump pointer to roll out engine changes. |
+| **SCM-agnostic core** | Same control plane for any git remote; adapters for trigger + publish only. |
+| **Fast, portable binary** | Go for poll, staging, orchestration, cache, publish — one small container on GHA. |
+| **Agent when needed** | OpenCode in a slim agent image for skill-backed jobs (review today; more later). |
 
 ## Non-goals (for this phase)
 
 - Rewriting agent skills or review rubrics in Go.
 - Replacing third-party SA tools (ruff, eslint, etc.) with Go implementations.
-- Maintaining Jenkins, Groovy stages, or Jenkins setup scripts in parallel with the new stack.
 - Building a hosted SaaS control plane (self-hosted control tower only).
+- Treating PR review as the only supported job forever (the plane must stay open to new workflows).
 
 ---
 
@@ -49,24 +52,21 @@ The target is:
 
 ```text
 majordomo (this repo)
-  ├── agents/                        (skills + personas — active)
-  ├── pipelines/scripts/             (staging, dispatch, publish — active)
-  ├── dockerfiles/                   (public/corp images — active)
-  ├── .github/workflows/             (image CI on GHA — active)
-  ├── cmd/majordomo + internal/      (Go control plane — in progress)
-  └── docs/PLAN-control-tower-…      (target architecture)
-
-Removed: Jenkinsfiles, Groovy stages/lib, setup-majordomo*.py, groovy config examples.
-Behaviour described in older advanced docs is a porting reference for Go/GHA, not a supported Jenkins path.
+  ├── agents/                        (skills + personas)
+  ├── pipelines/scripts/             (agent-dispatch + image build)
+  ├── dockerfiles/                   (public/corp images)
+  ├── .github/workflows/             (image CI on GHA)
+  ├── cmd/majordomo + internal/      (Go control plane)
+  └── docs/                          (setup + architecture plan)
 ```
 
-See [02 — Setup](02-setup.md) for what still runs locally, and the rest of this plan for the control-tower target.
+See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for the control-tower target.
 
 ---
 
 ## Target architecture
 
-**Default path (pull mode):** control-tower workflow polls SCM APIs; served repos change nothing.
+**Default path (pull mode):** control-tower workflow polls SCM APIs for work; served repos change nothing. PR review is the first end-to-end job wired on that path.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -111,10 +111,9 @@ See [02 — Setup](02-setup.md) for what still runs locally, and the rest of thi
 
 | # | Topic | Decision |
 |---|-------|----------|
-| 1 | Jenkins / Groovy | **Decommission.** Port behaviour to Go + GHA, then delete. No parallel maintenance. |
-| 2 | Review cache location | **On the served repo** (same as today). Cluster analysis cache branches live in the app repo under review. Poll cache (PR `head_sha` cursors) also lives on the served repo — not on the control-tower. |
-| 3 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
-| 4 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
+| 1 | Review cache location | **On the served repo** (same as today). Cluster analysis cache branches live in the app repo under review. Poll cache (PR `head_sha` cursors) also lives on the served repo — not on the control-tower. |
+| 2 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
+| 3 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
 
 ### Control-tower repository
 
@@ -153,7 +152,9 @@ git submodule add https://github.com/behaviorengineering/majordomo.git .majordom
 
 ### Review cache (served repo)
 
-Behaviour unchanged from [PROPOSAL-review-cache-bitbucket-downloads.md](PROPOSAL-review-cache-bitbucket-downloads.md):
+Behaviour for cluster cache on the served repo:
+
+Git-tracked analysis files on branch `majordomo-pr-reviewer-cache/<project-id>` (or similar), with retention and fingerprint checks. See `majordomo cache` (`precheck` / `lookup` / `store` / `restore` / `push`).
 
 - Cache branch pattern: `majordomo-pr-reviewer-cache/<project-id>`.
 - Skill-scoped layout: `<skill-name>/analysis-<cluster-sha>.json`
@@ -170,7 +171,7 @@ cache:
   enableSkips: false
 ```
 
-Go port: `majordomo cache` subcommand replaces `review-cache.py` and `push-to-cache.py` with the same git-branch storage model.
+Go port: `majordomo cache` implements the git-branch storage model (`precheck` / `lookup` / `store` / `restore` / `push`).
 
 **Poll cache** (separate branch): `majordomo-poll-cache/<repo-id>` with `poll-cursor.json` — see [Poll cache](#poll-cache-where-poll-compares-head_sha).
 
@@ -213,7 +214,7 @@ All SCM adapters must produce this shape (JSON) before triggering the control-to
 
 ## Central config schema (draft)
 
-Replace Groovy central config with YAML. Per-repo file: `majordomo-central-config/<repo_id>.yaml`.
+Per-repo config lives in YAML: `majordomo-central-config/<repo_id>.yaml`.
 
 ```yaml
 # majordomo-central-config/payments-api.yaml
@@ -261,7 +262,7 @@ pollCache:
 
 Org defaults in `majordomo-central-config/_defaults.yaml` are deep-merged; per-repo keys win.
 
-Existing Groovy config semantics in [09 — Customising the Review](advanced/09-customising-the-review.md) should map 1:1 where possible.
+Config keys in [09 — Customising the Review](advanced/09-customising-the-review.md) should map 1:1 where possible.
 
 ---
 
@@ -301,7 +302,7 @@ Push modes don’t replace poll — they **front-run** it. If a webhook fires an
 | **No served-repo changes** | Nothing to merge to default branch — avoids PR approver gatekeeping. |
 | **No extra hosting** | No webhook router, no GitHub App, no inbound URL on corp network. |
 | **Cross-org** | Platform admin issues PAT; no workflow in foreign repos. |
-| **Replaces Jenkins GWT** | Outbound API poll instead of inbound Bitbucket webhook to Jenkins. |
+| **Why poll** | Outbound API poll instead of relying on inbound webhooks alone. |
 
 Tradeoff for pull-only: reviews start within one poll interval (~5 min + scheduler jitter). Add push when a repo needs faster feedback.
 
@@ -438,25 +439,27 @@ Poll, clone, and publish are SCM-specific; trigger mode is independent.
 
 Built from this repo (new top-level `cmd/` and `internal/`). Distributed as `ghcr.io/behaviorengineering/majordomo`.
 
-| Subcommand | Replaces | Notes |
-|------------|----------|-------|
-| `majordomo prep` | `git-diff-prep.py` | Classify, cluster, batch, write manifest |
-| `majordomo dispatch` | `copilot-dispatch.sh` | Exec OpenCode with skill/env wiring |
-| `majordomo orchestrate` | `copilot-review.groovy` + loop scripts | Waves, checkpoints, finalize |
-| `majordomo publish` | `publish-pr-summary.py` | `--scm github\|gitlab\|bitbucket` |
-| `majordomo status` | `notify-build-status.py` | Commit/check status per SCM |
-| `majordomo report junit` | `review-to-junit.py` | |
-| `majordomo report html` | `md-to-html.py` | |
-| `majordomo cache` | `review-cache.py`, `push-to-cache.py` | Phase 5 |
-| `majordomo poll` | (new) | SCM API poll; default trigger ingress |
-| `majordomo sa run` | `run-sa-tool.sh` | `docker run` SA images |
+| Subcommand | Role |
+|------------|------|
+| `majordomo prep` | Classify, cluster, batch, write manifest |
+| `majordomo dispatch` | Exec OpenCode via `agent-dispatch.sh` |
+| `majordomo orchestrate` | Waves, checkpoints, finalize, prose, summary/tech loops, tech-deep |
+| `majordomo publish` | Post summary (`--scm github\|gitlab\|bitbucket`) |
+| `majordomo status` | Commit/check status per SCM |
+| `majordomo report junit` | Findings → JUnit XML |
+| `majordomo report html` | Markdown → HTML |
+| `majordomo report all-diffs` | Concatenate staging diffs for synthesis |
+| `majordomo cache` | Review-cache + poll-cursor helpers |
+| `majordomo poll` | SCM API poll; default trigger ingress |
+| `majordomo build-sa-tools` | Local SA image smoke builds |
+| `majordomo submodule` | Interactive vendored-submodule manager |
 
 ### Do not port to Go
 
 | Asset | Reason |
 |-------|--------|
 | `agents/skills/*`, personas | Prompt content |
-| OpenCode / Copilot CLI | External agent runtime |
+| OpenCode | External agent runtime ([opencode.ai](https://opencode.ai)) |
 | SA tool images | Third-party linters |
 
 ### Proposed module layout
@@ -479,7 +482,9 @@ majordomo/                          (this repo, new paths)
 ├── agents/                         # unchanged
 ├── docker/
 │   ├── Dockerfile.majordomo        # distroless + static binary
-│   └── Dockerfile.agent            # OpenCode only
+│   ├── Dockerfile.agent            # OpenCode only
+│   ├── Dockerfile.gh               # GitHub CLI (job container)
+│   └── Dockerfile.glab             # GitLab CLI (job container)
 └── pipelines/scripts/              # legacy; deprecated per subcommand
 ```
 
@@ -489,6 +494,8 @@ majordomo/                          (this repo, new paths)
 |-------|----------|
 | `majordomo` | Static Go binary only (~15–30 MB) |
 | `majordomo-agent` | OpenCode + git; no Python orchestration |
+| `majordomo-gh` | `gh` + git/jq; forge job container (majordomo binary built in-job) |
+| `majordomo-glab` | `glab` + git/jq; forge job container |
 | `sa-tools/*` | Existing ruff/eslint/… images (unchanged) |
 
 ---
@@ -497,38 +504,7 @@ majordomo/                          (this repo, new paths)
 
 See [Decisions → Control-tower repository](#control-tower-repository) for the two-repo split.
 
-This repository (`behaviorengineering/majordomo`) is **never** the workflow host — it is consumed as `.majordomo/` inside the control-tower repo.
-
-Relationship mirrors the old Jenkins central model: tower owns config and GHA entrypoints; `.majordomo` owns code — without Jenkins in the loop.
-
----
-
-## Decommission: Jenkins and Groovy
-
-**Status (2026-08-25):** Removed from this repository. Behaviour is ported incrementally to Go + GitHub Actions in the control tower.
-
-| Path | Status |
-|------|--------|
-| `pipelines/MajordomoReview*.Jenkinsfile` | **Deleted** |
-| `.jenkins-local/` | **Deleted** |
-| `stages/*.groovy`, `lib/*.groovy` | **Deleted** |
-| `scripts/setup-majordomo*.py` | **Deleted** |
-| `example.majordomo-config.groovy`, `example.majordomo-central-config/` | **Deleted** |
-| `copilot/setup-majordomo-*.prompt.md` | **Deleted** |
-| `docs/02-setup.md`, `04.1`, `09`, `01` | **Rewritten** for GHA / control tower |
-| `docs/PROPOSAL-*`, `08`, `REVISIONS-*` | **Archived** (historical banner) |
-| `.github/workflows/sa-tools.yml`, `copilot-cli.yml` | **Added** (public image CI) |
-
-**Still to port** before full review on GHA:
-
-- `majordomo orchestrate` ← wave/checkpoint logic from deleted `copilot-review.groovy`
-- Control-tower `majordomo-poll.yml` + `majordomo-review.yml`
-- YAML config examples in `majordomo-central-config/` (tower repo)
-
-**Keep as CI-agnostic helpers** (called by Go/GHA orchestrator):
-
-- `pipelines/scripts/*.py`, `pipelines/scripts/*.sh`
-- `agents/`, `dockerfiles/`
+This repository (`behaviorengineering/majordomo`) is **never** the workflow host — it is consumed as `.majordomo/` inside the control-tower repo. The tower owns config and GHA entrypoints; this repo owns review code.
 
 ---
 
@@ -622,78 +598,62 @@ jobs:
 - [x] Rename review cache branch to `majordomo-pr-reviewer-cache/<project-id>`
 - [x] Pin `.majordomo` submodule in tower → `behaviorengineering/majordomo`
 
-### Phase 1 — Go control plane (next; preferred over poll-first)
+### Phase 1 — Go control plane
 
 Port deterministic pipeline logic to Go. Tower poll/workflows stay stubs until the binary can prep, orchestrate, and publish.
 
 **1a — Staging and reports (start here)**
 
-- [x] `majordomo prep` — port `git-diff-prep.py` + tests from `tests/pipelines/scripts/test_git_diff_prep.py`
-- [x] `majordomo report junit` — port `review-to-junit.py`
-- [x] `majordomo report html` — port `md-to-html.py`
-- [x] `dep_clusters` + `doc_clusters` in Go (`internal/cluster`)
+- [x] `majordomo prep` — classify, cluster, batch + Go tests
+- [x] `majordomo report junit` / `html` / `all-diffs`
+- [x] Dependency + doc clustering in Go (`internal/cluster`)
 
 **1b — Orchestration and agent bridge**
 
-- [ ] `majordomo orchestrate` — port wave/checkpoint logic from `stages/copilot-review.groovy`
-- [ ] `majordomo dispatch` — wrap agent CLI (Copilot for now; OpenCode in Phase 3)
-- [ ] Port `summary-loop` / `tech-review-loop` into orchestrate
+- [x] `majordomo orchestrate` — waves, checkpoints, finalize, prose, loops, tech-deep
+- [x] `majordomo dispatch` — OpenCode via `agent-dispatch.sh`
+- [x] Summary / tech score loops in Go
 
 **1c — Publish and cache**
 
-- [ ] `majordomo publish` — GitHub first, then Bitbucket (port `publish-pr-summary.py`)
-- [ ] `majordomo status` — commit/check status
-- [ ] `majordomo cache` — review + poll cursor on served repo
+- [x] `majordomo publish` — GitHub, GitLab (`glab`), Bitbucket HTTP
+- [x] `majordomo status` — commit/check status
+- [x] `majordomo cache` — review + poll cursor + cluster precheck/lookup/store/restore
 
-**1d — Retire Python/Groovy for ported paths**
+**1d — Tooling**
 
-- [x] Delete `stages/*.groovy`, `lib/*.groovy`, Jenkinsfiles, setup-majordomo scripts (2026-08-25)
-- [ ] Keep `pipelines/scripts/*.py` only until each subcommand is covered by tests
+- [x] `majordomo build-sa-tools` / `majordomo submodule`
+- [x] Pipeline Python removed; bash retained for dispatch + image build
 
 ### Phase 2 — Pull mode end-to-end (tower wiring)
 
 Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 
-- [ ] Wire `majordomo-poll.yml` to build/run Go binary from `.majordomo`
-- [ ] Wire `majordomo-review.yml` to `majordomo orchestrate` + `publish`
+- [x] Wire `majordomo-poll.yml` to build/run Go binary from `.majordomo`
+- [x] Wire `majordomo-review.yml` to `majordomo orchestrate` + `publish`
 - [ ] One pilot served repo on **pull mode** — no files in served repo
-- [ ] Document beginner onboarding (credentials + YAML)
+- [x] Document beginner onboarding (credentials + YAML)
 
 ### Phase 3 — OpenCode + slim images
 
-- [ ] `Dockerfile.agent` with [OpenCode](https://github.com/anomalyco/opencode)
-- [ ] `majordomo dispatch` wraps OpenCode CLI
-- [ ] **Delete** `dockerfiles/copilot-cli.Dockerfile` and Copilot-specific dispatch paths
+- [x] `Dockerfile.agent` with [OpenCode](https://github.com/anomalyco/opencode)
+- [x] `majordomo dispatch` wraps OpenCode CLI
+- [x] Agent image CI (`majordomo-agent.yml`)
 
 ### Phase 4 — Multi-SCM + optional push triggers
 
-- [ ] GitLab poll + `publish/gitlab`
-- [ ] Bitbucket poll (primary migration path from Jenkins webhooks)
+- [x] GitLab poll (+ GitHub poll pagination)
+- [x] `publish/gitlab` via `glab` (GitHub publish via `gh`; Bitbucket remains HTTP)
+- [ ] Bitbucket poll
 - [ ] Optional: `push-workflow` stub template + `repository_dispatch` for willing repos
 - [ ] Optional: webhook router under `triggers/` (push-webhook mode)
 - [ ] `generic` SCM — clone + artifact-only reviews
 
-### Phase 5 — Cache hardening and legacy cleanup
+### Phase 5 — Cache hardening and polish
 
-- [ ] Port remaining cache edge cases from `review-cache.py` / `push-to-cache.py`
+- [x] Cluster cache precheck / lookup / store / restore
 - [ ] Checks API annotations from JUnit
-- [ ] **Delete** remaining `pipelines/scripts/*.py` and bash orchestration
-- [x] Rewrite `docs/02-setup.md` and archive Jenkins-specific docs (2026-08-25)
-
----
-
-## Migration notes (legacy Jenkins → control tower)
-
-Historical mapping for anyone porting config or behaviour. **No Jenkins deployment is planned going forward.**
-
-| Legacy (remove) | Replacement |
-|-----------------|-------------|
-| Bitbucket webhook → Jenkins central job | **Pull mode:** tower cron polls Bitbucket API (no webhook required) |
-| `majordomo-central-config/*.groovy` | `majordomo-central-config/*.yaml` |
-| `setup-majordomo-central.py` | Pull-mode onboarding: PAT in tower secrets + YAML config |
-| Jenkins credentials store | GitHub Actions secrets (`MAJORDOMO_CREDENTIAL__<repo_id>`) |
-| `MajordomoReview.Central.CI.Jenkinsfile` | `majordomo-poll.yml` + `majordomo-review.yml` + `majordomo orchestrate` |
-| Per-repo Jenkins job + `setup-majordomo.py` | Not replaced — central tower only; served repos stay clean |
+- [x] Docs refreshed for Go + OpenCode
 
 ---
 
@@ -701,9 +661,9 @@ Historical mapping for anyone porting config or behaviour. **No Jenkins deployme
 
 | Layer | Approach |
 |-------|----------|
-| Go units | Port existing pytest cases to `go test` per package |
-| Staging golden files | Fixture repos + expected `manifest.json` / `batch-plan.json` |
-| Publishers | HTTP mocks against GitHub/GitLab/Bitbucket APIs |
+| Go units | `go test` per package |
+| Staging fixture | Temp git repos + expected `manifest.json` / `batch-plan.json` shape |
+| Publishers | HTTP mocks / injectable runners against GitHub/GitLab/Bitbucket APIs |
 | Integration | Control-tower workflow `workflow_dispatch` with fixture payload |
 | Agent | Smoke test: `majordomo dispatch` with stub OpenCode in CI |
 
@@ -712,7 +672,13 @@ Historical mapping for anyone porting config or behaviour. **No Jenkins deployme
 ## Open questions
 
 1. **Credential model** — one org secret per SCM vs `MAJORDOMO_CREDENTIAL__<repo_id>` convention?
-2. **OpenCode auth** — which provider keys in agent container vs passed per-run?
+
+## Resolved decisions
+
+| Topic | Decision |
+|-------|----------|
+| **OpenCode auth** | Provider API keys are **per-run job secrets/env** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` for custom OpenAI-compatible gateways). Never bake keys into the agent image. Optional non-secret provider config (`baseURL`, provider id) via `opencode.json` / `OPENCODE_CONFIG_CONTENT` with `{env:...}`. SCM tokens remain separate from LLM auth. `agent-dispatch.sh` preflights provider keys; it no longer requires `GITHUB_TOKEN` for Copilot CLI. |
+| **Forge publish** | GitHub/GitLab publish uses **`gh` / `glab` on PATH** inside separate job containers (`majordomo-gh`, `majordomo-glab`). Majordomo Go binary is built in-job and not baked into forge images. Bitbucket publish stays HTTP until a Bitbucket CLI path exists. Poll remains Go HTTP. |
 
 ---
 
@@ -720,11 +686,11 @@ Historical mapping for anyone porting config or behaviour. **No Jenkins deployme
 
 | Doc | Relevance |
 |-----|-----------|
-| [01 — Portable Pipeline Pattern](01-portable-pipeline-pattern.md) | Submodule + config separation (still applies) |
-| [04 — How the Review Works](04-how-the-review-works.md) | Behaviour to preserve in Go orchestrator |
-| [advanced/05-file-orchestration.md](advanced/05-file-orchestration.md) | Staging port spec |
+| [01 — Portable Pipeline Pattern](01-portable-pipeline-pattern.md) | Submodule + config separation |
+| [02 — Setup](02-setup.md) | Local CLI and image builds |
+| [04 — How the Review Works](04-how-the-review-works.md) | Review behaviour |
+| [advanced/05-file-orchestration.md](advanced/05-file-orchestration.md) | Staging and waves |
 | [advanced/09-customising-the-review.md](advanced/09-customising-the-review.md) | YAML config mapping |
-| [PROPOSAL-review-cache-bitbucket-downloads.md](PROPOSAL-review-cache-bitbucket-downloads.md) | Cache port reference |
 
 ---
 
@@ -733,7 +699,6 @@ Historical mapping for anyone porting config or behaviour. **No Jenkins deployme
 | Date | Change |
 |------|--------|
 | 2026-08-22 | Initial draft from architecture discussion |
-| 2026-08-23 | Jenkins/Groovy decommissioned — no parallel maintenance path |
 | 2026-08-23 | Control-tower is a separate repo; pins `majordomo` as `.majordomo/` submodule |
 | 2026-08-23 | Review cache stays on served repo (`cache.repo: served`) |
 | 2026-08-23 | **Poll cache** on served repo branch `majordomo-poll-cache/<repo-id>` (`poll-cursor.json`) |
@@ -741,3 +706,6 @@ Historical mapping for anyone porting config or behaviour. **No Jenkins deployme
 | 2026-08-24 | Go module scaffold: `cmd/majordomo`, `internal/*` stubs; Phase 0 started |
 | 2026-08-24 | Control tower locked: `xynova/majordomo-tower`; pipeline stays `behaviorengineering/majordomo` |
 | 2026-08-24 | **Priority shift:** Go control plane (Phase 1) before tower poll wiring (Phase 2) |
+| 2026-08-26 | OpenCode auth resolved: runtime provider API keys |
+| 2026-08-26 | Forge CLI images `majordomo-gh` / `majordomo-glab`; publish via `gh`/`glab` on PATH |
+| 2026-08-26 | Pipeline Python removed; historical proposal/revision docs deleted |

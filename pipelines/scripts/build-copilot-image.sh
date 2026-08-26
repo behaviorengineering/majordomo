@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build and push a Docker image (Copilot CLI or SA tool) to the registry.
+# Build and push a Docker image (majordomo-agent / forge CLI / SA tool) to the registry.
 # Usage: ./build-copilot-image.sh <registry> <image-name> <image-tag> <dockerfile-path>
 #
 # Environment:
@@ -13,7 +13,7 @@
 #
 # Context:
 #   sa-tools/*          → dockerfiles/sa-tools/
-#   copilot-cli         → majordomo root (parent of dockerfiles/; has pyproject.toml)
+#   Dockerfile.agent|gh|glab → majordomo root (parent of dockerfiles/)
 #                         (`.majordomo/` when vendored as a submodule)
 
 set -euo pipefail
@@ -38,18 +38,21 @@ export REGISTRY_USER="${REGISTRY_USER:-}"
 export REGISTRY_TOKEN="${REGISTRY_TOKEN:-}"
 
 IS_SA_TOOL=false
-IS_COPILOT_CLI=false
+IS_AGENT_IMAGE=false
 if [[ "${DOCKERFILE_PATH}" == *"/sa-tools/"* ]] || [[ "${DOCKERFILE_PATH}" == sa-tools/* ]] \
     || [[ "$(basename "${DOCKERFILE_DIR}")" == "sa-tools" ]]; then
     IS_SA_TOOL=true
-elif [[ "${DOCKERFILE_BASE}" == "copilot-cli.Dockerfile" ]]; then
-    IS_COPILOT_CLI=true
+elif [[ "${DOCKERFILE_BASE}" == "Dockerfile.agent" ]] \
+    || [[ "${DOCKERFILE_BASE}" == "Dockerfile.gh" ]] \
+    || [[ "${DOCKERFILE_BASE}" == "Dockerfile.glab" ]] \
+    || [[ "${DOCKERFILE_BASE}" == "copilot-cli.Dockerfile" ]]; then
+    IS_AGENT_IMAGE=true
 fi
 
 if [ "${IS_SA_TOOL}" = true ]; then
     BUILD_CONTEXT="${DOCKERFILE_DIR}"
     DOCKERFILE_FLAG="${DOCKERFILE_ABS}"
-elif [ "${IS_COPILOT_CLI}" = true ]; then
+elif [ "${IS_AGENT_IMAGE}" = true ]; then
     # majordomo root (native checkout) or .majordomo/ (vendored submodule)
     BUILD_CONTEXT="$(cd "${DOCKERFILE_DIR}/.." && pwd)"
     DOCKERFILE_FLAG="${DOCKERFILE_ABS}"
@@ -59,7 +62,7 @@ else
 fi
 
 IS_DUAL_STAGE=false
-if [ "${IS_SA_TOOL}" = true ] || [ "${IS_COPILOT_CLI}" = true ]; then
+if [ "${IS_SA_TOOL}" = true ] || [ "${IS_AGENT_IMAGE}" = true ]; then
     IS_DUAL_STAGE=true
 fi
 
@@ -109,7 +112,8 @@ if [ "${IS_DUAL_STAGE}" = true ] && [ "${BUILD_TARGET}" = "corp" ]; then
         BUILD_ARGS+=(--build-arg "BASE_IMAGE=${BASE_IMAGE}")
     elif [ -n "${DOCKER_PULL_DOMAIN:-}" ]; then
         case "${IMAGE_NAME}" in
-            copilot-cli|sa-eslint) BASE_FROM="${DOCKER_PULL_DOMAIN}/node:20-slim" ;;
+            copilot-cli|sa-eslint|majordomo-agent) BASE_FROM="${DOCKER_PULL_DOMAIN}/node:20-slim" ;;
+            majordomo-gh|majordomo-glab) BASE_FROM="${DOCKER_PULL_DOMAIN}/debian:bookworm-slim" ;;
             sa-ruff|sa-bandit|sa-mypy) BASE_FROM="${DOCKER_PULL_DOMAIN}/python:3.12-slim" ;;
             sa-shellcheck|sa-hadolint) BASE_FROM="${DOCKER_PULL_DOMAIN}/debian:bookworm-slim" ;;
             *) BASE_FROM="${DOCKER_PULL_DOMAIN}/node:20-slim" ;;

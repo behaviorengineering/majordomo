@@ -5,35 +5,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
-	"sort"
 	"testing"
 
 	"github.com/behaviorengineering/majordomo/internal/staging"
 )
 
-// TestPrepGoldenVsPython builds a fixture repo, runs Go prep and Python git-diff-prep,
-// and compares key fields of manifest.json / batch-plan.json.
-func TestPrepGoldenVsPython(t *testing.T) {
-	python := "python3"
-	if _, err := exec.LookPath(python); err != nil {
-		t.Skip("python3 not available")
-	}
-	modRoot := findModuleRoot(t)
-	pyScript := filepath.Join(modRoot, "pipelines", "scripts", "git-diff-prep.py")
-	if _, err := os.Stat(pyScript); err != nil {
-		t.Fatalf("python script missing: %v", err)
-	}
-
+// TestPrepProducesReviewableManifest builds a fixture repo and checks Go prep
+// writes a coherent batch plan and reviewable manifest.
+func TestPrepProducesReviewableManifest(t *testing.T) {
 	fixture := t.TempDir()
 	initFixtureRepo(t, fixture)
 
 	goStaging := filepath.Join(t.TempDir(), "go-staging")
-	pyStaging := filepath.Join(t.TempDir(), "py-staging")
 	_ = os.MkdirAll(goStaging, 0o755)
-	_ = os.MkdirAll(pyStaging, 0o755)
 
-	// Run from fixture cwd so relative paths match.
 	prev, _ := os.Getwd()
 	if err := os.Chdir(fixture); err != nil {
 		t.Fatal(err)
@@ -49,34 +34,24 @@ func TestPrepGoldenVsPython(t *testing.T) {
 		t.Fatalf("go prep: %v", err)
 	}
 
-	cmd := exec.Command(python, pyScript, "main", pyStaging)
-	cmd.Dir = fixture
-	cmd.Env = append(os.Environ(), "COPILOT_BATCH_SIZE=15")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("python prep: %v\n%s", err, out)
+	plan := readJSON(t, filepath.Join(goStaging, "batch-plan.json"))
+	skills := toStringSlice(plan["skills"])
+	if len(skills) == 0 {
+		t.Fatal("expected at least one skill in batch-plan")
+	}
+	total, ok := asInt(plan["total_batches"])
+	if !ok || total < 1 {
+		t.Fatalf("expected total_batches >= 1, got %v", plan["total_batches"])
 	}
 
-	comparePlans(t, filepath.Join(goStaging, "batch-plan.json"), filepath.Join(pyStaging, "batch-plan.json"))
-	compareManifests(t, filepath.Join(goStaging, "manifest.json"), filepath.Join(pyStaging, "manifest.json"))
-}
-
-func findModuleRoot(t *testing.T) string {
-	t.Helper()
-	wd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
+	manifest := readJSON(t, filepath.Join(goStaging, "manifest.json"))
+	files := reviewableFiles(manifest)
+	if len(files) == 0 {
+		t.Fatal("expected reviewable files in manifest")
 	}
-	dir := wd
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatal("go.mod not found")
-		}
-		dir = parent
+	agents := toStringMapLists(manifest["review_agents"])
+	if len(agents) == 0 {
+		t.Fatal("expected review_agents in manifest")
 	}
 }
 
@@ -114,7 +89,6 @@ func initFixtureRepo(t *testing.T, dir string) {
 	run("add", ".")
 	run("commit", "-m", "initial")
 
-	// Bare remote so origin/main exists for three-dot diff.
 	remote := filepath.Join(dir, "..", "fixture-remote.git")
 	_ = os.RemoveAll(remote)
 	r2 := exec.Command("git", "init", "--bare", remote)
@@ -131,72 +105,6 @@ func initFixtureRepo(t *testing.T, dir string) {
 	write("config/app.yaml", "name: fixture\n")
 	run("add", ".")
 	run("commit", "-m", "feature changes")
-}
-
-func comparePlans(t *testing.T, goPath, pyPath string) {
-	t.Helper()
-	goPlan := readJSON(t, goPath)
-	pyPlan := readJSON(t, pyPath)
-
-	goSkills := toStringSlice(goPlan["skills"])
-	pySkills := toStringSlice(pyPlan["skills"])
-	if !reflect.DeepEqual(goSkills, pySkills) {
-		t.Fatalf("skills mismatch\ngo=%v\npy=%v", goSkills, pySkills)
-	}
-	goTotal, _ := asInt(goPlan["total_batches"])
-	pyTotal, _ := asInt(pyPlan["total_batches"])
-	if goTotal != pyTotal {
-		t.Fatalf("total_batches go=%d py=%d", goTotal, pyTotal)
-	}
-
-	goBatches := toMapSlice(goPlan["batches"])
-	pyBatches := toMapSlice(pyPlan["batches"])
-	if len(goBatches) != len(pyBatches) {
-		t.Fatalf("batch count go=%d py=%d", len(goBatches), len(pyBatches))
-	}
-	for i := range goBatches {
-		gs, _ := goBatches[i]["skill"].(string)
-		ps, _ := pyBatches[i]["skill"].(string)
-		if gs != ps {
-			t.Fatalf("batch[%d] skill go=%s py=%s", i, gs, ps)
-		}
-		gb, _ := goBatches[i]["batch_num"].(string)
-		pb, _ := pyBatches[i]["batch_num"].(string)
-		if gb != pb {
-			t.Fatalf("batch[%d] batch_num go=%s py=%s", i, gb, pb)
-		}
-		gt, _ := asInt(goBatches[i]["task_count"])
-		pt, _ := asInt(pyBatches[i]["task_count"])
-		if gt != pt {
-			t.Fatalf("batch[%d] task_count go=%d py=%d", i, gt, pt)
-		}
-	}
-}
-
-func compareManifests(t *testing.T, goPath, pyPath string) {
-	t.Helper()
-	goM := readJSON(t, goPath)
-	pyM := readJSON(t, pyPath)
-
-	goFiles := reviewableFiles(goM)
-	pyFiles := reviewableFiles(pyM)
-	sort.Strings(goFiles)
-	sort.Strings(pyFiles)
-	if !reflect.DeepEqual(goFiles, pyFiles) {
-		t.Fatalf("reviewable files mismatch\ngo=%v\npy=%v", goFiles, pyFiles)
-	}
-
-	goAgents := toStringMapLists(goM["review_agents"])
-	pyAgents := toStringMapLists(pyM["review_agents"])
-	for k := range goAgents {
-		sort.Strings(goAgents[k])
-	}
-	for k := range pyAgents {
-		sort.Strings(pyAgents[k])
-	}
-	if !reflect.DeepEqual(goAgents, pyAgents) {
-		t.Fatalf("review_agents mismatch\ngo=%v\npy=%v", goAgents, pyAgents)
-	}
 }
 
 func reviewableFiles(m map[string]any) []string {

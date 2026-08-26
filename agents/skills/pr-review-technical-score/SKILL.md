@@ -1,7 +1,7 @@
 # PR Technical Review Score Skill
 
 This skill scores a completed `tech-review.md` against the structural and prose rules
-defined by the `pr-review-technical` skill. It is invoked by `tech-review-loop.py` after
+defined by the `pr-review-technical` skill. It is invoked by the orchestrate tech loop after
 each generation pass. It does NOT rewrite the review — it only evaluates and records findings.
 
 This skill runs as `mode:tech-score` — it produces a single `tech-score.md` file.

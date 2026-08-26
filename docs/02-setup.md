@@ -2,38 +2,53 @@
 
 *Majordomo — repository operations for evolving software.*
 
-> **Jenkins is retired.** Pipeline-from-SCM jobs, Generic Webhook Trigger setup, `.majordomo-config.groovy`, and the `setup-majordomo*.py` Jenkins API helpers have been removed from this repository.
->
-> Target runtime: **GitHub Actions control tower** + **Go CLI**. Follow **[PLAN — Control Tower, GitHub Actions, and Go](PLAN-control-tower-github-go.md)**.
+Target runtime: **GitHub Actions control tower** + **Go CLI** (`majordomo`). Majordomo is a control plane for evolving repositories; PR review is one workflow on that plane. See **[PLAN — Control Tower, GitHub Actions, and Go](PLAN-control-tower-github-go.md)**.
 
-## What still runs today
+## What runs today
 
 | Piece | Location | Notes |
 |-------|----------|--------|
-| Review skills / personas | `agents/` | Unchanged |
-| Staging / dispatch / publish scripts | `pipelines/scripts/` | CI-agnostic Python/bash |
-| Agent + SA Docker images | `dockerfiles/` | Dual `public` / `corp` stages |
-| Image CI | `.github/workflows/` | `--target public` on GitHub-hosted runners |
-| Go control plane | `cmd/majordomo`, `internal/` | Prep/report first; poll/orchestrate next |
+| Review skills / personas | `agents/` | Rubrics and templates |
+| Go control plane | `cmd/majordomo`, `internal/` | prep, orchestrate, dispatch, publish, status, cache, poll, report, build-sa-tools, submodule |
+| Agent dispatch | `pipelines/scripts/agent-dispatch.sh` | OpenCode wrapper; needs `MAJORDOMO_BIN` or `majordomo` on PATH for all-diffs |
+| Agent + SA + forge images | `dockerfiles/` | Dual `public` / `corp` stages |
+| Image CI | `.github/workflows/` | SA tools, agent, forge CLI (`gh` / `glab`) |
+
+Pipeline Python is gone. Remaining bash is dispatch and image build only.
+
+## Build the CLI
+
+```bash
+go build -o majordomo ./cmd/majordomo
+./majordomo version
+```
 
 ## Local image builds
 
 ```bash
 # SA tools (public)
-python scripts/build-sa-tools.py
+majordomo build-sa-tools
 
-# Copilot / agent image (public)
+# OpenCode agent image (public)
 DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
   bash pipelines/scripts/build-copilot-image.sh \
-    local copilot-cli local-test dockerfiles/copilot-cli.Dockerfile
+    local majordomo-agent local-test dockerfiles/Dockerfile.agent
+
+# Forge CLI images (public) — job containers for publish; majordomo binary is built in-job
+DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
+  bash pipelines/scripts/build-copilot-image.sh \
+    local majordomo-gh local-test dockerfiles/Dockerfile.gh
+DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
+  bash pipelines/scripts/build-copilot-image.sh \
+    local majordomo-glab local-test dockerfiles/Dockerfile.glab
 ```
 
-Corp agents: pass `PACKAGE_REGISTRY_HOST`, `CORP_CA_CERT_URL`, `DEBIAN_REPO_PATH`, `PIP_INDEX_PATH`, `NPM_VIRTUAL_PATH`, `DOCKER_PULL_DOMAIN`, and registry credentials — see Dockerfile headers.
+Corp agents/forge: pass `PACKAGE_REGISTRY_HOST`, `CORP_CA_CERT_URL`, `DEBIAN_REPO_PATH`, `NPM_VIRTUAL_PATH` (agent only), `DOCKER_PULL_DOMAIN`, and registry credentials — see Dockerfile headers.
+
+**OpenCode LLM auth (agent job, per-run):** inject a provider API key as a secret/env into the agent container. Do not bake keys into the image. `agent-dispatch.sh` requires at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` (use the last for custom OpenAI-compatible gateways, with `baseURL` in `opencode.json` / `OPENCODE_CONFIG_CONTENT` via `{env:OPENCODE_PROVIDER_API_KEY}`). SCM tokens (`GITHUB_TOKEN`, etc.) stay separate for clone/publish/status.
+
+**Publish (GitHub/GitLab):** run the review job inside `majordomo-gh` or `majordomo-glab` so `gh` / `glab` are on PATH. Build `./majordomo` in the job workspace; `majordomo publish --scm github|gitlab` shells to the forge CLI. Bitbucket publish remains HTTP.
 
 ## Submodule consumers
 
-If an app repo still vendors this project as `.majordomo/`, keep using [03 — Manage Submodule](03-manage-submodule.md) for pin/update. Do **not** add Jenkins job script paths; orchestration moves to the control-tower workflows described in the plan.
-
-## Historical docs
-
-Proposal and revision notes under `docs/PROPOSAL-*` and `docs/REVISIONS-*` are archived Jenkins-era material (banner at top of each file). Operational guides under `docs/advanced/` describe the script-based pipeline and control-tower target.
+If an app repo still vendors this project as `.majordomo/`, use [03 — Manage Submodule](03-manage-submodule.md) (`majordomo submodule`) for pin/update. Prefer the control-tower model so served app repos stay clean.

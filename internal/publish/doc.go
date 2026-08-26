@@ -1,2 +1,2 @@
-// Package publish posts PR/MR summaries and comments (github|gitlab|bitbucket).
+// Package publish posts PR/MR summaries via forge CLIs (gh, glab) or Bitbucket HTTP.
 package publish

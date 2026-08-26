@@ -1,10 +1,5 @@
-# Prep golden fixtures
+# Prep fixtures
 
-The Go/Python prep parity check lives in `internal/staging/golden_test.go`.
-
-It builds a temporary git repo (initial `main` + `feature` branch with code/docs/config
-changes), runs `staging.Run` and `pipelines/scripts/git-diff-prep.py` against
-`origin/main...HEAD`, then compares `batch-plan.json` skill/batch metadata and
-`manifest.json` reviewable files / agents.
-
-No committed tree is required under this directory; the test is self-contained.
+`internal/staging` golden coverage builds a temporary git fixture (see
+`TestPrepProducesReviewableManifest`), runs `staging.Run`, and asserts the
+batch plan and manifest contain reviewable skills and files.
