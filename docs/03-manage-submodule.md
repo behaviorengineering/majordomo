@@ -36,9 +36,11 @@ Recommended approach:
 
 Only needed once when setting up a new app repo (legacy submodule consumers). New onboardings should prefer the [control-tower model](PLAN-control-tower-github-go.md) so app repos stay clean.
 
+Install the `majordomo` binary from [GitHub Releases](https://github.com/behaviorengineering/majordomo/releases/latest) (see [02 — Setup](02-setup.md)), then either use `majordomo submodule` or add the submodule by hand:
+
 ```bash
 cd <your-app-repo>
-git submodule add ssh://git@bitbucket.example.com/scm/tooling/majordomo.git .majordomo
+git submodule add https://github.com/behaviorengineering/majordomo.git .majordomo
 git add .gitmodules .majordomo
 git commit -m "Add .majordomo as submodule"
 git push origin <your-branch>

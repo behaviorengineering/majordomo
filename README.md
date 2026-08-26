@@ -95,40 +95,64 @@ Review is the first end-to-end job on the plane. Changed files route to skills a
 
 See [09 — Customising the review](docs/advanced/09-customising-the-review.md) for agent context, routing overrides, and skill paths (control-tower YAML).
 
+## 📦 Install (binary)
+
+Use the released CLI to bootstrap a control tower or manage a `.majordomo/` pin before you have the submodule checked out.
+
+1. Download the `majordomo` archive for your OS from the [latest release](https://github.com/behaviorengineering/majordomo/releases/latest), unpack it, and put `majordomo` on your `PATH`.
+2. Confirm the build:
+
+```bash
+majordomo version
+```
+
+3. In a tower or legacy app repo, manage the submodule pin:
+
+```bash
+majordomo submodule
+```
+
+Releases are cut from `v*` tags via GoReleaser (`.goreleaser.yaml`, `.github/workflows/release.yml`). Each release includes archives for linux/darwin/windows (`amd64`/`arm64`) and notes since the previous tag.
+
+**From source** (developers working in this repo):
+
+```bash
+go build -o majordomo ./cmd/majordomo
+./majordomo version
+```
+
 ## 📚 Docs
 
 **Architecture:**
 - [PLAN — Control Tower, GitHub Actions, and Go](docs/PLAN-control-tower-github-go.md)
 
-**Go CLI:**
+**Go CLI (common commands):**
 
 ```bash
-go build -o majordomo ./cmd/majordomo
-./majordomo version
-./majordomo poll --config-dir majordomo-central-config --out pending-reviews.json
-./majordomo prep <base-branch> <staging-dir> \
+majordomo poll --config-dir majordomo-central-config --out pending-reviews.json
+majordomo prep <base-branch> <staging-dir> \
   [--routing path] [--agent-context path] [--summary-config path]
-./majordomo orchestrate \
+majordomo orchestrate \
   --pr <n> --staging-dir <dir> --output-dir <dir> \
   [--base-branch <b> | --skip-prep] [--concurrency 6]
-./majordomo dispatch <pr> <staging-dir> <output-dir> [--summary|--finalize|--prose|...]
-./majordomo publish --scm github|gitlab|bitbucket <pr> <summary.md> auto|comment|description
-./majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFUL|FAILED
-./majordomo cache validate-branch majordomo-pr-reviewer-cache/<id>
-./majordomo cache push --remote <url> --branch <name> --worktree <dir>
-./majordomo cache precheck|lookup|store|restore ...
-./majordomo report junit <review-output-dir> <junit-output-dir>
-./majordomo report html <input.md> <output.html>
-./majordomo report all-diffs <manifest.json> <output.txt> [--cap N]
-./majordomo build-sa-tools [--dry-run] [--corp]
-./majordomo submodule
+majordomo dispatch <pr> <staging-dir> <output-dir> [--summary|--finalize|--prose|...]
+majordomo publish --scm github|gitlab|bitbucket <pr> <summary.md> auto|comment|description
+majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFUL|FAILED
+majordomo cache validate-branch majordomo-pr-reviewer-cache/<id>
+majordomo cache push --remote <url> --branch <name> --worktree <dir>
+majordomo cache precheck|lookup|store|restore ...
+majordomo report junit <review-output-dir> <junit-output-dir>
+majordomo report html <input.md> <output.html>
+majordomo report all-diffs <manifest.json> <output.txt> [--cap N]
+majordomo build-sa-tools [--dry-run] [--corp]
+majordomo submodule
 ```
 
 Set `MAJORDOMO_SCRIPTS` if `pipelines/scripts` is not discoverable from cwd; set `MAJORDOMO_BIN` when dispatch must find the CLI off PATH.
 
 **Start here:**
 - [01 — Portable Pipeline Pattern](docs/01-portable-pipeline-pattern.md)
-- [02 — Setup](docs/02-setup.md) — local dev and image CI
+- [02 — Setup](docs/02-setup.md) — install, local dev, and image CI
 - [03 — Manage Submodule](docs/03-manage-submodule.md)
 
 **Review workflow (deep dive):**

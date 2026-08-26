@@ -16,7 +16,13 @@ Target runtime: **GitHub Actions control tower** + **Go CLI** (`majordomo`). Maj
 
 Pipeline Python is gone. Remaining bash is dispatch and image build only.
 
-## Build the CLI
+## Install the CLI
+
+**Preferred (bootstrap / tower setup):** download a release binary from [GitHub Releases](https://github.com/behaviorengineering/majordomo/releases/latest), put `majordomo` on your `PATH`, then run `majordomo submodule` (or follow the control-tower pin steps in the [PLAN](PLAN-control-tower-github-go.md)).
+
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml) (GoReleaser). Version is injected into `internal/cli.Version` via ldflags.
+
+**From source** (this repo):
 
 ```bash
 go build -o majordomo ./cmd/majordomo
