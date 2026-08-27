@@ -78,12 +78,9 @@ func Run(opts Options) error {
 		Reviews:     []PendingReview{},
 	}
 
+	outcomes := make([]repoOutcome, 0, len(cfgs))
 	var listErrs []string
 	for _, cfg := range cfgs {
-		if !cfg.Trigger.PollEnabled() {
-			logf("INFO", "skip %s (poll disabled)", cfg.Repository.ID)
-			continue
-		}
 		scm := strings.ToLower(cfg.SCM)
 		if scm == "" {
 			scm = "github"
@@ -100,11 +97,29 @@ func Run(opts Options) error {
 			}
 		}
 
+		out := repoOutcome{
+			RepoID:     cfg.Repository.ID,
+			SCM:        scm,
+			Owner:      owner,
+			Name:       name,
+			Continuous: cfg.Review.ContinuousRunsEnabled(),
+		}
+
+		if !cfg.Trigger.PollEnabled() {
+			out.Status = "poll_disabled"
+			logf("INFO", "%s: skip (poll disabled)", cfg.Repository.ID)
+			outcomes = append(outcomes, out)
+			continue
+		}
+
 		token := config.ResolveCredential(cfg.Repository.ID, scm, owner)
 		// When ListPRs is injected (tests), allow empty token.
 		if token == "" && !listInjected {
-			logf("WARN", "%s: no credential (set %s) — skipping",
-				cfg.Repository.ID, config.CredentialHint(cfg.Repository.ID, scm, owner))
+			hint := config.CredentialHint(cfg.Repository.ID, scm, owner)
+			out.Status = "no_credential"
+			out.Detail = hint
+			logf("WARN", "%s: no credential (set %s) - skipping", cfg.Repository.ID, hint)
+			outcomes = append(outcomes, out)
 			continue
 		}
 
@@ -113,6 +128,9 @@ func Run(opts Options) error {
 			msg := fmt.Sprintf("%s: list PRs failed: %v", cfg.Repository.ID, err)
 			logf("WARN", "%s", msg)
 			listErrs = append(listErrs, msg)
+			out.Status = "list_error"
+			out.Detail = err.Error()
+			outcomes = append(outcomes, out)
 			continue
 		}
 
@@ -123,10 +141,13 @@ func Run(opts Options) error {
 		}
 		cursor.RepoID = cfg.Repository.ID
 
+		pendingHere := 0
+		skippedHere := 0
 		for _, pr := range prs {
 			prNum := fmt.Sprintf("%d", pr.Number)
-			continuous := cfg.Review.ContinuousRunsEnabled()
+			continuous := out.Continuous
 			if !cache.ShouldReview(cursor, prNum, pr.HeadSHA, continuous) {
+				skippedHere++
 				if continuous {
 					logf("INFO", "%s#%s: head unchanged (%s)", cfg.Repository.ID, prNum, short(pr.HeadSHA))
 				} else {
@@ -151,8 +172,25 @@ func Run(opts Options) error {
 				ReviewID:    reviewID,
 				PublishMode: cfg.EffectivePublishMode(),
 			})
+			pendingHere++
 			logf("INFO", "%s#%s: needs review @ %s", cfg.Repository.ID, prNum, short(pr.HeadSHA))
 		}
+
+		out.Status = "polled"
+		out.Open = len(prs)
+		out.Pending = pendingHere
+		out.Skipped = skippedHere
+		logf("INFO", "%s: %s %s/%s open=%d pending=%d skip=%d",
+			cfg.Repository.ID, scm, owner, name, out.Open, out.Pending, out.Skipped)
+		outcomes = append(outcomes, out)
+	}
+
+	summary := formatASCIISummary(outcomes, len(result.Reviews))
+	for _, line := range strings.Split(strings.TrimSuffix(summary, "\n"), "\n") {
+		logf("INFO", "%s", line)
+	}
+	if err := writePollSummary(opts.CursorDir, summary); err != nil {
+		return fmt.Errorf("write poll summary: %w", err)
 	}
 
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -168,7 +206,7 @@ func Run(opts Options) error {
 		if err := os.MkdirAll(filepath.Dir(opts.OutPath), 0o755); err != nil {
 			return err
 		}
-		logf("INFO", "wrote %d pending review(s) → %s", len(result.Reviews), opts.OutPath)
+		logf("INFO", "wrote %d pending review(s) -> %s", len(result.Reviews), opts.OutPath)
 		if err := os.WriteFile(opts.OutPath, data, 0o644); err != nil {
 			return err
 		}
@@ -177,6 +215,14 @@ func Run(opts Options) error {
 		return fmt.Errorf("poll incomplete: %d repo list failure(s): %s", len(listErrs), strings.Join(listErrs, "; "))
 	}
 	return nil
+}
+
+func writePollSummary(cursorDir, summary string) error {
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(cursorDir, "poll-summary.txt")
+	return os.WriteFile(path, []byte(summary), 0o644)
 }
 
 func short(sha string) string {
