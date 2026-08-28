@@ -146,6 +146,84 @@ trigger:
 	}
 }
 
+func TestIsMajordomoInternalBranch(t *testing.T) {
+	cases := []struct {
+		base, head string
+		want       bool
+	}{
+		{"main", "feature/x", false},
+		{"majordomo-context/demo", "majordomo-context/demo-update", true},
+		{"main", "majordomo-context/demo-update", true},
+		{"majordomo-pr-reviewer-cache/demo", "bot/cache", true},
+		{"main", "majordomo-poll-cache/demo", true},
+		{"main", "feature/majordomo-context/nope", false},
+	}
+	for _, tc := range cases {
+		if got := isMajordomoInternalBranch(tc.base, tc.head); got != tc.want {
+			t.Fatalf("base=%q head=%q got %v want %v", tc.base, tc.head, got, tc.want)
+		}
+	}
+}
+
+func TestRunSkipsMajordomoInternalBranches(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, "cfg")
+	_ = os.MkdirAll(cfgDir, 0o755)
+	_ = os.WriteFile(filepath.Join(cfgDir, "_defaults.yaml"), []byte("trigger:\n  poll: true\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(cfgDir, "demo.yaml"), []byte(`
+scm: github
+repository:
+  id: demo
+  owner: acme
+  name: demo
+trigger:
+  poll: true
+`), 0o644)
+
+	out := filepath.Join(dir, "pending.json")
+	err := Run(Options{
+		ConfigDir: cfgDir,
+		CursorDir: filepath.Join(dir, "cursors"),
+		OutPath:   out,
+		ListPRs: func(cfg config.RepoConfig, token string) ([]openPR, error) {
+			return []openPR{
+				{
+					Number:     10,
+					HeadSHA:    "ctxsha",
+					BaseBranch: "majordomo-context/demo",
+					HeadBranch: "majordomo-context/demo-update",
+				},
+				{
+					Number:     11,
+					HeadSHA:    "cachesha",
+					BaseBranch: "main",
+					HeadBranch: "majordomo-pr-reviewer-cache/demo",
+				},
+				{
+					Number:     3,
+					HeadSHA:    "abc1234deadbeef",
+					BaseBranch: "main",
+					HeadBranch: "feature/ok",
+				},
+			}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(out)
+	s := string(data)
+	if strings.Contains(s, `"pr": "10"`) || strings.Contains(s, `"pr":"10"`) {
+		t.Fatalf("expected context PR skipped, got %s", s)
+	}
+	if strings.Contains(s, `"pr": "11"`) || strings.Contains(s, `"pr":"11"`) {
+		t.Fatalf("expected cache PR skipped, got %s", s)
+	}
+	if !strings.Contains(s, `"pr": "3"`) && !strings.Contains(s, `"pr":"3"`) {
+		t.Fatalf("expected normal PR pending, got %s", s)
+	}
+}
+
 func TestListGitHubPRsPaginated(t *testing.T) {
 	var pages []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -158,13 +236,13 @@ func TestListGitHubPRsPaginated(t *testing.T) {
 		}
 		if r.URL.Query().Get("page") == "2" || strings.Contains(r.URL.RawQuery, "page=2") {
 			_ = json.NewEncoder(w).Encode([]map[string]any{
-				{"number": 2, "head": map[string]string{"sha": "bbb"}, "base": map[string]string{"ref": "main"}},
+				{"number": 2, "head": map[string]string{"sha": "bbb", "ref": "feat-b"}, "base": map[string]string{"ref": "main"}},
 			})
 			return
 		}
 		w.Header().Set("Link", `<http://`+r.Host+r.URL.Path+`?state=open&per_page=100&page=2>; rel="next"`)
 		_ = json.NewEncoder(w).Encode([]map[string]any{
-			{"number": 1, "head": map[string]string{"sha": "aaa"}, "base": map[string]string{"ref": "main"}},
+			{"number": 1, "head": map[string]string{"sha": "aaa", "ref": "feat-a"}, "base": map[string]string{"ref": "main"}},
 		})
 	}))
 	defer srv.Close()
@@ -180,6 +258,9 @@ func TestListGitHubPRsPaginated(t *testing.T) {
 	if len(prs) != 2 || prs[0].Number != 1 || prs[1].Number != 2 {
 		t.Fatalf("got %#v pages=%v", prs, pages)
 	}
+	if prs[0].HeadBranch != "feat-a" || prs[1].HeadBranch != "feat-b" {
+		t.Fatalf("head branches %#v", prs)
+	}
 }
 
 func TestListGitLabMRs(t *testing.T) {
@@ -191,7 +272,7 @@ func TestListGitLabMRs(t *testing.T) {
 			t.Fatalf("expected encoded project in %s (path=%s)", r.URL.RequestURI(), r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{
-			{"iid": 9, "sha": "deadbeef", "target_branch": "main"},
+			{"iid": 9, "sha": "deadbeef", "source_branch": "feat", "target_branch": "main"},
 		})
 	}))
 	defer srv.Close()
@@ -209,6 +290,9 @@ func TestListGitLabMRs(t *testing.T) {
 	}
 	if len(prs) != 1 || prs[0].Number != 9 || prs[0].HeadSHA != "deadbeef" {
 		t.Fatalf("got %#v", prs)
+	}
+	if prs[0].HeadBranch != "feat" || prs[0].BaseBranch != "main" {
+		t.Fatalf("branches %#v", prs[0])
 	}
 }
 

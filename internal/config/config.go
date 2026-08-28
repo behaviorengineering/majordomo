@@ -57,6 +57,45 @@ type PollCache struct {
 	Branch string `yaml:"branch"` // majordomo-poll-cache/<repo-id>
 }
 
+// Context is the served-repo orphan branch for human-reviewed project understanding.
+type Context struct {
+	Repo              string `yaml:"repo"`   // served
+	Branch            string `yaml:"branch"` // majordomo-context/<repo-id>
+	AutoMerge         *bool  `yaml:"autoMerge,omitempty"`
+	GateCommentPrefix string `yaml:"gateCommentPrefix,omitempty"`
+	Compaction        ContextCompaction    `yaml:"compaction,omitempty"`
+	MaxCommitsPerRun  int                  `yaml:"maxCommitsPerRun,omitempty"`
+}
+
+const defaultMaxCommitsPerRun = 20
+
+// MaxCommitsPerRunLimit returns the per-digest first-parent walk cap (0 = unlimited).
+func (c Context) MaxCommitsPerRunLimit() int {
+	if c.MaxCommitsPerRun > 0 {
+		return c.MaxCommitsPerRun
+	}
+	return defaultMaxCommitsPerRun
+}
+
+// ContextCompaction controls teaching-document compaction during digest.
+type ContextCompaction struct {
+	MaxChronologyEntries int `yaml:"maxChronologyEntries,omitempty"`
+	KeepRecentEntries    int `yaml:"keepRecentEntries,omitempty"`
+}
+
+// AutoMergeEnabled reports whether digest may merge context PRs when gate is done.
+func (c Context) AutoMergeEnabled() bool {
+	return c.AutoMerge != nil && *c.AutoMerge
+}
+
+// GatePrefix returns the @majordomo comment prefix.
+func (c Context) GatePrefix() string {
+	if p := strings.TrimSpace(c.GateCommentPrefix); p != "" {
+		return p
+	}
+	return "@majordomo"
+}
+
 // Repository identifies the served git remote.
 type Repository struct {
 	ID       string `yaml:"id"`
@@ -168,6 +207,7 @@ type RepoConfig struct {
 	Trigger        Trigger              `yaml:"trigger"`
 	Cache          Cache                `yaml:"cache"`
 	PollCache      PollCache            `yaml:"pollCache"`
+	Context        Context              `yaml:"context"`
 	Review         Review               `yaml:"review"`
 	PublishMode    string               `yaml:"publishMode,omitempty"` // legacy alias
 	StaticAnalysis []StaticAnalysisTool `yaml:"staticAnalysis,omitempty"`
@@ -202,4 +242,16 @@ func CacheBranch(projectID string) string {
 // PollCacheBranch returns the poll-cursor git branch for repoID.
 func PollCacheBranch(repoID string) string {
 	return "majordomo-poll-cache/" + repoID
+}
+
+// ContextBranch returns the repo-context git branch for repoID.
+func ContextBranch(repoID string) string {
+	return "majordomo-context/" + repoID
+}
+
+// ContextUpdateBranch returns the catch-up head branch for repoID.
+// Uses a hyphen suffix because git cannot hold both refs/heads/majordomo-context/id
+// and refs/heads/majordomo-context/id/update when the base branch exists.
+func ContextUpdateBranch(repoID string) string {
+	return ContextBranch(repoID) + "-update"
 }

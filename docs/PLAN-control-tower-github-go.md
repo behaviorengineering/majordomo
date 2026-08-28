@@ -3,7 +3,7 @@
 *Majordomo — repository operations for evolving software.*
 
 **Status:** In progress (Phases 1–3 and most of Phase 5 done; Bitbucket poll and a few Phase 4 items remain)  
-**Date:** 2026-08-22 (progress updated 2026-08-27)  
+**Date:** 2026-08-22 (progress updated 2026-08-28)  
 **Audience:** Maintainers and contributors planning the next major evolution of Majordomo.
 
 ---
@@ -20,7 +20,7 @@ Majordomo is a **control plane for evolving repositories**: durable org config, 
 2. **GitHub Actions minutes** — all pipeline compute runs on GitHub-hosted runners in the control tower.
 3. **Any git host** — operate on GitHub, GitLab, Bitbucket, or self-hosted git; SCM API adapters for poll, clone, and publish.
 4. **Go control plane** — deterministic job logic in a single static binary; agent and SA tooling in focused containers.
-5. **OpenCode** — agent runtime for jobs that need LLM skills (skills/personas remain file-based).
+5. **Judge driver (later)** — [strop](https://github.com/behaviorengineering/strop) + DSPy own generate → evaluate → gate. Workspace explore/edit is a **port**; OpenCode is one adapter. Mechanical workflows are deterministic code; protocol markdown is offboarded. Today review still runs via OpenCode (`agent-dispatch.sh`).
 6. **Pull poll (reconciliation)** — `majordomo-poll.yml` runs on every onboarded repo regardless of push config. Push triggers are optional speed boosts. See [Trigger modes and onboarding](#trigger-modes-and-onboarding).
 
 Bitbucket (and other SCMs) remain valid **targets** for repository operations.
@@ -31,20 +31,20 @@ Bitbucket (and other SCMs) remain valid **targets** for repository operations.
 
 | Goal | Description |
 |------|-------------|
-| **Evolve with the repo** | Durable config, cursors, and cache so jobs compound over time — not one-shot scripts. |
+| **Evolve with the repo** | Durable config, cursors, cache, and a [context branch](advanced/10-repo-context-branch.md) (teaching story + first-parent cursor) so jobs compound over time, not one-shot scripts. |
 | **No repo pollution** | Served repos do not add `.github/workflows/`, `.majordomo/`, or Majordomo config (default pull mode). |
 | **Central onboarding** | Add `majordomo-central-config/<repo>.yaml` + store SCM credential in tower secrets; no app-repo merge required. |
 | **Submodule versioning** | Control tower pins `.majordomo` at a commit; bump pointer to roll out engine changes. |
 | **SCM-agnostic core** | Same control plane for any git remote; adapters for trigger + publish only. |
 | **Fast, portable binary** | Go for poll, staging, orchestration, cache, publish — one small container on GHA. |
-| **Agent when needed** | OpenCode in a slim agent image for skill-backed jobs (review today; more later). |
+| **Deterministic mechanical path** | Workflows in Go + strop; LLM only judges. Workspace tool behind a port (OpenCode today). Agenting packs stay markdown. |
 
 ## Non-goals (for this phase)
 
-- Rewriting agent skills or review rubrics in Go.
 - Replacing third-party SA tools (ruff, eslint, etc.) with Go implementations.
 - Building a hosted SaaS control plane (self-hosted control tower only).
 - Treating PR review as the only supported job forever (the plane must stay open to new workflows).
+- Shipping the strop Judge driver in the current pilot (v1 still `agent-dispatch.sh` / OpenCode). That is [Phase 6](#phase-6--judge-driver-context-and-workspace-port).
 
 ---
 
@@ -89,11 +89,14 @@ See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for 
         ┌───────────────────────┼───────────────────────┐
         ▼                       ▼                       ▼
   ghcr.io/majordomo        ghcr.io/majordomo-agent   ghcr.io/sa-tools/*
-  (Go binary)              (OpenCode only)           (ruff, eslint, …)
+  (Go binary;              (OpenCode image:          (ruff, eslint, …)
+   Phase 6: + strop)        v1 review runtime)
         │                       │
         └───────────┬───────────┘
                     ▼
            clone served repo → prep → review waves → publish → artifacts
+           (v1: OpenCode via agent-dispatch.sh. Phase 6: Go/strop Judge;
+            that image may still supply OpenCode on PATH for checkout tools.)
 ```
 
 **Optional paths (advanced):** push triggers via thin per-repo workflow, webhook router, or GitHub App — see [Trigger modes](#trigger-modes-and-onboarding). Not required for initial rollout.
@@ -103,7 +106,7 @@ See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for 
 1. **GitHub is the engine room, not the SCM lock-in.** Runners and secrets live in the control tower; target repos can be anywhere.
 2. **Normalize early.** Every SCM adapter emits the same dispatch payload; downstream code is SCM-blind.
 3. **Thin edges, fat core in Go.** Webhook routers and publishers are small; staging/orchestration/cache are one binary.
-4. **Agents stay files.** Skills, personas, and templates remain markdown under `agents/`; OpenCode loads them from disk.
+4. **Mechanical protocol in Go via strop; agenting stays files.** Orchestration and checkpoints stay Majordomo. Generate → evaluate → refine and Gate live in [strop](https://github.com/behaviorengineering/strop) (DSPy). Workspace explore/edit is a **port**; OpenCode is one adapter. **Workflows are deterministic code**, not executable markdown. `pr-review.agent.md` and long SKILL protocols are offboarded (human docs or gone). Agenting packs stay markdown on the context branch.
 
 ---
 
@@ -115,6 +118,8 @@ See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for 
 | 2 | Poll cursor location (v1) | **GitHub Actions cache** on the control-tower job (directory `.poll-cache/`, files `.poll-cache/<repo-id>/poll-cursor.json`). Not on the served repo yet. Durable enough for pilot; see Phase 5 for optional served-repo git branch hardening. |
 | 3 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
 | 4 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
+| 5 | Repo context location | **On the served repo**, orphan branch `majordomo-context/<repo-id>`. Story is a compactable teaching document (evidenced decisions only), not an audit log. Cursor catch-up on default first-parent; no-ops silent; bootstrap from last. Humans steer via PR conversation, not file edits. Grounding is **selected agenting packs**, never mixed into mechanical protocol. See [Repo context branch](advanced/10-repo-context-branch.md). |
+| 6 | Judge driver | **strop + DSPy** own generate → evaluate → refine → Gate. Mechanical workflows are **deterministic code**. Protocol markdown is offboarded. Workspace is a **port** (OpenCode one adapter). Cutover: `MAJORDOMO_JUDGE=opencode\|strop`, never both. Findings are structured; MD is a formatter. Context PRs use existing forge adapters; human merge (`context.autoMerge` default false); rewrite blocked without why. v1 still `agent-dispatch.sh`. Contract: [Phase 6 contract](#phase-6-contract-locks-the-former-open-holes). |
 
 ### Control-tower repository
 
@@ -176,6 +181,94 @@ cache:
 Go port: `majordomo cache` implements the git-branch storage model (`precheck` / `lookup` / `store` / `restore` / `push`).
 
 **Poll cursor (v1):** separate from review cache. Stored under tower job `.poll-cache/` via Actions cache — see [Poll cache](#poll-cache-where-poll-compares-head_sha).
+
+### Repo context (served repo)
+
+Teaching story (mission, architecture, conventions, weaknesses, chronology) plus a first-parent cursor on orphan branch `majordomo-context/<repo-id>`. Product PRs still target default. Context updates target the context branch, never default. Humans converse on that PR; they do not push files.
+
+Schema and `majordomo context validate` ship now. Digest, agenting packs, conversation-before-merge, rewrite workflow, and poll exclusion are [Phase 6](#phase-6--judge-driver-context-and-workspace-port). Full contract: [Repo context branch](advanced/10-repo-context-branch.md).
+
+```yaml
+# majordomo-central-config/_defaults.yaml (context section)
+context:
+  repo: served
+  # branch defaults to majordomo-context/<repo-id>
+  # autoMerge: false   # Phase 6: human clicks merge after Gate
+```
+
+### Judge driver and workspace port (later)
+
+v1 review still: `majordomo orchestrate` → `agent-dispatch.sh` → OpenCode, with protocol in `pr-review.agent.md`.
+
+**Target:**
+
+| Layer | Owns |
+|-------|------|
+| Majordomo Go | Poll, prep, waves, checkpoints, which job, selected agenting pack |
+| [strop](https://github.com/behaviorengineering/strop) + DSPy | Generate → evaluate → refine until gate; composition walks; structured-output validation; human Gate |
+| Workspace **port** | Optional read/grep/edit/shell on a checkout. OpenCode is one adapter. Stub/sandbox/other agents swap without changing Judge modules |
+
+Mechanical path is deterministic: same inputs take the same states. The LLM does not choose the next mechanical step. `pr-review.agent.md` and long SKILL protocols are offboarded (human docs or gone). Agenting packs and compactable story stay markdown on the context branch. Rubric data may stay as tables the machine loads.
+
+Do not dual-run OpenCode-as-driver and strop-as-driver. Until Phase 6 ships, `agent-dispatch.sh` is the only execution path.
+
+#### Phase 6 contract (locks the former open holes)
+
+**Cutover.** One execution path per job. Flag `MAJORDOMO_JUDGE=opencode|strop` (default `opencode`). `agent.Dispatch` and `orchestrate` refuse `strop` until generator modules are registered (`judge.ErrStropJudgeNotReady`). Never both drivers in one review job. After strop CI is green, flip default and delete `agent-dispatch.sh` as protocol (adapter may still shell out to OpenCode for the workspace port).
+
+**strop pin.** Majordomo `go.mod` requires `github.com/behaviorengineering/strop` **v0.2.0**. Judge boundary: `internal/judge` (`NewJobRunner`, summary/tech packs under `internal/judge/evaluation/`). Judge runs in-process when cutover lands. Today `majordomo-agent` is the OpenCode **review** image (`agent-dispatch.sh`). After cutover, Judge prompts stay out of that image; it may still put OpenCode on PATH for checkout tools (`Read`/`Grep`/`Edit`). Do not treat the image name as a second driver.
+
+**Workspace port.** Go interface, cwd-bounded. Methods: `Read`, `Grep`, `Edit`, `Shell`. Per-job allowlist:
+
+| Job | Port |
+|-----|------|
+| File-review Judge | **None** (prep staged the diff) |
+| Summary / tech Judge | None |
+| Tech-deep | `Read`, `Grep` |
+| Digest / context amend | `Read`, `Grep`, `Edit` (no `Shell` unless a later job opts in) |
+| Tests | stub adapter (no process) |
+
+Majordomo and strop import the port only. OpenCode CLI lives in `internal/workspace/opencode` (skeleton today; review still uses `agent-dispatch.sh`).
+
+**Agenting packs.** Not `SKILL.md`. On the context branch:
+
+```text
+agenting/index.yaml
+agenting/<area>/GROUNDING.md
+```
+
+`index.yaml` maps pack id → `globs` and `modes` (`files`, `summary`, `technical`, `digest`). Example:
+
+```yaml
+packs:
+  overview:
+    modes: [summary, technical, digest]
+  auth:
+    globs: ["**/auth/**", "**/*jwt*"]
+    modes: [files, summary, technical]
+```
+
+Prep selects packs; the model MUST NOT probe `agenting/`. `pipelines.*.agentContext` is **legacy** (still materialized today). Phase 6 grounding is packs, not that YAML.
+
+**Findings schema.** Judge output is **structured** (strop XML / map). Mandatory: `file`, `slug`, `findings` (each `severity` in `critical|warn|info`, `text` non-empty). Go fails the state if a reviewable has no artifact or a finding lacks severity. Markdown reports are a **formatter** after validation, not the contract. `[CRITICAL]` in MD is display, not the machine.
+
+**Context PRs on every SCM.** Open/restack uses the same forge adapters as publish (`gh` / `glab` / Bitbucket HTTP). Base = `majordomo-context/<id>`, head = `majordomo-context/<id>-update`. Poll must ignore PRs under `majordomo-context/` (Phase 6 checkbox).
+
+**Digest trigger.** Tower cron (same interval family as poll, e.g. every 5m). Run only when `last_merged_sha` is a proper ancestor of default `HEAD` and not equal to it (cursor behind). If caught up, exit no-op. One worker per repo (`context-digest-<repo-id>`).
+
+**First orphan.** If the base branch is missing, the digest bot creates `majordomo-context/<id>` (orphan, schema tree, bootstrap `meta.yaml`) and opens the first PR from `…/update`. No human seed step.
+
+**Gate comments.** Only comments starting with `@majordomo` count. `@majordomo reject <reason>` = reject + regen. `@majordomo done` = conversation complete (human may click merge). Other comments are ignored for Gate.
+
+**Digest credentials.** Same forge token as review MUST allow: read default, push to `majordomo-context/**`, open/restack PRs base=`majordomo-context/<id>` head=`…/update`.
+
+**Generic SCM.** Digest open/restack requires GitHub, GitLab, or Bitbucket. For `scm: generic`: skip opening a context PR; log and exit. No invented forge.
+
+**Context PR merge.** Default: **human clicks merge** after Gate is not rejected (conversation done). Humans still MUST NOT push commits. `context.autoMerge` default **false**; opt-in later.
+
+**History rewrite why.** Use forge actor + commit/event message when present. If why is empty, Gate **blocks** cursor reset until an `@majordomo` PR comment supplies it. Do not auto-resolve a rewrite with an empty reason.
+
+**Digest composition.** Walk story files as **sections** (mission, architecture, conventions, weaknesses, chronology), lock each section that passes. Do not invent a separate phase-walk over the same files.
 
 ---
 
@@ -258,6 +351,10 @@ pollCache:
   repo: served           # reserved; v1 cursor is Actions .poll-cache (see Decisions #2)
   # branch defaults to majordomo-poll-cache/<repo-id> when/if served-repo cursor lands
 
+context:
+  repo: served           # orphan majordomo-context/<repo-id>; never merge to default
+  # branch defaults to majordomo-context/<repo-id>
+
 pipelines:
   pr-review:
     model: anthropic/claude-sonnet-4-5   # sets COPILOT_MODEL if unset
@@ -282,6 +379,8 @@ staticAnalysis:                          # majordomo sa → .sa/<tool>.txt befor
 Legacy top-level `publishMode:` is still accepted as a fallback for `review.publishMode`.
 
 `prep` / `orchestrate` accept `--config-dir` + `--repo-id` to load this YAML (explicit `--routing` / `--agent-context` still win). `majordomo sa` runs `staticAnalysis` via `run-sa-tool.sh`.
+
+`pipelines.*.agentContext` is loaded and staged today but **not** consumed by the agent protocol. Do not treat it as Phase 6 grounding; that is `agenting/` packs on the context branch.
 
 ---
 
@@ -360,6 +459,7 @@ All steps happen in the **control-tower** repo and platform admin consoles — n
 1. **Platform admin** (customer or yours) creates a machine identity with:
    - Read access to the served repo (clone + list open PRs/MRs)
    - Write access to post PR/MR comments (and optional check/status)
+   - Phase 6 digest: push to `majordomo-context/**` and open/restack context PRs (same token)
    - GitHub: fine-grained PAT for **one** resource owner (org), or a GitHub App install
    - GitLab: group access token (or bot PAT) for the group that owns the project
 2. Store token in control-tower secrets (prefer one per org/group):
@@ -484,7 +584,10 @@ Built from this repo (new top-level `cmd/` and `internal/`). Distributed as `ghc
 | Subcommand | Role |
 |------------|------|
 | `majordomo prep` | Classify, cluster, batch, write manifest |
-| `majordomo dispatch` | Exec OpenCode via `agent-dispatch.sh` |
+| `majordomo dispatch` | Exec OpenCode via `agent-dispatch.sh` (v1 review path) |
+| `majordomo context validate` | Validate a context-branch worktree |
+| `majordomo context digest` | Catch up context cursor when default HEAD is ahead (orphan seed, push update branch, open/restack PR) |
+| `majordomo context repos` | List digest targets as JSON (tower cron matrix) |
 | `majordomo orchestrate` | Waves, checkpoints, finalize, prose, summary/tech loops, tech-deep |
 | `majordomo publish` | Post summary (`--scm github\|gitlab\|bitbucket`) |
 | `majordomo status` | Commit/check status per SCM |
@@ -501,42 +604,44 @@ Built from this repo (new top-level `cmd/` and `internal/`). Distributed as `ghc
 
 | Asset | Reason |
 |-------|--------|
-| `agents/skills/*`, personas | Prompt content |
-| OpenCode | External agent runtime ([opencode.ai](https://opencode.ai)) |
+| Context **story** and `agenting/*/GROUNDING.md` | Teaching content; selected per task |
+| Rubric **copy** (criterion text) | Registers at the strop boundary; not inside strop |
+| OpenCode | Workspace **adapter** only ([opencode.ai](https://opencode.ai)) |
 | SA tool images | Third-party linters |
+
+Mechanical **protocol** (`pr-review.agent.md`, step-by-step SKILL scripts) **does** move to Go/strop (Phase 6). Personas/skills that are only rubrics shrink to data files.
 
 ### Proposed module layout
 
 ```text
-majordomo/                          (this repo, new paths)
+majordomo/
 ├── cmd/majordomo/
 ├── internal/
 │   ├── config/                     # YAML central + per-repo merge
-│   ├── poll/                       # SCM API poll (default trigger)
-│   ├── staging/                    # prep
-│   ├── cluster/                    # dep + doc clusters
+│   ├── poll/
+│   ├── staging/
+│   ├── cluster/
 │   ├── cache/
+│   ├── contextstore/               # context branch schema
+│   ├── contextdigest/              # context catch-up job
+│   ├── workspace/                  # port + adapters (Phase 6)
 │   ├── diff/
 │   ├── orchestrate/
-│   ├── agent/                      # OpenCode exec, env, mounts
-│   ├── publish/                    # github, gitlab, bitbucket
+│   ├── agent/                      # v1 OpenCode dispatch; shrinks in Phase 6
+│   ├── publish/
 │   ├── status/
-│   └── report/                     # junit, html
-├── agents/                         # unchanged
-├── docker/
-│   ├── Dockerfile.majordomo        # distroless + static binary
-│   ├── Dockerfile.agent            # OpenCode only
-│   ├── Dockerfile.gh               # GitHub CLI (job container)
-│   └── Dockerfile.glab             # GitLab CLI (job container)
-└── pipelines/scripts/              # legacy; deprecated per subcommand
+│   └── report/
+├── agents/                         # rubric data; protocol MD offboarded in Phase 6
+├── dockerfiles/                    # majordomo, agent (OpenCode adapter), gh, glab
+└── pipelines/scripts/              # v1 dispatch + image build
 ```
 
 ### Container images
 
 | Image | Contents |
 |-------|----------|
-| `majordomo` | Static Go binary only (~15–30 MB) |
-| `majordomo-agent` | OpenCode + git; no Python orchestration |
+| `majordomo` | Static Go binary (Phase 6: + strop in-process) |
+| `majordomo-agent` | OpenCode + git. v1: the review runtime. Phase 6: optional OpenCode on PATH for checkout tools, not a second Judge |
 | `majordomo-gh` | `gh` + git/jq; forge job container (majordomo binary built in-job) |
 | `majordomo-glab` | `glab` + git/jq; forge job container |
 | `sa-tools/*` | Existing ruff/eslint/… images (unchanged) |
@@ -675,7 +780,7 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 - [x] Wire `majordomo-poll.yml` to build/run Go binary from `.majordomo`
 - [x] Wire `majordomo-review.yml` to `majordomo orchestrate` + `publish`
 - [x] Document beginner onboarding (credentials + YAML)
-- [ ] Wire agent image + LLM provider secrets into `majordomo-review` (required for real review output)
+- [x] Wire agent image + LLM provider secrets into `majordomo-review` (required for real review output)
 - [ ] One pilot served repo on **pull mode** — meet [Pilot definition of done](#pilot-definition-of-done-pull-mode)
 
 ### Phase 3 — OpenCode + slim images
@@ -700,6 +805,22 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 - [ ] Checks API annotations from JUnit
 - [x] Docs refreshed for Go + OpenCode
 - [x] Load `pipelines` / `staticAnalysis` from central YAML into Go (`majordomo sa` + prep materialize)
+- [x] Context branch schema: `internal/contextstore`, `majordomo context validate`, `context:` in `_defaults.yaml`
+
+### Phase 6 — Judge driver, context, and workspace port
+
+Not in the current pilot. Detail: [Repo context branch](advanced/10-repo-context-branch.md).
+
+- [x] Workspace port (`Read`/`Grep`/`Edit`/`Shell`) + OpenCode adapter skeleton + test stub; per-job allowlists (`Guard`)
+- [x] `go.mod` pin tagged `github.com/behaviorengineering/strop` v0.2.0; `internal/judge` JobRunner helper + summary/tech evaluator packs (loops still OpenCode until cutover)
+- [x] File-review Prepare → Judge → Validate → Assemble (`internal/filereview`); structured findings + MD formatter; OpenCode Judge via dispatch; `pr-review.agent.md` still drives Judge prompt until cutover
+- [x] `MAJORDOMO_JUDGE=opencode|strop` cutover (default opencode; strop selected → fail closed until generator modules land; never dual-run)
+- [x] Digest catch-up (`internal/contextdigest`, `majordomo context digest`, tower cron `.github/workflows/majordomo-context-digest.yml`: cursor behind check, orphan seed, first-parent walk + cursor advance, one update PR via gh/glab/Bitbucket; generic SCM skips)
+- [x] `agenting/index.yaml` + `GROUNDING.md` packs; prep selects by glob/mode (`internal/agenting`, `AttachGrounding` in prep/orchestrate; `--context-dir` / `MAJORDOMO_CONTEXT_DIR`; validate when index present)
+- [x] Conversation-before-merge via strop Gate (`@majordomo reject` / `@majordomo done`); human merge click; `context.autoMerge` default false (`internal/contextgate`, `gate.json`, digest comment poll)
+- [x] History-rewrite workflow; block cursor reset until why is known (`internal/contextdigest/rewrite.go`, meta rewrite fields)
+- [x] Poll skips context and cache-branch PRs
+- [x] Compaction pass for the teaching story (`internal/contextdigest/compact.go`, chronology threshold)
 
 ---
 
@@ -717,20 +838,24 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 
 ## Open questions
 
-_(none blocking pilot)_
+_(none blocking pilot or Phase 6 product shape)_
 
-Deferred (tracked under Phase 4 / 5 checkboxes): Bitbucket poll, push triggers, served-repo poll cursor, Checks annotations.
+Phase 6 contract is under [Judge driver](#judge-driver-and-workspace-port-later). Implementation maps findings onto strop XML helpers using the mandatory fields already named there (`file`, `slug`, `findings[].severity`, `findings[].text`).
+
+Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll, push triggers, served-repo poll cursor, Checks annotations) and Phase 6 checkboxes (build the contract).
 
 ## Resolved decisions
 
 | Topic | Decision |
 |-------|----------|
 | **Poll cursor (v1)** | Actions cache + `.poll-cache/<repo-id>/poll-cursor.json` on the tower. Served-repo git branch is optional Phase 5 hardening, not required for pilot. |
-| **Credential model** | One forge token **per org/group** in tower secrets: `GH_TOKEN_<OWNER>` (GitHub; never `GITHUB_TOKEN_*` — Actions forbids that prefix) or `GITLAB_TOKEN_<OWNER>` (GitLab). Optional per-repo override `MAJORDOMO_CREDENTIAL_<REPO_ID>`. Lookup order: per-repo → org. **No** unqualified `GH_TOKEN` / `GITLAB_TOKEN` / `GITHUB_TOKEN` for served-repo access (tower Actions `GITHUB_TOKEN` remains for operating on the tower itself). Map secrets into job env explicitly. |
+| **Credential model** | One forge token **per org/group** in tower secrets: `GH_TOKEN_<OWNER>` (GitHub; never `GITHUB_TOKEN_*` — Actions forbids that prefix) or `GITLAB_TOKEN_<OWNER>` (GitLab). Optional per-repo override `MAJORDOMO_CREDENTIAL_<REPO_ID>`. Lookup order: per-repo → org. **No** unqualified `GH_TOKEN` / `GITLAB_TOKEN` / `GITHUB_TOKEN` for served-repo access (tower Actions `GITHUB_TOKEN` remains for operating on the tower itself). Map secrets into job env explicitly. Phase 6 digest needs the same token to **push** `majordomo-context/**` and open/restack context PRs (not only comment on product PRs). |
 | **Continuous runs** | `review.enableContinuousRuns` default **false** (one review per PR number). Set **true** to re-queue when `head_sha` changes. |
 | **Cache skips** | Analysis-cache skips **on by default**; opt out with `cache.disableSkips: true`. |
 | **OpenCode auth** | Provider API keys are **per-run job secrets/env** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` for custom OpenAI-compatible gateways). Never bake keys into the agent image. Optional non-secret provider config (`baseURL`, provider id) via `opencode.json` / `OPENCODE_CONFIG_CONTENT` with `{env:...}`. SCM tokens remain separate from LLM auth. `agent-dispatch.sh` preflights provider keys; it no longer requires `GITHUB_TOKEN` for Copilot CLI. |
 | **Forge publish** | GitHub/GitLab publish uses **`gh` / `glab` on PATH** inside separate job containers (`majordomo-gh`, `majordomo-glab`). Majordomo Go binary is built in-job and not baked into forge images. Bitbucket publish stays HTTP until a Bitbucket CLI path exists. Poll remains Go HTTP. |
+| **Repo context** | Served-repo orphan branch. Teaching story + first-parent cursor. Bootstrap from last. Cron when cursor behind HEAD; bot seeds orphan. Gate via `@majordomo` comments; human merge. Grounding via selected agenting packs. Schema-first today (Phase 6 for digest). |
+| **Judge driver** | strop + DSPy for generate/eval/gate. Workspace port; OpenCode is one adapter. Mechanical workflows are deterministic code; protocol markdown is offboarded. Cutover: `MAJORDOMO_JUDGE`. v1 still OpenCode dispatch. Findings are structured; MD is a formatter. Context PRs use existing forge adapters; human merge; rewrite blocked without why. |
 
 ---
 
@@ -743,6 +868,7 @@ Deferred (tracked under Phase 4 / 5 checkboxes): Bitbucket poll, push triggers, 
 | [04 — How the Review Works](04-how-the-review-works.md) | Review behaviour |
 | [advanced/05-file-orchestration.md](advanced/05-file-orchestration.md) | Staging and waves |
 | [advanced/09-customising-the-review.md](advanced/09-customising-the-review.md) | YAML config mapping |
+| [advanced/10-repo-context-branch.md](advanced/10-repo-context-branch.md) | Context branch, catch-up, agenting vs mechanical, strop driver, workspace port |
 
 ---
 
@@ -766,3 +892,28 @@ Deferred (tracked under Phase 4 / 5 checkboxes): Bitbucket poll, push triggers, 
 | 2026-08-27 | Cache skips default on; opt out with `cache.disableSkips: true` (replaces `enableSkips`) |
 | 2026-08-27 | Plan sync: poll cursor = Actions `.poll-cache` (v1); schema vs loader split; pilot DoD + agent requirement; continuous-runs in poll algorithm |
 | 2026-08-27 | Load `pipelines` + `staticAnalysis` in Go; materialize for prep; `majordomo sa` + tower review step |
+| 2026-08-28 | Repo context branch (Decision 5): served-repo orphan `majordomo-context/<repo-id>`; schema + `majordomo context validate`; no workflow wiring |
+| 2026-08-28 | Context digest catch-up: first-parent walk from `last_merged_sha`; never skip a node; one update PR per repo |
+| 2026-08-28 | Context story vs cursor: bootstrap from last; no-ops silent; conversation not file edits; rewrite workflow; selected skills for grounding |
+| 2026-08-28 | Mechanical `pr-review-*` skills stay separate from context-branch agenting packs; do not mix |
+| 2026-08-28 | Mechanical protocol: Go state machine (like generate/score loops); OpenCode only judges; SKILL.md shrinks to rubric data |
+| 2026-08-28 | Driver: strop + DSPy for generate/eval/gate; OpenCode optional workspace tool |
+| 2026-08-28 | Workspace tool is a port; OpenCode is a swappable adapter |
+| 2026-08-28 | Mechanical workflows are deterministic code; protocol markdown is offboarded |
+| 2026-08-28 | PLAN: Decision 6 (strop driver + workspace port); Phase 6 checklist; target architecture item 5 updated |
+| 2026-08-28 | Phase 6 contract: cutover flag, strop pin, port allowlists, agenting index, structured findings, forge context PRs, human merge, rewrite-why gate |
+| 2026-08-28 | Context catch-up PR head: `majordomo-context/<repo-id>-update` (hyphen; git ref conflict with `/update` when base branch exists) |
+| 2026-08-28 | Digest holes: cron when cursor behind HEAD; bot seeds orphan; Gate `@majordomo reject`/`done`; digest token push scope; generic SCM skips context PR |
+| 2026-08-28 | Poll skips PRs whose base or head starts with `majordomo-context/`, `majordomo-pr-reviewer-cache/`, or `majordomo-poll-cache/` |
+| 2026-08-28 | Workspace port: `internal/workspace` (Local, Stub, Guard allowlists) + `opencode` adapter skeleton; not wired to orchestrate |
+| 2026-08-28 | Pin strop v0.2.0; `internal/judge` JobRunner boundary + summary/tech criteriapacks; review loops still OpenCode |
+| 2026-08-28 | File-review FSM: `internal/filereview` Prepare→Judge→Validate→Assemble; findings.json; orchestrate waves call it |
+| 2026-08-28 | `MAJORDOMO_JUDGE` cutover wiring: default opencode; strop fail-closed until modules; dispatch refuses dual-run |
+| 2026-08-28 | Context digest v1: `internal/contextdigest` + `majordomo context digest` (cursor check, orphan bootstrap, first-parent walk, forge PR); story/agenting later |
+| 2026-08-28 | Tower cron: `majordomo-context-digest.yml` + `majordomo context repos` (matrix job, concurrency `context-digest-<repo-id>`) |
+| 2026-08-28 | Context digest hardening: cursor read from update branch, shallow deepen, SCM git auth, PR body refresh, example config filter, `-update` branch suffix (git ref fix) |
+| 2026-08-28 | Agenting v1: `internal/agenting`, bootstrap `index.yaml` + overview pack, prep `AttachGrounding` + `grounding_packs` on manifest; `--context-dir` / review workflow context clone |
+| 2026-08-28 | Grounding dispatch: `internal/agent/grounding.go`, `MAJORDOMO_GROUNDING` env, `agent-dispatch.sh` prompt suffix, `pr-review.agent.md` Step 1.5 |
+| 2026-08-28 | Context Phase 6 remainder: rewrite workflow, gate comments + `gate.json`, story digest per commit, agenting materialize, compaction, `context.autoMerge` opt-in |
+| 2026-08-28 | Phase 6 hardening: strop generator modules + `MAJORDOMO_JUDGE=strop` cutover, LLM story section-walk, Bitbucket gate comments, digest commit cap + gate workflow |
+| 2026-08-29 | Tower review job: LLM secrets, `MAJORDOMO_JUDGE` / `MAJORDOMO_AGENT_IMAGE` vars, fail-closed orchestrate, context-dir pass-through |

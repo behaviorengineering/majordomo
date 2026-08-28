@@ -45,6 +45,7 @@ Check wiring matches intent in the plan:
 | `publish` | `internal/publish` |
 | `status` | `internal/status` |
 | `cache` | `internal/cache` |
+| `context` | `internal/contextstore` (`validate`), `internal/contextdigest` (`digest`, `repos`) |
 | `report` | `internal/report` |
 
 - [ ] Flags live on the owning subcommand.

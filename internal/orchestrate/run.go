@@ -12,6 +12,8 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/agent"
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/filereview"
+	"github.com/behaviorengineering/majordomo/internal/judge"
 	"github.com/behaviorengineering/majordomo/internal/report"
 	"github.com/behaviorengineering/majordomo/internal/staging"
 )
@@ -33,6 +35,7 @@ type Options struct {
 	RoutingPath       string
 	AgentContextPath  string
 	SummaryConfigPath string
+	ContextDir        string // merged context-branch checkout (agenting); optional
 
 	// ConfigDir + RepoID load majordomo-central-config and materialize routing/agentContext
 	// when RoutingPath / AgentContextPath are empty.
@@ -75,7 +78,24 @@ func Run(opts Options) error {
 
 	logf := agent.Logf
 	logf("INFO", "========== majordomo orchestrate ==========")
-	logf("INFO", "PR: %s  pipeline: %s  concurrency: %d", opts.PRNumber, opts.Pipeline, opts.Concurrency)
+	judgeMode, err := judge.ResolveMode()
+	if err != nil {
+		return err
+	}
+	logf("INFO", "PR: %s  pipeline: %s  concurrency: %d  judge: %s", opts.PRNumber, opts.Pipeline, opts.Concurrency, judgeMode)
+	if judgeMode == judge.ModeStrop {
+		if err := judge.EnsureStropReady(); err != nil {
+			return err
+		}
+		stropDispatch := func(opts agent.DispatchOptions) error {
+			return judge.StropDispatch(judge.StropDispatchOptions{
+				StagingDir: opts.StagingDir,
+				OutputDir:  opts.OutputDir,
+				Mode:       judge.DispatchMode(opts.Mode),
+			})
+		}
+		opts.Dispatch = stropDispatch
+	}
 
 	if !opts.SkipPrep {
 		if opts.BaseBranch == "" {
@@ -100,6 +120,7 @@ func Run(opts Options) error {
 			AgentContextPath:  agentContextPath,
 			SummaryConfigPath: opts.SummaryConfigPath,
 			RepoRoot:          opts.RepoRoot,
+			ContextDir:        staging.ResolveContextDir(opts.ContextDir),
 		})
 		if err != nil {
 			if errors.Is(err, staging.ErrNothingToReview) {
@@ -208,16 +229,33 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 		agent.Logf("INFO", "%s: checkpoint — skipping", label)
 		return nil
 	}
+	judgeMode, _ := judge.ResolveMode()
 
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
-		lastErr = opts.Dispatch(agent.DispatchOptions{
-			PRNumber:   opts.PRNumber,
+		lastErr = filereview.Run(filereview.Options{
 			StagingDir: b.StagingDir,
-			OutputDir:  skillOut,
-			Mode:       agent.ModeFiles,
-			ScriptsDir: opts.ScriptsDir,
-			Timeout:    opts.BatchTimeout,
+			SkillOut:   skillOut,
+			MaxRetries: 2,
+			Logf: func(format string, args ...any) {
+				agent.Logf("INFO", "%s: "+format, append([]any{label}, args...)...)
+			},
+			Judge: func() error {
+				if judgeMode == judge.ModeStrop {
+					return judge.FileReviewBatch(judge.FileReviewOptions{
+						StagingDir: b.StagingDir,
+						SkillOut:   skillOut,
+					})
+				}
+				return opts.Dispatch(agent.DispatchOptions{
+					PRNumber:   opts.PRNumber,
+					StagingDir: b.StagingDir,
+					OutputDir:  skillOut,
+					Mode:       agent.ModeFiles,
+					ScriptsDir: opts.ScriptsDir,
+					Timeout:    opts.BatchTimeout,
+				})
+			},
 		})
 		if lastErr == nil {
 			break

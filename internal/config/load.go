@@ -49,6 +49,9 @@ func LoadRepoFile(configDir, repoID string, defaults RepoConfig) (RepoConfig, er
 	if merged.PollCache.Branch == "" {
 		merged.PollCache.Branch = PollCacheBranch(merged.Repository.ID)
 	}
+	if merged.Context.Branch == "" {
+		merged.Context.Branch = ContextBranch(merged.Repository.ID)
+	}
 	return merged, nil
 }
 
@@ -141,6 +144,24 @@ func mergeConfig(base, over RepoConfig) RepoConfig {
 	}
 	if over.PollCache.Branch != "" {
 		out.PollCache.Branch = over.PollCache.Branch
+	}
+	if over.Context.Repo != "" {
+		out.Context.Repo = over.Context.Repo
+	}
+	if over.Context.Branch != "" {
+		out.Context.Branch = over.Context.Branch
+	}
+	if over.Context.AutoMerge != nil {
+		out.Context.AutoMerge = over.Context.AutoMerge
+	}
+	if over.Context.GateCommentPrefix != "" {
+		out.Context.GateCommentPrefix = over.Context.GateCommentPrefix
+	}
+	if over.Context.Compaction.MaxChronologyEntries != 0 {
+		out.Context.Compaction.MaxChronologyEntries = over.Context.Compaction.MaxChronologyEntries
+	}
+	if over.Context.Compaction.KeepRecentEntries != 0 {
+		out.Context.Compaction.KeepRecentEntries = over.Context.Compaction.KeepRecentEntries
 	}
 	if over.Review.PublishMode != "" {
 		out.Review.PublishMode = over.Review.PublishMode

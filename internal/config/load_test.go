@@ -42,6 +42,12 @@ trigger:
 	if cfg.Review.ContinuousRunsEnabled() {
 		t.Fatal("expected continuous runs false from defaults")
 	}
+	if cfg.PollCache.Branch != "majordomo-poll-cache/payments-api" {
+		t.Fatalf("pollCache.branch=%q", cfg.PollCache.Branch)
+	}
+	if cfg.Context.Branch != "majordomo-context/payments-api" {
+		t.Fatalf("context.branch=%q", cfg.Context.Branch)
+	}
 }
 
 func TestReviewMergeAndEffectivePublishMode(t *testing.T) {

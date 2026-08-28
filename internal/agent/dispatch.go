@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/behaviorengineering/majordomo/internal/judge"
 )
 
 // Mode selects agent-dispatch.sh behaviour.
@@ -91,7 +93,11 @@ func ResolveScriptsDir(explicit string) (string, error) {
 }
 
 // Dispatch runs agent-dispatch.sh (OpenCode) with the given options.
+// Refuses to run when MAJORDOMO_JUDGE=strop so OpenCode and strop never mix.
 func Dispatch(opts DispatchOptions) error {
+	if err := judge.EnsureOpencodeDriver(); err != nil {
+		return err
+	}
 	if opts.PRNumber == "" || opts.StagingDir == "" || opts.OutputDir == "" {
 		return fmt.Errorf("dispatch requires pr, staging-dir, and output-dir")
 	}
@@ -110,6 +116,11 @@ func Dispatch(opts DispatchOptions) error {
 
 	env := append([]string{}, os.Environ()...)
 	env = append(env, opts.Env...)
+	if genv, err := groundingEnv(opts.StagingDir, opts.Mode); err != nil {
+		return fmt.Errorf("grounding: %w", err)
+	} else if genv != "" {
+		env = append(env, genv)
+	}
 
 	runner := opts.Runner
 	if runner == nil {
@@ -176,4 +187,16 @@ func ParseScore(text string) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func groundingEnv(stagingDir string, mode Mode) (string, error) {
+	skillDir, err := GroundingSkillDir(stagingDir, mode)
+	if err != nil || skillDir == "" {
+		return "", err
+	}
+	paths, err := GroundingPaths(stagingDir, skillDir)
+	if err != nil || len(paths) == 0 {
+		return "", err
+	}
+	return "MAJORDOMO_GROUNDING=" + strings.Join(paths, ","), nil
 }

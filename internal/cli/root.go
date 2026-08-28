@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,9 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/agent"
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/contextdigest"
+	"github.com/behaviorengineering/majordomo/internal/contextgate"
+	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	diffpkg "github.com/behaviorengineering/majordomo/internal/diff"
 	"github.com/behaviorengineering/majordomo/internal/orchestrate"
 	"github.com/behaviorengineering/majordomo/internal/poll"
@@ -47,6 +51,7 @@ See docs/PLAN-control-tower-github-go.md.`,
 	root.AddCommand(newPublishCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newCacheCmd())
+	root.AddCommand(newContextCmd())
 	root.AddCommand(newReportCmd())
 	root.AddCommand(newBuildSAToolsCmd())
 	root.AddCommand(newSACmd())
@@ -99,7 +104,7 @@ func newPollCmd() *cobra.Command {
 }
 
 func newPrepCmd() *cobra.Command {
-	var routing, agentContext, summaryConfig, configDir, repoID, pipeline string
+	var routing, agentContext, summaryConfig, configDir, repoID, pipeline, contextDir string
 	cmd := &cobra.Command{
 		Use:   "prep <base-branch> <staging-dir>",
 		Short: "Classify diffs, cluster files, write staging manifest",
@@ -118,6 +123,7 @@ func newPrepCmd() *cobra.Command {
 				RoutingPath:       routingPath,
 				AgentContextPath:  agentContextPath,
 				SummaryConfigPath: summaryConfig,
+				ContextDir:        staging.ResolveContextDir(contextDir),
 			}
 			return staging.Run(opts)
 		},
@@ -128,6 +134,7 @@ func newPrepCmd() *cobra.Command {
 	cmd.Flags().StringVar(&configDir, "config-dir", "", "majordomo-central-config dir (materialize routing/agentContext)")
 	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id under config-dir")
 	cmd.Flags().StringVar(&pipeline, "pipeline", "pr-review", "pipelines.<name> key when using --config-dir")
+	cmd.Flags().StringVar(&contextDir, "context-dir", "", "merged context-branch checkout (agenting packs; or MAJORDOMO_CONTEXT_DIR)")
 	return cmd
 }
 
@@ -187,7 +194,7 @@ func newDispatchCmd() *cobra.Command {
 func newOrchestrateCmd() *cobra.Command {
 	var (
 		pr, stagingDir, outputDir, baseBranch, pipeline, scriptsDir, repoRoot string
-		routing, agentContext, summaryConfig, configDir, repoID               string
+		routing, agentContext, summaryConfig, configDir, repoID, contextDir               string
 		concurrency                                                           int
 		skipPrep, skipDeep, skipReport                                        bool
 		timeoutMin                                                            int
@@ -224,6 +231,7 @@ func newOrchestrateCmd() *cobra.Command {
 				SummaryConfigPath: summaryConfig,
 				ConfigDir:         configDir,
 				RepoID:            repoID,
+				ContextDir:        staging.ResolveContextDir(contextDir),
 				BatchTimeout:      timeout,
 			})
 		},
@@ -240,6 +248,7 @@ func newOrchestrateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&summaryConfig, "summary-config", "", "summary config JSON for prep")
 	cmd.Flags().StringVar(&configDir, "config-dir", "", "majordomo-central-config dir")
 	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id under config-dir")
+	cmd.Flags().StringVar(&contextDir, "context-dir", "", "merged context-branch checkout (agenting packs; or MAJORDOMO_CONTEXT_DIR)")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 0, "max parallel batches (default COPILOT_CONCURRENCY or 6)")
 	cmd.Flags().IntVar(&timeoutMin, "batch-timeout-minutes", 0, "per-batch timeout (default 8)")
 	cmd.Flags().BoolVar(&skipPrep, "skip-prep", false, "assume staging already prepared")
@@ -596,6 +605,105 @@ func newCacheCmd() *cobra.Command {
 	_ = restoreCmd.MarkFlagRequired("output-dir")
 	cmd.AddCommand(restoreCmd)
 
+	return cmd
+}
+
+func newContextCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "context",
+		Short: "Served-repo context branch (validate, digest, list targets)",
+	}
+	var dir string
+	validate := &cobra.Command{
+		Use:   "validate",
+		Short: "Validate a context-branch worktree (meta.yaml, chronology, required files)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return contextstore.ValidateTree(dir)
+		},
+	}
+	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
+	_ = validate.MarkFlagRequired("dir")
+	var digestConfigDir, digestRepoID, digestWorkDir string
+	var skipStory, skipCompact, forceCompact bool
+	digest := &cobra.Command{
+		Use:   "digest",
+		Short: "Catch up the served-repo context branch when the cursor is behind default HEAD",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := contextdigest.Run(contextdigest.Options{
+				ConfigDir:    digestConfigDir,
+				RepoID:       digestRepoID,
+				WorkDir:      digestWorkDir,
+				SkipStory:    skipStory,
+				SkipCompact:  skipCompact,
+				ForceCompact: forceCompact,
+			})
+			if err != nil {
+				return err
+			}
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(res)
+		},
+	}
+	digest.Flags().StringVar(&digestConfigDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	digest.Flags().StringVar(&digestRepoID, "repo-id", "", "served repo id")
+	digest.Flags().StringVar(&digestWorkDir, "workdir", "", "served-repo clone with origin remote")
+	digest.Flags().BoolVar(&skipStory, "skip-story", false, "cursor/meta only; skip story and agenting updates")
+	digest.Flags().BoolVar(&skipCompact, "skip-compact", false, "skip chronology compaction")
+	digest.Flags().BoolVar(&forceCompact, "force-compact", false, "run compaction even under entry threshold")
+	_ = digest.MarkFlagRequired("repo-id")
+	_ = digest.MarkFlagRequired("workdir")
+	var gateConfigDir, gateRepoID, gateWorkDir, gateDir string
+	gate := &cobra.Command{
+		Use:   "gate",
+		Short: "Show gate.json sidecar state for a context worktree",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir := gateDir
+			if dir == "" {
+				dir = gateWorkDir
+			}
+			if dir == "" {
+				return fmt.Errorf("--dir or --workdir required")
+			}
+			s, err := contextgate.LoadSidecar(dir)
+			if err != nil {
+				return err
+			}
+			enc := json.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent("", "  ")
+			return enc.Encode(s)
+		},
+	}
+	gate.Flags().StringVar(&gateConfigDir, "config-dir", "majordomo-central-config", "unused; reserved for future forge sync")
+	gate.Flags().StringVar(&gateRepoID, "repo-id", "", "unused; reserved for future forge sync")
+	gate.Flags().StringVar(&gateWorkDir, "workdir", "", "context worktree directory")
+	gate.Flags().StringVar(&gateDir, "dir", "", "context worktree directory (alias for --workdir)")
+	var reposConfigDir, reposOut string
+	repos := &cobra.Command{
+		Use:   "repos",
+		Short: "List served repos eligible for context digest (JSON for tower matrix)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := contextdigest.ListTargets(reposConfigDir)
+			if err != nil {
+				return err
+			}
+			out := cmd.OutOrStdout()
+			if reposOut != "" && reposOut != "-" {
+				f, err := os.Create(reposOut)
+				if err != nil {
+					return err
+				}
+				defer f.Close()
+				out = f
+			}
+			enc := json.NewEncoder(out)
+			enc.SetIndent("", "  ")
+			return enc.Encode(res)
+		},
+	}
+	repos.Flags().StringVar(&reposConfigDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	repos.Flags().StringVar(&reposOut, "out", "-", "write JSON (default stdout)")
+	cmd.AddCommand(validate, digest, gate, repos)
 	return cmd
 }
 

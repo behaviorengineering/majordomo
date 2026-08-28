@@ -59,10 +59,12 @@ Violation: STOP, reload SKILL.md and re-apply from Step 3
 ## Invocation Format
 
 ```
-PR #<number> staging:<absolute-path> skill:<skill-name> skill_dir:<absolute-path> output:<absolute-path> [mode:<mode>]
+PR #<number> staging:<absolute-path> skill:<skill-name> skill_dir:<absolute-path> output:<absolute-path> [mode:<mode>] [grounding:<path>[,<path>...]]
 ```
 
 Parse all values before doing anything else.
+
+**`grounding` (optional):** Comma-separated absolute paths to staged `GROUNDING.md` packs (project context). When present, execute [Step 1.5](#step-15---load-grounding-optional) after loading SKILL.md. Do NOT probe for other grounding or agenting files.
 
 **`mode` values (optional):**
 
@@ -145,7 +147,7 @@ Rules:
 
 **Step 0 - Parse prompt**
 
-Extract `PR #<number>`, `staging:<path>`, `skill:<name>`, `skill_dir:<path>`, `output:<path>`. Store as working variables.
+Extract `PR #<number>`, `staging:<path>`, `skill:<name>`, `skill_dir:<path>`, `output:<path>`, optional `mode:<mode>`, and optional `grounding:<comma-separated paths>`. Store as working variables.
 
 ---
 
@@ -164,6 +166,19 @@ This file defines:
 
 MUST read SKILL.md in full before proceeding to Step 2. All specialization decisions for the
 rest of this session come exclusively from this file.
+
+---
+
+**Step 1.5 - Load grounding (optional)**
+
+> Skip entirely when `grounding:` was not parsed in Step 0.
+
+Read each file path listed in `grounding:` **in order**. These are **project grounding** packs — use them to understand system context when applying SKILL.md review criteria. They do **not** replace SKILL.md criteria, prioritization, or blast-radius rules.
+
+Rules:
+- Read **only** the paths explicitly listed in `grounding:`.
+- MUST NOT list, glob, or read any other `.grounding/` directory or `agenting/` tree.
+- Grounding informs context; findings still MUST trace to SKILL.md and the changed files.
 
 ---
 
@@ -212,9 +227,12 @@ Schema:
       "agent": "<skill>"
     }
   ],
-  "excluded": ["<path>", "..."]
+  "excluded": ["<path>", "..."],
+  "grounding_packs": [{ "id": "<pack-id>", "file": "<skill_dir-relative path>" }]
 }
 ```
+
+`grounding_packs` (optional): Present when prep attached agenting context. Do **not** open these files from the manifest — read only paths from the `grounding:` prompt parameter (Step 1.5).
 
 `mode` meanings:
 - `full_and_diff` - input file contains the full current file content followed by the diff
@@ -306,6 +324,7 @@ Read **§Blast Radius** from SKILL.md:
 This step runs only when `mode:summary` is active. The skill is `pr-review-summary`.
 
 1. Read `<staging>/<skill>/manifest.json` for metadata (`base_branch`, `dep_clusters`, `reverse_deps`, `static_analysis`, file list).
+   If Step 1.5 loaded grounding packs, use that context when synthesising scope and impact.
 2. Read `<staging>/<skill>/all-diffs.txt` — one file containing every diff concatenated by the
    dispatcher. Each file’s diff is preceded by `=== FILE: <path> ===`.
    Some file diffs may be truncated — a `[... N lines omitted — summary mode diff cap]` marker
@@ -333,6 +352,7 @@ Constraints active for this step:
 This step runs only when `mode:technical` is active. The skill is `pr-review-technical`.
 
 1. Read `<staging>/<skill>/manifest.json` for metadata (`base_branch`, `dep_clusters`, `reverse_deps`, file list).
+   If Step 1.5 loaded grounding packs, use that context when assessing architectural and correctness risks.
 2. Read `<staging>/<skill>/all-diffs.txt` — one file containing every diff concatenated by the
    dispatcher. Each file’s diff is preceded by `=== FILE: <path> ===`.
    MUST NOT read individual `input_file` entries from the manifest — they are already here.

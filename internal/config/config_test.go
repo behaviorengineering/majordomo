@@ -10,6 +10,14 @@ func TestCacheBranch(t *testing.T) {
 	}
 }
 
+func TestContextBranch(t *testing.T) {
+	got := ContextBranch("payments-api")
+	want := "majordomo-context/payments-api"
+	if got != want {
+		t.Fatalf("ContextBranch = %q, want %q", got, want)
+	}
+}
+
 func TestCacheSkipsDefaultOn(t *testing.T) {
 	c := Cache{}
 	if !c.SkipsEnabled() {

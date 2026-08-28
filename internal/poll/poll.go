@@ -45,6 +45,24 @@ type openPR struct {
 	Number     int
 	HeadSHA    string
 	BaseBranch string
+	HeadBranch string
+}
+
+var majordomoInternalBranchPrefixes = []string{
+	"majordomo-context/",
+	"majordomo-pr-reviewer-cache/",
+	"majordomo-poll-cache/",
+}
+
+// isMajordomoInternalBranch reports whether base or head is a Majordomo-owned branch
+// that product poll must ignore.
+func isMajordomoInternalBranch(base, head string) bool {
+	for _, p := range majordomoInternalBranchPrefixes {
+		if strings.HasPrefix(base, p) || strings.HasPrefix(head, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func logf(level, format string, args ...any) {
@@ -145,6 +163,12 @@ func Run(opts Options) error {
 		skippedHere := 0
 		for _, pr := range prs {
 			prNum := fmt.Sprintf("%d", pr.Number)
+			if isMajordomoInternalBranch(pr.BaseBranch, pr.HeadBranch) {
+				skippedHere++
+				logf("INFO", "%s#%s: skip majordomo-internal branch (base=%s head=%s)",
+					cfg.Repository.ID, prNum, pr.BaseBranch, pr.HeadBranch)
+				continue
+			}
 			continuous := out.Continuous
 			if !cache.ShouldReview(cursor, prNum, pr.HeadSHA, continuous) {
 				skippedHere++

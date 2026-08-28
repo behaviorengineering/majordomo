@@ -141,6 +141,7 @@ majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFU
 majordomo cache validate-branch majordomo-pr-reviewer-cache/<id>
 majordomo cache push --remote <url> --branch <name> --worktree <dir>
 majordomo cache precheck|lookup|store|restore ...
+majordomo context validate --dir <worktree>
 majordomo report junit <review-output-dir> <junit-output-dir>
 majordomo report html <input.md> <output.html>
 majordomo report all-diffs <manifest.json> <output.txt> [--cap N]
@@ -160,3 +161,4 @@ Set `MAJORDOMO_SCRIPTS` if `pipelines/scripts` is not discoverable from cwd; set
 - [05 — File Orchestration](docs/advanced/05-file-orchestration.md)
 - [06 — PR Summary Flow](docs/advanced/06-pr-summary-flow.md)
 - [07 — Example Summary](docs/advanced/07-example-summary.md)
+- [10 — Repo Context Branch](docs/advanced/10-repo-context-branch.md)

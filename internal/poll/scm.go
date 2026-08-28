@@ -67,6 +67,7 @@ func listGitHubPRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 			Number int `json:"number"`
 			Head   struct {
 				SHA string `json:"sha"`
+				Ref string `json:"ref"`
 			} `json:"head"`
 			Base struct {
 				Ref string `json:"ref"`
@@ -76,7 +77,12 @@ func listGitHubPRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 			return nil, fmt.Errorf("decode GitHub pulls: %w", err)
 		}
 		for _, p := range raw {
-			out = append(out, openPR{Number: p.Number, HeadSHA: p.Head.SHA, BaseBranch: p.Base.Ref})
+			out = append(out, openPR{
+				Number:     p.Number,
+				HeadSHA:    p.Head.SHA,
+				BaseBranch: p.Base.Ref,
+				HeadBranch: p.Head.Ref,
+			})
 		}
 		next = linkRelNext(resp.Header.Get("Link"))
 	}
@@ -114,13 +120,19 @@ func listGitLabMRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 		var raw []struct {
 			IID          int    `json:"iid"`
 			SHA          string `json:"sha"`
+			SourceBranch string `json:"source_branch"`
 			TargetBranch string `json:"target_branch"`
 		}
 		if err := json.Unmarshal(body, &raw); err != nil {
 			return nil, fmt.Errorf("decode GitLab merge_requests: %w", err)
 		}
 		for _, mr := range raw {
-			out = append(out, openPR{Number: mr.IID, HeadSHA: mr.SHA, BaseBranch: mr.TargetBranch})
+			out = append(out, openPR{
+				Number:     mr.IID,
+				HeadSHA:    mr.SHA,
+				BaseBranch: mr.TargetBranch,
+				HeadBranch: mr.SourceBranch,
+			})
 		}
 		nextPage := strings.TrimSpace(resp.Header.Get("X-Next-Page"))
 		if nextPage == "" {
