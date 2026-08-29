@@ -158,7 +158,7 @@ Go owns the states. OpenCode is one action inside a state: "given this input and
 Example file-review batch:
 
 1. **Prepare** (Go `internal/filereview`): load reviewables from batch `manifest.json`.
-2. **Judge** (OpenCode via dispatch today; strop later): write per-file markdown under `per-file/`.
+2. **Judge** (strop in-process): write per-file markdown under `per-file/`.
 3. **Validate** (Go): parse MD → structured reports; every reviewable has an artifact; every finding has severity + text (or explicit no-issues). Invalid → retry with `filereview_feedback.md`, up to a cap, then fail the batch.
 4. **Assemble** (Go): write `findings.json`; rewrite markdown from structured reports (MD is the display formatter).
 
@@ -227,7 +227,7 @@ Map today's loops onto strop instead of new `for` loops:
 
 Strop boundary rules still apply: no product prompts inside strop; Majordomo owns signatures, rubric copy, and the workspace-tool adapter.
 
-Today's `agent-dispatch.sh` / `pr-review.agent.md` stay until this driver exists. One execution path per job: `MAJORDOMO_JUDGE=opencode|strop` (default `opencode`). Selecting `strop` fail-closes until generator modules are registered (`judge.ErrStropJudgeNotReady`). Never dual-run. The `majordomo-agent` image remains the OpenCode install; after cutover it is not the protocol owner. Majordomo `go.mod` pins tagged `github.com/behaviorengineering/strop`. Judge prompts stay out of `Dockerfile.agent`.
+Judge always runs in-process via strop (`internal/judge`). OpenCode is not a protocol driver. The `majordomo-agent` image may still put OpenCode on PATH later for workspace tools only. Majordomo `go.mod` pins tagged `github.com/behaviorengineering/strop`.
 
 ## Grounding: selected agenting packs (v1 prep)
 
@@ -279,7 +279,7 @@ Checkout the **merged** context tip only. Open context update PRs are not ground
 
 ## Later slices (not this work)
 
-1. **Mechanical state machine.** Drive Judge with strop DSPy. Workspace port + per-job allowlists. `MAJORDOMO_JUDGE` cutover. Pull step protocol out of `pr-review.agent.md`. Structured findings; MD formatter after Validate.
+1. **Mechanical state machine.** Drive Judge with strop DSPy. Workspace port + per-job allowlists. Pull step protocol out of `pr-review.agent.md`. Structured findings; MD formatter after Validate.
 2. **Poll filter.** Done: skip context and cache-branch PRs in `internal/poll`.
 
 ## Related

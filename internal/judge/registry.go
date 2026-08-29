@@ -73,11 +73,11 @@ func StropReady() bool {
 	return err == nil
 }
 
-// EnsureStropReady fails when MAJORDOMO_JUDGE=strop but modules are unavailable.
+// EnsureStropReady fails when generator modules cannot be registered (usually missing LLM keys).
 func EnsureStropReady() error {
 	_, _, err := ensureRegistry()
 	if err != nil {
-		return ErrStropJudgeNotReady
+		return ErrNotReady
 	}
 	return nil
 }

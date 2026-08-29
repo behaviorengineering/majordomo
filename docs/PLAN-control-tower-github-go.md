@@ -119,7 +119,7 @@ See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for 
 | 3 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
 | 4 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
 | 5 | Repo context location | **On the served repo**, orphan branch `majordomo-context/<repo-id>`. Story is a compactable teaching document (evidenced decisions only), not an audit log. Cursor catch-up on default first-parent; no-ops silent; bootstrap from last. Humans steer via PR conversation, not file edits. Grounding is **selected agenting packs**, never mixed into mechanical protocol. See [Repo context branch](advanced/10-repo-context-branch.md). |
-| 6 | Judge driver | **strop + DSPy** own generate → evaluate → refine → Gate. Mechanical workflows are **deterministic code**. Protocol markdown is offboarded. Workspace is a **port** (OpenCode one adapter). Cutover: `MAJORDOMO_JUDGE=opencode\|strop`, never both. Findings are structured; MD is a formatter. Context PRs use existing forge adapters; human merge (`context.autoMerge` default false); rewrite blocked without why. v1 still `agent-dispatch.sh`. Contract: [Phase 6 contract](#phase-6-contract-locks-the-former-open-holes). |
+| 6 | Judge driver | **strop + DSPy** own generate → evaluate → refine → Gate. Mechanical workflows are **deterministic code**. Protocol markdown is offboarded. Workspace is a **port** (OpenCode one optional adapter for tools). Findings are structured; MD is a formatter. Context PRs use existing forge adapters; human merge (`context.autoMerge` default false); rewrite blocked without why. Contract: [Phase 6 contract](#phase-6-contract-locks-the-former-open-holes). |
 
 ### Control-tower repository
 
@@ -214,9 +214,9 @@ Do not dual-run OpenCode-as-driver and strop-as-driver. Until Phase 6 ships, `ag
 
 #### Phase 6 contract (locks the former open holes)
 
-**Cutover.** One execution path per job. Flag `MAJORDOMO_JUDGE=opencode|strop` (default `opencode`). `agent.Dispatch` and `orchestrate` refuse `strop` until generator modules are registered (`judge.ErrStropJudgeNotReady`). Never both drivers in one review job. After strop CI is green, flip default and delete `agent-dispatch.sh` as protocol (adapter may still shell out to OpenCode for the workspace port).
+**Judge.** One execution path: in-process strop (`internal/judge`). OpenCode is not a Judge driver. `agent.Dispatch` / `majordomo dispatch` call strop generators. Workspace explore/edit remains a port (`internal/workspace`); an OpenCode adapter may exist later for tools only.
 
-**strop pin.** Majordomo `go.mod` requires `github.com/behaviorengineering/strop` **v0.2.0**. Judge boundary: `internal/judge` (`NewJobRunner`, summary/tech packs under `internal/judge/evaluation/`). Judge runs in-process when cutover lands. Today `majordomo-agent` is the OpenCode **review** image (`agent-dispatch.sh`). After cutover, Judge prompts stay out of that image; it may still put OpenCode on PATH for checkout tools (`Read`/`Grep`/`Edit`). Do not treat the image name as a second driver.
+**strop pin.** Majordomo `go.mod` requires `github.com/behaviorengineering/strop` **v0.2.0**. Judge boundary: `internal/judge` (`NewJobRunner`, packs under `internal/judge/evaluation/`). Judge runs in-process. The `majordomo-agent` image is optional (workspace tools), not the protocol owner.
 
 **Workspace port.** Go interface, cwd-bounded. Methods: `Read`, `Grep`, `Edit`, `Shell`. Per-job allowlist:
 
@@ -814,7 +814,7 @@ Not in the current pilot. Detail: [Repo context branch](advanced/10-repo-context
 - [x] Workspace port (`Read`/`Grep`/`Edit`/`Shell`) + OpenCode adapter skeleton + test stub; per-job allowlists (`Guard`)
 - [x] `go.mod` pin tagged `github.com/behaviorengineering/strop` v0.2.0; `internal/judge` JobRunner helper + summary/tech evaluator packs (loops still OpenCode until cutover)
 - [x] File-review Prepare → Judge → Validate → Assemble (`internal/filereview`); structured findings + MD formatter; OpenCode Judge via dispatch; `pr-review.agent.md` still drives Judge prompt until cutover
-- [x] `MAJORDOMO_JUDGE=opencode|strop` cutover (default opencode; strop selected → fail closed until generator modules land; never dual-run)
+- [x] strop Judge only (`internal/judge`; no OpenCode protocol driver / no `MAJORDOMO_JUDGE` cutover)
 - [x] Digest catch-up (`internal/contextdigest`, `majordomo context digest`, tower cron `.github/workflows/majordomo-context-digest.yml`: cursor behind check, orphan seed, first-parent walk + cursor advance, one update PR via gh/glab/Bitbucket; generic SCM skips)
 - [x] `agenting/index.yaml` + `GROUNDING.md` packs; prep selects by glob/mode (`internal/agenting`, `AttachGrounding` in prep/orchestrate; `--context-dir` / `MAJORDOMO_CONTEXT_DIR`; validate when index present)
 - [x] Conversation-before-merge via strop Gate (`@majordomo reject` / `@majordomo done`); human merge click; `context.autoMerge` default false (`internal/contextgate`, `gate.json`, digest comment poll)
@@ -855,7 +855,7 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | **OpenCode auth** | Provider API keys are **per-run job secrets/env** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` for custom OpenAI-compatible gateways). Never bake keys into the agent image. Optional non-secret provider config (`baseURL`, provider id) via `opencode.json` / `OPENCODE_CONFIG_CONTENT` with `{env:...}`. SCM tokens remain separate from LLM auth. `agent-dispatch.sh` preflights provider keys; it no longer requires `GITHUB_TOKEN` for Copilot CLI. |
 | **Forge publish** | GitHub/GitLab publish uses **`gh` / `glab` on PATH** inside separate job containers (`majordomo-gh`, `majordomo-glab`). Majordomo Go binary is built in-job and not baked into forge images. Bitbucket publish stays HTTP until a Bitbucket CLI path exists. Poll remains Go HTTP. |
 | **Repo context** | Served-repo orphan branch. Teaching story + first-parent cursor. Bootstrap from last. Cron when cursor behind HEAD; bot seeds orphan. Gate via `@majordomo` comments; human merge. Grounding via selected agenting packs. Schema-first today (Phase 6 for digest). |
-| **Judge driver** | strop + DSPy for generate/eval/gate. Workspace port; OpenCode is one adapter. Mechanical workflows are deterministic code; protocol markdown is offboarded. Cutover: `MAJORDOMO_JUDGE`. v1 still OpenCode dispatch. Findings are structured; MD is a formatter. Context PRs use existing forge adapters; human merge; rewrite blocked without why. |
+| **Judge driver** | strop + DSPy for generate/eval/gate (always). Workspace port; OpenCode may be a tool adapter later. Mechanical workflows are deterministic code. Findings are structured; MD is a formatter. Context PRs use existing forge adapters; human merge; rewrite blocked without why. |
 
 ---
 
@@ -917,3 +917,4 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | 2026-08-28 | Context Phase 6 remainder: rewrite workflow, gate comments + `gate.json`, story digest per commit, agenting materialize, compaction, `context.autoMerge` opt-in |
 | 2026-08-28 | Phase 6 hardening: strop generator modules + `MAJORDOMO_JUDGE=strop` cutover, LLM story section-walk, Bitbucket gate comments, digest commit cap + gate workflow |
 | 2026-08-29 | Tower review job: LLM secrets, `MAJORDOMO_JUDGE` / `MAJORDOMO_AGENT_IMAGE` vars, fail-closed orchestrate, context-dir pass-through |
+| 2026-08-29 | Strop-only Judge: remove `MAJORDOMO_JUDGE` cutover and OpenCode protocol path; `dispatch`/`orchestrate` always use in-process strop |

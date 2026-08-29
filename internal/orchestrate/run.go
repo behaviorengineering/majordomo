@@ -66,7 +66,8 @@ func Run(opts Options) error {
 		mins := envInt("COPILOT_BATCH_TIMEOUT_MINUTES", 8)
 		opts.BatchTimeout = time.Duration(mins) * time.Minute
 	}
-	if opts.Dispatch == nil {
+	useDefaultDispatch := opts.Dispatch == nil
+	if useDefaultDispatch {
 		opts.Dispatch = agent.Dispatch
 	}
 	if opts.RunSummary == nil {
@@ -78,24 +79,12 @@ func Run(opts Options) error {
 
 	logf := agent.Logf
 	logf("INFO", "========== majordomo orchestrate ==========")
-	judgeMode, err := judge.ResolveMode()
-	if err != nil {
-		return err
-	}
-	logf("INFO", "PR: %s  pipeline: %s  concurrency: %d  judge: %s", opts.PRNumber, opts.Pipeline, opts.Concurrency, judgeMode)
-	if judgeMode == judge.ModeStrop {
+	if useDefaultDispatch {
 		if err := judge.EnsureStropReady(); err != nil {
 			return err
 		}
-		stropDispatch := func(opts agent.DispatchOptions) error {
-			return judge.StropDispatch(judge.StropDispatchOptions{
-				StagingDir: opts.StagingDir,
-				OutputDir:  opts.OutputDir,
-				Mode:       judge.DispatchMode(opts.Mode),
-			})
-		}
-		opts.Dispatch = stropDispatch
 	}
+	logf("INFO", "PR: %s  pipeline: %s  concurrency: %d  judge: strop", opts.PRNumber, opts.Pipeline, opts.Concurrency)
 
 	if !opts.SkipPrep {
 		if opts.BaseBranch == "" {
@@ -229,8 +218,6 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 		agent.Logf("INFO", "%s: checkpoint — skipping", label)
 		return nil
 	}
-	judgeMode, _ := judge.ResolveMode()
-
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		lastErr = filereview.Run(filereview.Options{
@@ -241,12 +228,6 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 				agent.Logf("INFO", "%s: "+format, append([]any{label}, args...)...)
 			},
 			Judge: func() error {
-				if judgeMode == judge.ModeStrop {
-					return judge.FileReviewBatch(judge.FileReviewOptions{
-						StagingDir: b.StagingDir,
-						SkillOut:   skillOut,
-					})
-				}
 				return opts.Dispatch(agent.DispatchOptions{
 					PRNumber:   opts.PRNumber,
 					StagingDir: b.StagingDir,

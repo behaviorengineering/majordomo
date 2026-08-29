@@ -151,7 +151,7 @@ func newDispatchCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
-		Short: "Run one agent batch (wraps agent-dispatch.sh / OpenCode)",
+		Short: "Run one Judge batch (in-process strop)",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := agent.ModeFiles

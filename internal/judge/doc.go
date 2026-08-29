@@ -1,3 +1,3 @@
 // Package judge is the Majordomo boundary onto strop JobRunner and evaluation packs.
-// Review still runs via agent-dispatch until MAJORDOMO_JUDGE=strop cutover.
+// Review Judge always runs in-process via strop (no OpenCode protocol driver).
 package judge

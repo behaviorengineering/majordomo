@@ -45,7 +45,7 @@ PR review uses that plane today (classify → agent waves → publish). The same
 |-------|--------|
 | **Go CLI** (`cmd/majordomo`, `internal/`) | Active |
 | **Agents / skills** (`agents/`) | Active — rubrics for review (and future agent jobs) |
-| **Agent dispatch** (`pipelines/scripts/agent-dispatch.sh`) | Active — OpenCode (set `MAJORDOMO_BIN` when needed) |
+| **Agent dispatch** (`majordomo dispatch`) | Active — in-process strop Judge |
 | **Docker images** (`dockerfiles/`) | Active — agent, SA tools, forge CLI (`gh` / `glab`) |
 | **GitHub Actions** (`.github/workflows/`) | Image CI; tower poll/review in the control-tower repo |
 
