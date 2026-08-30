@@ -16,9 +16,11 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	diffpkg "github.com/behaviorengineering/majordomo/internal/diff"
 	"github.com/behaviorengineering/majordomo/internal/orchestrate"
+	"github.com/behaviorengineering/majordomo/internal/observability"
 	"github.com/behaviorengineering/majordomo/internal/poll"
 	"github.com/behaviorengineering/majordomo/internal/publish"
 	"github.com/behaviorengineering/majordomo/internal/report"
+	"github.com/behaviorengineering/majordomo/internal/reviewrun"
 	"github.com/behaviorengineering/majordomo/internal/sa"
 	"github.com/behaviorengineering/majordomo/internal/satools"
 	"github.com/behaviorengineering/majordomo/internal/staging"
@@ -48,6 +50,7 @@ See docs/PLAN-control-tower-github-go.md.`,
 	root.AddCommand(newPrepCmd())
 	root.AddCommand(newDispatchCmd())
 	root.AddCommand(newOrchestrateCmd())
+	root.AddCommand(newRunCmd())
 	root.AddCommand(newPublishCmd())
 	root.AddCommand(newStatusCmd())
 	root.AddCommand(newCacheCmd())
@@ -194,15 +197,16 @@ func newDispatchCmd() *cobra.Command {
 func newOrchestrateCmd() *cobra.Command {
 	var (
 		pr, stagingDir, outputDir, baseBranch, pipeline, scriptsDir, repoRoot string
-		routing, agentContext, summaryConfig, configDir, repoID, contextDir               string
+		routing, agentContext, summaryConfig, configDir, repoID, contextDir   string
 		concurrency                                                           int
 		skipPrep, skipDeep, skipReport                                        bool
+		until                                                                 string
 		timeoutMin                                                            int
 	)
 	cmd := &cobra.Command{
 		Use:   "orchestrate",
 		Short: "Run review waves, checkpoints, finalize, and synthesis loops",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			if concurrency <= 0 {
 				if v := os.Getenv("COPILOT_CONCURRENCY"); v != "" {
 					if n, err := strconv.Atoi(v); err == nil {
@@ -214,6 +218,12 @@ func newOrchestrateCmd() *cobra.Command {
 			if timeoutMin > 0 {
 				timeout = time.Duration(timeoutMin) * time.Minute
 			}
+			otelCfg := observability.ResolveConfig(outputDir)
+			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
+				fmt.Fprintf(os.Stderr, "otel init: %v\n", otelErr)
+			}
+			_, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.orchestrate")
+			defer observability.EndSpanWithStatus(span, &err)
 			return orchestrate.Run(orchestrate.Options{
 				PRNumber:          pr,
 				BaseBranch:        baseBranch,
@@ -225,6 +235,7 @@ func newOrchestrateCmd() *cobra.Command {
 				SkipPrep:          skipPrep,
 				SkipDeep:          skipDeep,
 				SkipReport:        skipReport,
+				Until:             until,
 				RepoRoot:          repoRoot,
 				RoutingPath:       routing,
 				AgentContextPath:  agentContext,
@@ -254,9 +265,77 @@ func newOrchestrateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&skipPrep, "skip-prep", false, "assume staging already prepared")
 	cmd.Flags().BoolVar(&skipDeep, "skip-deep", false, "skip technical deep review pass")
 	cmd.Flags().BoolVar(&skipReport, "skip-report", false, "skip JUnit conversion")
+	cmd.Flags().StringVar(&until, "until", "", "stop after stage: prep|waves|finalize|prose|synth|report")
 	_ = cmd.MarkFlagRequired("pr")
 	_ = cmd.MarkFlagRequired("staging-dir")
 	_ = cmd.MarkFlagRequired("output-dir")
+	return cmd
+}
+
+func newRunCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run a job locally or in CI (same command)",
+	}
+	cmd.AddCommand(newRunReviewCmd())
+	return cmd
+}
+
+func newRunReviewCmd() *cobra.Command {
+	var (
+		configDir, repoID, pr, headSHA, baseBranch, cloneURL                     string
+		workdir, stagingDir, outputDir, scriptsDir, contextDir, cursorDir, until string
+		doPublish, skipDeep, skipReport                                          bool
+		concurrency                                                              int
+	)
+	cmd := &cobra.Command{
+		Use:   "review",
+		Short: "Clone (if needed), SA, orchestrate, optionally publish",
+		Long: `Run the PR review job. Laptop and CI use the same flags.
+
+Publish is off unless --publish (CI sets it). --until stops after a stage:
+clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return reviewrun.Run(reviewrun.Options{
+				ConfigDir:   configDir,
+				RepoID:      repoID,
+				PRNumber:    pr,
+				HeadSHA:     headSHA,
+				BaseBranch:  baseBranch,
+				CloneURL:    cloneURL,
+				WorkDir:     workdir,
+				StagingDir:  stagingDir,
+				OutputDir:   outputDir,
+				ScriptsDir:  scriptsDir,
+				ContextDir:  staging.ResolveContextDir(contextDir),
+				CursorDir:   cursorDir,
+				Until:       until,
+				Publish:     doPublish,
+				SkipDeep:    skipDeep,
+				SkipReport:  skipReport,
+				Concurrency: concurrency,
+			})
+		},
+	}
+	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id (required)")
+	cmd.Flags().StringVar(&pr, "pr", "", "PR/MR number (required)")
+	cmd.Flags().StringVar(&headSHA, "head-sha", "", "head commit to review (default: workdir HEAD)")
+	cmd.Flags().StringVar(&baseBranch, "base-branch", "", "base branch for prep (default: origin HEAD)")
+	cmd.Flags().StringVar(&cloneURL, "clone-url", "", "HTTPS clone URL (default: config repository.cloneUrl)")
+	cmd.Flags().StringVar(&workdir, "workdir", "", "served-repo checkout (default: cwd if git, else served/repo)")
+	cmd.Flags().StringVar(&stagingDir, "staging-dir", "", "prep staging directory")
+	cmd.Flags().StringVar(&outputDir, "output-dir", "", "pipeline output directory")
+	cmd.Flags().StringVar(&scriptsDir, "scripts-dir", "", "pipelines/scripts directory")
+	cmd.Flags().StringVar(&contextDir, "context-dir", "", "merged context-branch checkout (or MAJORDOMO_CONTEXT_DIR)")
+	cmd.Flags().StringVar(&cursorDir, "cursor-dir", ".poll-cache", "poll cursor directory")
+	cmd.Flags().StringVar(&until, "until", "", "stop after stage: clone|sa|prep|waves|finalize|prose|synth|report|publish")
+	cmd.Flags().BoolVar(&doPublish, "publish", false, "publish summary to the PR/MR (default: off)")
+	cmd.Flags().BoolVar(&skipDeep, "skip-deep", false, "skip technical deep review pass")
+	cmd.Flags().BoolVar(&skipReport, "skip-report", false, "skip JUnit conversion")
+	cmd.Flags().IntVar(&concurrency, "concurrency", 0, "max parallel batches")
+	_ = cmd.MarkFlagRequired("repo-id")
+	_ = cmd.MarkFlagRequired("pr")
 	return cmd
 }
 

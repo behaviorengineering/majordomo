@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/outbound"
 )
 
 func listOpenPRs(cfg config.RepoConfig, token string) ([]openPR, error) {
@@ -43,7 +44,7 @@ func listGitHubPRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 
 	var out []openPR
 	next := fmt.Sprintf("%s/repos/%s/%s/pulls?state=open&per_page=100", base, owner, name)
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := outbound.Client(60 * time.Second)
 	for next != "" {
 		req, err := http.NewRequest(http.MethodGet, next, nil)
 		if err != nil {
@@ -51,7 +52,7 @@ func listGitHubPRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/vnd.github+json")
-		resp, err := client.Do(req)
+		resp, err := outbound.DoWithRetry(client, req, 3)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +97,7 @@ func listGitLabMRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 	}
 	api := gitlabAPIBase(cfg)
 	var out []openPR
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := outbound.Client(60 * time.Second)
 	page := 1
 	for {
 		req, err := newGitLabMRListRequest(api, project, page)
@@ -105,7 +106,7 @@ func listGitLabMRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 		}
 		req.Header.Set("PRIVATE-TOKEN", token)
 		req.Header.Set("Accept", "application/json")
-		resp, err := client.Do(req)
+		resp, err := outbound.DoWithRetry(client, req, 3)
 		if err != nil {
 			return nil, err
 		}

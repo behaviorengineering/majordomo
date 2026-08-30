@@ -130,11 +130,12 @@ go build -o majordomo ./cmd/majordomo
 
 ```bash
 majordomo poll --config-dir majordomo-central-config --out pending-reviews.json
+majordomo run review --config-dir majordomo-central-config --repo-id <id> --pr <n> [--until prep] [--publish]
 majordomo prep <base-branch> <staging-dir> \
   [--routing path] [--agent-context path] [--summary-config path]
 majordomo orchestrate \
   --pr <n> --staging-dir <dir> --output-dir <dir> \
-  [--base-branch <b> | --skip-prep] [--concurrency 6]
+  [--base-branch <b> | --skip-prep] [--until waves] [--concurrency 6]
 majordomo dispatch <pr> <staging-dir> <output-dir> [--summary|--finalize|--prose|...]
 majordomo publish --scm github|gitlab|bitbucket <pr> <summary.md> auto|comment|description
 majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFUL|FAILED

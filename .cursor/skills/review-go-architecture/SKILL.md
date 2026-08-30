@@ -37,6 +37,7 @@ internal/contextdigest/     # context catch-up job (cursor, orphan seed, forge P
 internal/workspace/         # cwd-bounded tool port (+ opencode adapter)
 internal/judge/             # strop JobRunner boundary + evaluation packs
 internal/filereview/        # Prepare→Judge→Validate→Assemble for file batches
+internal/reviewrun/         # local/CI review job (clone, SA, orchestrate, publish)
 internal/config/            # config load
 internal/status/            # status
 internal/diff/              # diff helpers

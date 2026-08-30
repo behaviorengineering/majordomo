@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/outbound"
 )
 
 const Marker = "<!-- majordomo-review -->"
@@ -67,7 +68,7 @@ func (o *Options) client() *http.Client {
 	if o.HTTPClient != nil {
 		return o.HTTPClient
 	}
-	return &http.Client{Timeout: 60 * time.Second}
+	return outbound.Client(60 * time.Second)
 }
 
 func (o *Options) runCLI(name string, args []string, env []string) (string, error) {

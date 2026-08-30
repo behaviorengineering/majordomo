@@ -42,6 +42,7 @@ Check wiring matches intent in the plan:
 | `prep` | `internal/staging` |
 | `dispatch` | `internal/agent` |
 | `orchestrate` | `internal/orchestrate` |
+| `run review` | `internal/reviewrun` |
 | `publish` | `internal/publish` |
 | `status` | `internal/status` |
 | `cache` | `internal/cache` |

@@ -18,10 +18,12 @@
 #
 # Environment:
 #   LLM auth (runtime only; never bake keys into the agent image):
-#     OPENAI_API_KEY              Stock OpenAI (and many OpenAI-compatible gateways)
-#     ANTHROPIC_API_KEY           Stock Anthropic
+#     OPENAI_API_KEY              Stock OpenAI OR dummy key when Majordomo embeds Bifrost
+#     ANTHROPIC_API_KEY           Stock Anthropic (prefer letting Majordomo aigateway own this)
 #     OPENCODE_PROVIDER_API_KEY   Custom OpenAI-compatible gateway (wire as {env:OPENCODE_PROVIDER_API_KEY}
 #                                 in opencode.json / OPENCODE_CONFIG_CONTENT)
+#     OPENAI_BASE_URL             When set by Majordomo aigateway.ChildEnv, points at loopback Bifrost
+#                                 (OpenAI-compatible). Real provider keys are stripped from the child env.
 #     GOOGLE_GENERATIVE_AI_API_KEY  Stock Google Generative AI (when used)
 #   COPILOT_PIPELINE      Legacy name for orchestrator agent label (default: pr-review)
 #   OPENCODE_AGENT        Optional OpenCode --agent name (overrides pipeline label when set)

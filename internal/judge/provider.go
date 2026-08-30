@@ -1,54 +1,40 @@
 package judge
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"time"
 
 	stropdspy "github.com/behaviorengineering/strop/dspy"
+
+	"github.com/behaviorengineering/majordomo/internal/aigateway"
 )
 
-const (
-	defaultAnthropicModel = "claude-sonnet-4-20250514"
-	defaultOpenAIModel    = "gpt-4.1-mini"
-	defaultModuleTimeout  = 2 * time.Minute
-)
+const defaultModuleTimeout = 2 * time.Minute
 
-// ResolveProvider picks an LLM provider from standard env keys.
+// ResolveProvider returns an OpenAI-schema ProviderConfig aimed at the embedded
+// Bifrost loopback. Real Anthropic/OpenAI/Gemini keys are owned by aigateway.
 func ResolveProvider() (stropdspy.ProviderConfig, error) {
-	if key := strings.TrimSpace(os.Getenv("ANTHROPIC_API_KEY")); key != "" {
-		model := envOr("MAJORDOMO_MODEL", defaultAnthropicModel)
-		return stropdspy.ProviderConfig{
-			APIKey:    key,
-			Model:     model,
-			BaseURL:   "https://api.anthropic.com",
-			APISchema: "anthropic",
-			Timeout:   "120s",
-		}, nil
+	gw, err := aigateway.Ensure()
+	if err != nil {
+		return stropdspy.ProviderConfig{}, err
 	}
-	if key := strings.TrimSpace(os.Getenv("OPENAI_API_KEY")); key != "" {
-		model := envOr("MAJORDOMO_MODEL", defaultOpenAIModel)
-		return stropdspy.ProviderConfig{
-			APIKey:    key,
-			Model:     model,
-			BaseURL:   "https://api.openai.com/v1",
-			APISchema: "openai",
-			Timeout:   "120s",
-		}, nil
+	account, _ := aigateway.NewAccountFromEnv()
+	model := strings.TrimSpace(os.Getenv("MAJORDOMO_MODEL"))
+	if model == "" {
+		model = aigateway.LogicalModel(account)
 	}
-	return stropdspy.ProviderConfig{}, fmt.Errorf("judge: no LLM provider key (set ANTHROPIC_API_KEY or OPENAI_API_KEY)")
+	return stropdspy.ProviderConfig{
+		APIKey:    aigateway.DummyAPIKey,
+		Model:     model,
+		BaseURL:   gw.BaseURL(),
+		APISchema: "openai",
+		Timeout:   "120s",
+	}, nil
 }
 
-// LLMConfigured reports whether a provider key is present.
+// LLMConfigured reports whether the embedded gateway can start (at least one real key).
 func LLMConfigured() bool {
-	_, err := ResolveProvider()
+	_, err := aigateway.NewAccountFromEnv()
 	return err == nil
-}
-
-func envOr(key, fallback string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		return v
-	}
-	return fallback
 }

@@ -3,13 +3,18 @@ package judge
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	"github.com/behaviorengineering/strop/dspy/registry"
 	"github.com/behaviorengineering/strop/dspy/runner"
+	dspyTracing "github.com/behaviorengineering/strop/dspy/tracing"
 	"github.com/behaviorengineering/strop/runreport"
+
+	"github.com/behaviorengineering/majordomo/internal/aigateway"
+	"github.com/behaviorengineering/majordomo/internal/observability"
 
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 )
@@ -29,10 +34,28 @@ func ensureRegistry() (*registry.ModuleRegistry, *runner.JobRunner, error) {
 			return
 		}
 		reg := registry.NewModuleRegistry()
-		llmFactory := factory.NewLLMFactory(nil, defaultModuleTimeout)
+		llmFactory := factory.NewLLMFactory(func(modelID string, providerType string) {
+			reg.RegisterModelProvider(modelID, providerType)
+		}, defaultModuleTimeout)
+		llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
+
+		otelOn := true
+		if v := os.Getenv("MAJORDOMO_OTEL_ENABLED"); v == "0" {
+			otelOn = false
+		}
+		svc := os.Getenv("MAJORDOMO_OTEL_SERVICE_NAME")
+		if svc == "" {
+			svc = observability.DefaultServiceName
+		}
 		interceptorSetup := factory.NewInterceptorSetup(
-			false, "", nil, defaultModuleTimeout,
-			nil, nil, nil, nil, nil, nil, runreport.Config{},
+			otelOn, svc, nil, defaultModuleTimeout,
+			dspyTracing.OpenInferenceModuleInterceptor,
+			nil,
+			reg.GetModelProvider,
+			reg.GetModuleModel,
+			func(moduleName, modelID string) { reg.RegisterModuleModel(moduleName, modelID) },
+			nil,
+			runreport.Config{},
 		)
 		configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
 		genFactory := factory.NewGeneratorFactory(configurator)
@@ -114,4 +137,5 @@ func ResetRegistryForTests() {
 	registryErr = nil
 	sharedReg = nil
 	sharedRunner = nil
+	aigateway.ResetForTests()
 }

@@ -14,6 +14,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextgate"
+	"github.com/behaviorengineering/majordomo/internal/outbound"
 	"github.com/behaviorengineering/majordomo/internal/publish"
 )
 
@@ -35,7 +36,7 @@ func (f *Forge) client() *http.Client {
 	if f.Client != nil {
 		return f.Client
 	}
-	return &http.Client{Timeout: 60 * time.Second}
+	return outbound.Client(60 * time.Second)
 }
 
 func (f *Forge) runCLI(name string, args []string, env []string) (string, error) {
