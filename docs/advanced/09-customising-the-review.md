@@ -4,7 +4,9 @@
 
 Configuration lives in the **control-tower repo** (`majordomo-central-config/<repo-slug>.yaml` merged with `_defaults.yaml`). Per-repo overrides replace org defaults; omit keys to inherit.
 
-The pipeline ships **eight built-in skills** across three categories. Only `pr-review-code` is **routed by default** — all other skills require explicit routing configuration.
+The Go CLI loads this YAML: `majordomo prep` / `orchestrate --config-dir … --repo-id …` materialize `pipelines.*.routing` and `agentContext` to JSON for prep. `majordomo sa` runs `staticAnalysis` into `.sa/` before prep embeds findings. Explicit `--routing` / `--agent-context` flags still override materialization.
+
+The pipeline ships **eight built-in skills** across three categories. Only `pr-review-code` is **routed by default** (when no routing is configured) — other skills need explicit routing in YAML.
 
 ---
 
@@ -85,7 +87,7 @@ pipelines:
         - "**"   # catch-all — must be last
 ```
 
-Pass a routing JSON file to prep with `--routing` when the orchestrator materialises config at runtime.
+Pass routing via central YAML (`pipelines.pr-review.routing`) and `--config-dir` / `--repo-id`, or pass a routing JSON file to prep with `--routing`.
 
 ---
 
@@ -143,7 +145,7 @@ pipelines:
 
 cache:
   cacheRepo: project          # project | central
-  enableSkips: false
+  # disableSkips: true        # opt out; skips are on by default when cache works
   retentionDays: 120
 ```
 
@@ -163,6 +165,7 @@ staticAnalysis:
     glob: "**/*.go"
 ```
 
+Run with `majordomo sa --config-dir … --repo-id … --base-branch … --repo-root …`. Prefer `image:` at run time; if only `dockerfile:` is set, the image is `{MAJORDOMO_SA_IMAGE_PREFIX}/sa-<tool>:{MAJORDOMO_SA_IMAGE_TAG}` (defaults `majordomo` / `local`).
 ---
 
 ## 🔗 Related

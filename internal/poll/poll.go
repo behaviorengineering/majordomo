@@ -34,10 +34,9 @@ type Result struct {
 
 // Options configures a poll run.
 type Options struct {
-	ConfigDir   string
-	CursorDir   string // local cursor store (Actions cache); default .poll-cache
-	OutPath     string // write JSON here; empty → stdout
-	GitHubToken string // optional fallback token (also used when no per-repo / SCM env is set)
+	ConfigDir string
+	CursorDir string // local cursor store (Actions cache); default .poll-cache
+	OutPath   string // write JSON here; empty → stdout
 	// ListPRs injectable for tests
 	ListPRs func(cfg config.RepoConfig, token string) ([]openPR, error)
 }
@@ -46,6 +45,24 @@ type openPR struct {
 	Number     int
 	HeadSHA    string
 	BaseBranch string
+	HeadBranch string
+}
+
+var majordomoInternalBranchPrefixes = []string{
+	"majordomo-context/",
+	"majordomo-pr-reviewer-cache/",
+	"majordomo-poll-cache/",
+}
+
+// isMajordomoInternalBranch reports whether base or head is a Majordomo-owned branch
+// that product poll must ignore.
+func isMajordomoInternalBranch(base, head string) bool {
+	for _, p := range majordomoInternalBranchPrefixes {
+		if strings.HasPrefix(base, p) || strings.HasPrefix(head, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func logf(level, format string, args ...any) {
@@ -79,25 +96,48 @@ func Run(opts Options) error {
 		Reviews:     []PendingReview{},
 	}
 
+	outcomes := make([]repoOutcome, 0, len(cfgs))
 	var listErrs []string
 	for _, cfg := range cfgs {
-		if !cfg.Trigger.PollEnabled() {
-			logf("INFO", "skip %s (poll disabled)", cfg.Repository.ID)
-			continue
-		}
 		scm := strings.ToLower(cfg.SCM)
 		if scm == "" {
 			scm = "github"
 		}
-		token := credentialFor(cfg.Repository.ID, scm, opts.GitHubToken)
+
+		owner, name := cfg.Repository.Owner, cfg.Repository.Name
+		if owner == "" || name == "" {
+			o2, n2 := splitOwnerName(parseClonePath(cfg.Repository.CloneURL))
+			if owner == "" {
+				owner = o2
+			}
+			if name == "" {
+				name = n2
+			}
+		}
+
+		out := repoOutcome{
+			RepoID:     cfg.Repository.ID,
+			SCM:        scm,
+			Owner:      owner,
+			Name:       name,
+			Continuous: cfg.Review.ContinuousRunsEnabled(),
+		}
+
+		if !cfg.Trigger.PollEnabled() {
+			out.Status = "poll_disabled"
+			logf("INFO", "%s: skip (poll disabled)", cfg.Repository.ID)
+			outcomes = append(outcomes, out)
+			continue
+		}
+
+		token := config.ResolveCredential(cfg.Repository.ID, scm, owner)
 		// When ListPRs is injected (tests), allow empty token.
 		if token == "" && !listInjected {
-			hint := "GITHUB_TOKEN"
-			if scm == "gitlab" {
-				hint = "GITLAB_TOKEN"
-			}
-			logf("WARN", "%s: no credential (set %s or %s) — skipping",
-				cfg.Repository.ID, config.CredentialEnvName(cfg.Repository.ID), hint)
+			hint := config.CredentialHint(cfg.Repository.ID, scm, owner)
+			out.Status = "no_credential"
+			out.Detail = hint
+			logf("WARN", "%s: no credential (set %s) - skipping", cfg.Repository.ID, hint)
+			outcomes = append(outcomes, out)
 			continue
 		}
 
@@ -106,6 +146,9 @@ func Run(opts Options) error {
 			msg := fmt.Sprintf("%s: list PRs failed: %v", cfg.Repository.ID, err)
 			logf("WARN", "%s", msg)
 			listErrs = append(listErrs, msg)
+			out.Status = "list_error"
+			out.Detail = err.Error()
+			outcomes = append(outcomes, out)
 			continue
 		}
 
@@ -116,15 +159,24 @@ func Run(opts Options) error {
 		}
 		cursor.RepoID = cfg.Repository.ID
 
-		owner, name := cfg.Repository.Owner, cfg.Repository.Name
-		if owner == "" || name == "" {
-			owner, name = splitOwnerName(parseClonePath(cfg.Repository.CloneURL))
-		}
-
+		pendingHere := 0
+		skippedHere := 0
 		for _, pr := range prs {
 			prNum := fmt.Sprintf("%d", pr.Number)
-			if !cache.ShouldReview(cursor, prNum, pr.HeadSHA) {
-				logf("INFO", "%s#%s: head unchanged (%s)", cfg.Repository.ID, prNum, short(pr.HeadSHA))
+			if isMajordomoInternalBranch(pr.BaseBranch, pr.HeadBranch) {
+				skippedHere++
+				logf("INFO", "%s#%s: skip majordomo-internal branch (base=%s head=%s)",
+					cfg.Repository.ID, prNum, pr.BaseBranch, pr.HeadBranch)
+				continue
+			}
+			continuous := out.Continuous
+			if !cache.ShouldReview(cursor, prNum, pr.HeadSHA, continuous) {
+				skippedHere++
+				if continuous {
+					logf("INFO", "%s#%s: head unchanged (%s)", cfg.Repository.ID, prNum, short(pr.HeadSHA))
+				} else {
+					logf("INFO", "%s#%s: already reviewed (enableContinuousRuns=false)", cfg.Repository.ID, prNum)
+				}
 				continue
 			}
 			clone := cfg.Repository.CloneURL
@@ -142,10 +194,27 @@ func Run(opts Options) error {
 				BaseBranch:  pr.BaseBranch,
 				CloneURL:    clone,
 				ReviewID:    reviewID,
-				PublishMode: first(cfg.PublishMode, "auto"),
+				PublishMode: cfg.EffectivePublishMode(),
 			})
+			pendingHere++
 			logf("INFO", "%s#%s: needs review @ %s", cfg.Repository.ID, prNum, short(pr.HeadSHA))
 		}
+
+		out.Status = "polled"
+		out.Open = len(prs)
+		out.Pending = pendingHere
+		out.Skipped = skippedHere
+		logf("INFO", "%s: %s %s/%s open=%d pending=%d skip=%d",
+			cfg.Repository.ID, scm, owner, name, out.Open, out.Pending, out.Skipped)
+		outcomes = append(outcomes, out)
+	}
+
+	summary := formatASCIISummary(outcomes, len(result.Reviews))
+	for _, line := range strings.Split(strings.TrimSuffix(summary, "\n"), "\n") {
+		logf("INFO", "%s", line)
+	}
+	if err := writePollSummary(opts.CursorDir, summary); err != nil {
+		return fmt.Errorf("write poll summary: %w", err)
 	}
 
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -161,7 +230,7 @@ func Run(opts Options) error {
 		if err := os.MkdirAll(filepath.Dir(opts.OutPath), 0o755); err != nil {
 			return err
 		}
-		logf("INFO", "wrote %d pending review(s) → %s", len(result.Reviews), opts.OutPath)
+		logf("INFO", "wrote %d pending review(s) -> %s", len(result.Reviews), opts.OutPath)
 		if err := os.WriteFile(opts.OutPath, data, 0o644); err != nil {
 			return err
 		}
@@ -172,25 +241,12 @@ func Run(opts Options) error {
 	return nil
 }
 
-func credentialFor(repoID, scm, fallback string) string {
-	if v := os.Getenv(config.CredentialEnvName(repoID)); v != "" {
-		return v
+func writePollSummary(cursorDir, summary string) error {
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		return err
 	}
-	switch strings.ToLower(scm) {
-	case "gitlab":
-		return first(fallback, os.Getenv("GITLAB_TOKEN"), os.Getenv("GITLAB_PAT"), os.Getenv("PRIVATE_TOKEN"))
-	default:
-		return first(fallback, os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
-	}
-}
-
-func first(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	path := filepath.Join(cursorDir, "poll-summary.txt")
+	return os.WriteFile(path, []byte(summary), 0o644)
 }
 
 func short(sha string) string {

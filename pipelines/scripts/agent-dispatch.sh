@@ -18,10 +18,12 @@
 #
 # Environment:
 #   LLM auth (runtime only; never bake keys into the agent image):
-#     OPENAI_API_KEY              Stock OpenAI (and many OpenAI-compatible gateways)
-#     ANTHROPIC_API_KEY           Stock Anthropic
+#     OPENAI_API_KEY              Stock OpenAI OR dummy key when Majordomo embeds Bifrost
+#     ANTHROPIC_API_KEY           Stock Anthropic (prefer letting Majordomo aigateway own this)
 #     OPENCODE_PROVIDER_API_KEY   Custom OpenAI-compatible gateway (wire as {env:OPENCODE_PROVIDER_API_KEY}
 #                                 in opencode.json / OPENCODE_CONFIG_CONTENT)
+#     OPENAI_BASE_URL             When set by Majordomo aigateway.ChildEnv, points at loopback Bifrost
+#                                 (OpenAI-compatible). Real provider keys are stripped from the child env.
 #     GOOGLE_GENERATIVE_AI_API_KEY  Stock Google Generative AI (when used)
 #   COPILOT_PIPELINE      Legacy name for orchestrator agent label (default: pr-review)
 #   OPENCODE_AGENT        Optional OpenCode --agent name (overrides pipeline label when set)
@@ -34,6 +36,7 @@
 #   COPILOT_SCORE_MODEL / OPENCODE_SCORE_MODEL  (default: auto — omit --model)
 #   OPENCODE_PROVIDER     Default provider prefix when model has no slash (default: anthropic)
 #   OPENCODE_CONFIG / OPENCODE_CONFIG_CONTENT  Optional provider config (baseURL, custom provider id)
+   MAJORDOMO_GROUNDING   Set by majordomo dispatch — comma-separated absolute paths to grounding packs
 
 set -euo pipefail
 
@@ -307,6 +310,10 @@ else
         TZ=Australia/Sydney date +"%Y-%m-%dT%H:%M:%S%:z" > "${STAGING_DIR}/${SKILL}/review_timestamp.txt"
     fi
 
+    if [ -d "${STAGING_DIR}/.grounding" ]; then
+        cp -r "${STAGING_DIR}/.grounding" "${STAGING_DIR}/${SKILL}/.grounding"
+    fi
+
     # Rewrite input_file in the batch manifest to workspace-relative paths.
     # The agent reads input_file directly — no path construction from the staging: prompt
     # parameter, which caused "missing path segment" errors when the agent converted the
@@ -434,6 +441,10 @@ else
     PROMPT_SKILL_DIR="${STAGING_DIR}/${SKILL}"
 fi
 PROMPT="PR #${PR_NUMBER} staging:${AGENT_STAGING} skill:${SKILL} skill_dir:${PROMPT_SKILL_DIR} output:${PROMPT_OUTPUT} mode:${MODE}"
+if [ -n "${MAJORDOMO_GROUNDING:-}" ]; then
+    PROMPT="${PROMPT} grounding:${MAJORDOMO_GROUNDING}"
+    log_info "  Grounding:     ${MAJORDOMO_GROUNDING}"
+fi
 
 log_header "${LOG_LABEL}"
 log_info "  Agent staging: ${AGENT_STAGING}"

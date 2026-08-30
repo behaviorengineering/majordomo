@@ -11,6 +11,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/outbound"
 )
 
 const Marker = "<!-- majordomo-review -->"
@@ -40,6 +43,8 @@ type Options struct {
 	BitbucketToken string
 	BBProject      string
 	BBRepo         string
+	// RepoID is the majordomo-central-config id (optional; enables MAJORDOMO_CREDENTIAL_ override).
+	RepoID string
 	// GitHub (gh CLI) — owner/repo also used for GitLab path projects
 	GitHubToken string
 	GitHubOwner string
@@ -63,7 +68,7 @@ func (o *Options) client() *http.Client {
 	if o.HTTPClient != nil {
 		return o.HTTPClient
 	}
-	return &http.Client{Timeout: 60 * time.Second}
+	return outbound.Client(60 * time.Second)
 }
 
 func (o *Options) runCLI(name string, args []string, env []string) (string, error) {
@@ -196,8 +201,8 @@ func (o *Options) fillFromEnv() {
 	if o.BBRepo == "" {
 		o.BBRepo = os.Getenv("BB_REPO")
 	}
-	if o.GitHubToken == "" {
-		o.GitHubToken = firstNonEmpty(os.Getenv("GITHUB_TOKEN"), os.Getenv("GH_TOKEN"))
+	if o.RepoID == "" {
+		o.RepoID = firstNonEmpty(os.Getenv("MAJORDOMO_REPO_ID"), os.Getenv("REPO_ID"))
 	}
 	if o.GitHubOwner == "" {
 		o.GitHubOwner = os.Getenv("GITHUB_REPOSITORY_OWNER")
@@ -212,9 +217,6 @@ func (o *Options) fillFromEnv() {
 		if repo := os.Getenv("GITHUB_REPOSITORY"); strings.Contains(repo, "/") {
 			o.GitHubRepo = strings.SplitN(repo, "/", 2)[1]
 		}
-	}
-	if o.GitLabToken == "" {
-		o.GitLabToken = firstNonEmpty(os.Getenv("GITLAB_TOKEN"), os.Getenv("GLAB_TOKEN"), os.Getenv("PRIVATE_TOKEN"))
 	}
 	if o.GitLabHost == "" {
 		o.GitLabHost = firstNonEmpty(os.Getenv("GITLAB_HOST"), os.Getenv("GLAB_HOST"))
@@ -232,6 +234,13 @@ func (o *Options) fillFromEnv() {
 				o.GitHubRepo = parts[len(parts)-1]
 			}
 		}
+	}
+	// Served-repo tokens: per-repo override, then per-org (no unqualified GH_TOKEN / GITLAB_TOKEN).
+	if o.GitHubToken == "" {
+		o.GitHubToken = config.ResolveCredential(o.RepoID, "github", o.GitHubOwner)
+	}
+	if o.GitLabToken == "" {
+		o.GitLabToken = config.ResolveCredential(o.RepoID, "gitlab", o.GitHubOwner)
 	}
 	if o.SummaryArtifactURL == "" {
 		o.SummaryArtifactURL = os.Getenv("SUMMARY_ARTIFACT_URL")

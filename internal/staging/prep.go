@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 // Run executes the full prep pipeline.
@@ -83,7 +84,15 @@ func Run(opts Options) error {
 		batchEntries = append([]BatchEntry{crossEntries[i]}, batchEntries...)
 	}
 	batchPlanSkills := append(append([]string{}, crossSkills...), codeSkillNames...)
-	return WriteBatchPlan(batchEntries, batchPlanSkills, opts.StagingDir)
+	if err := WriteBatchPlan(batchEntries, batchPlanSkills, opts.StagingDir); err != nil {
+		return err
+	}
+	if strings.TrimSpace(opts.ContextDir) != "" {
+		if err := AttachGrounding(opts.ContextDir, batchEntries); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func classifyFiles(allFiles []string, routing []RoutingRule, extra []*regexp.Regexp) (reviewable, excluded []string) {

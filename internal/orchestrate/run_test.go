@@ -110,3 +110,66 @@ func TestFailedBatchDoesNotCheckpoint(t *testing.T) {
 		t.Fatalf("failed batch must not create checkpoint %s", cp)
 	}
 }
+
+func TestUntilPrepDoesNotDispatch(t *testing.T) {
+	dir := t.TempDir()
+	staging := filepath.Join(dir, "staging")
+	output := filepath.Join(dir, "out")
+	_ = os.MkdirAll(staging, 0o755)
+
+	var calls atomic.Int32
+	err := Run(Options{
+		PRNumber: "1", StagingDir: staging, OutputDir: output,
+		SkipPrep: true, SkipDeep: true, SkipReport: true,
+		Until: StagePrep,
+		Dispatch: func(o agent.DispatchOptions) error {
+			calls.Add(1)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("until prep must not dispatch, got %d", calls.Load())
+	}
+}
+
+func TestUntilWavesSkipsFinalize(t *testing.T) {
+	dir := t.TempDir()
+	staging := filepath.Join(dir, "staging")
+	output := filepath.Join(dir, "out")
+	batchDir := filepath.Join(staging, "pr-review-code", "batch_001")
+	_ = os.MkdirAll(batchDir, 0o755)
+	plan := `{
+  "batches": [
+    {"skill":"pr-review-code","batch_num":"001","task_count":1,"staging_dir":"` + filepath.ToSlash(batchDir) + `"}
+  ],
+  "skills": ["pr-review-code"],
+  "total_batches": 1
+}`
+	if err := os.WriteFile(filepath.Join(staging, "batch-plan.json"), []byte(plan), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillOut := filepath.Join(output, "pr-review-code")
+	if err := TouchCheckpoint(CheckpointPath(skillOut, "001")); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls atomic.Int32
+	err := Run(Options{
+		PRNumber: "1", StagingDir: staging, OutputDir: output,
+		SkipPrep: true, SkipDeep: true, SkipReport: true,
+		Until: StageWaves,
+		Dispatch: func(o agent.DispatchOptions) error {
+			calls.Add(1)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("until waves with checkpointed batch must not finalize, got %d", calls.Load())
+	}
+}

@@ -45,7 +45,7 @@ PR review uses that plane today (classify → agent waves → publish). The same
 |-------|--------|
 | **Go CLI** (`cmd/majordomo`, `internal/`) | Active |
 | **Agents / skills** (`agents/`) | Active — rubrics for review (and future agent jobs) |
-| **Agent dispatch** (`pipelines/scripts/agent-dispatch.sh`) | Active — OpenCode (set `MAJORDOMO_BIN` when needed) |
+| **Agent dispatch** (`majordomo dispatch`) | Active — in-process strop Judge |
 | **Docker images** (`dockerfiles/`) | Active — agent, SA tools, forge CLI (`gh` / `glab`) |
 | **GitHub Actions** (`.github/workflows/`) | Image CI; tower poll/review in the control-tower repo |
 
@@ -130,17 +130,19 @@ go build -o majordomo ./cmd/majordomo
 
 ```bash
 majordomo poll --config-dir majordomo-central-config --out pending-reviews.json
+majordomo run review --config-dir majordomo-central-config --repo-id <id> --pr <n> [--until prep] [--publish]
 majordomo prep <base-branch> <staging-dir> \
   [--routing path] [--agent-context path] [--summary-config path]
 majordomo orchestrate \
   --pr <n> --staging-dir <dir> --output-dir <dir> \
-  [--base-branch <b> | --skip-prep] [--concurrency 6]
+  [--base-branch <b> | --skip-prep] [--until waves] [--concurrency 6]
 majordomo dispatch <pr> <staging-dir> <output-dir> [--summary|--finalize|--prose|...]
 majordomo publish --scm github|gitlab|bitbucket <pr> <summary.md> auto|comment|description
 majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFUL|FAILED
 majordomo cache validate-branch majordomo-pr-reviewer-cache/<id>
 majordomo cache push --remote <url> --branch <name> --worktree <dir>
 majordomo cache precheck|lookup|store|restore ...
+majordomo context validate --dir <worktree>
 majordomo report junit <review-output-dir> <junit-output-dir>
 majordomo report html <input.md> <output.html>
 majordomo report all-diffs <manifest.json> <output.txt> [--cap N]
@@ -160,3 +162,4 @@ Set `MAJORDOMO_SCRIPTS` if `pipelines/scripts` is not discoverable from cwd; set
 - [05 — File Orchestration](docs/advanced/05-file-orchestration.md)
 - [06 — PR Summary Flow](docs/advanced/06-pr-summary-flow.md)
 - [07 — Example Summary](docs/advanced/07-example-summary.md)
+- [10 — Repo Context Branch](docs/advanced/10-repo-context-branch.md)

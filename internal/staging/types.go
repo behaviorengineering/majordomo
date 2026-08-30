@@ -45,6 +45,7 @@ type Options struct {
 	SummaryConfigPath string
 	RepoRoot          string // empty = cwd
 	BatchSize         int
+	ContextDir        string // merged context-branch checkout (agenting packs); optional
 }
 
 func batchSizeFromEnv() int {

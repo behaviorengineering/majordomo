@@ -32,6 +32,12 @@ internal/agent/             # agent dispatch / loops
 internal/report/            # JUnit / HTML
 internal/publish/           # publish artefacts
 internal/cache/             # cursor / cache
+internal/contextstore/      # served-repo context branch schema
+internal/contextdigest/     # context catch-up job (cursor, orphan seed, forge PR)
+internal/workspace/         # cwd-bounded tool port (+ opencode adapter)
+internal/judge/             # strop JobRunner boundary + evaluation packs
+internal/filereview/        # Prepare→Judge→Validate→Assemble for file batches
+internal/reviewrun/         # local/CI review job (clone, SA, orchestrate, publish)
 internal/config/            # config load
 internal/status/            # status
 internal/diff/              # diff helpers

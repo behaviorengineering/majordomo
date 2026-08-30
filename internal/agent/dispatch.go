@@ -3,13 +3,14 @@ package agent
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/behaviorengineering/majordomo/internal/judge"
 )
 
-// Mode selects agent-dispatch.sh behaviour.
+// Mode selects Judge step behaviour (strop DispatchMode).
 type Mode string
 
 const (
@@ -28,20 +29,19 @@ const (
 	dispatchScriptLegacy  = "copilot-dispatch.sh"
 )
 
-// DispatchOptions configures a single agent invocation.
+// DispatchOptions configures a single Judge invocation.
 type DispatchOptions struct {
 	PRNumber   string
 	StagingDir string
 	OutputDir  string
 	Mode       Mode
-	// ScriptsDir is the pipelines/scripts directory containing agent-dispatch.sh
-	// (or the copilot-dispatch.sh shim). Empty → MAJORDOMO_SCRIPTS / walk up from CWD.
+	// ScriptsDir is retained for ResolveScriptsDir callers (tech-deep helpers); unused by strop Judge.
 	ScriptsDir string
-	// Env extra environment variables (merged onto os.Environ).
+	// Env unused (kept for test injectables / API stability).
 	Env []string
-	// Timeout caps the subprocess; 0 = no timeout.
+	// Timeout unused by in-process Judge (kept for API stability).
 	Timeout time.Duration
-	// Runner overrides command execution (tests).
+	// Runner unused by in-process Judge (kept for API stability).
 	Runner func(name string, args []string, env []string, dir string) error
 }
 
@@ -55,16 +55,20 @@ func dispatchScriptIn(dir string) (string, bool) {
 	return "", false
 }
 
-// ResolveScriptsDir finds pipelines/scripts containing agent-dispatch.sh.
+// ResolveScriptsDir finds pipelines/scripts (legacy helper paths / SA scripts).
 func ResolveScriptsDir(explicit string) (string, error) {
 	if explicit != "" {
 		if _, ok := dispatchScriptIn(explicit); ok {
 			return filepath.Clean(explicit), nil
 		}
-		return "", fmt.Errorf("%s not found in %s", dispatchScriptPrimary, explicit)
+		// Allow directory even without dispatch script (scripts still hold helpers).
+		if info, err := os.Stat(explicit); err == nil && info.IsDir() {
+			return filepath.Clean(explicit), nil
+		}
+		return "", fmt.Errorf("scripts dir not found: %s", explicit)
 	}
 	if v := os.Getenv("MAJORDOMO_SCRIPTS"); v != "" {
-		if _, ok := dispatchScriptIn(v); ok {
+		if info, err := os.Stat(v); err == nil && info.IsDir() {
 			return filepath.Clean(v), nil
 		}
 	}
@@ -77,7 +81,7 @@ func ResolveScriptsDir(explicit string) (string, error) {
 	for i := 0; i < 8 && dir != ""; i++ {
 		for _, rel := range candidates {
 			cand := filepath.Join(dir, rel)
-			if _, ok := dispatchScriptIn(cand); ok {
+			if info, err := os.Stat(cand); err == nil && info.IsDir() {
 				return cand, nil
 			}
 		}
@@ -87,61 +91,20 @@ func ResolveScriptsDir(explicit string) (string, error) {
 		}
 		dir = parent
 	}
-	return "", fmt.Errorf("%s not found (set --scripts-dir or MAJORDOMO_SCRIPTS)", dispatchScriptPrimary)
+	return "", fmt.Errorf("pipelines/scripts not found (set --scripts-dir or MAJORDOMO_SCRIPTS)")
 }
 
-// Dispatch runs agent-dispatch.sh (OpenCode) with the given options.
+// Dispatch runs the in-process strop Judge (never OpenCode).
 func Dispatch(opts DispatchOptions) error {
 	if opts.PRNumber == "" || opts.StagingDir == "" || opts.OutputDir == "" {
 		return fmt.Errorf("dispatch requires pr, staging-dir, and output-dir")
 	}
-	scripts, err := ResolveScriptsDir(opts.ScriptsDir)
-	if err != nil {
-		return err
-	}
-	script, ok := dispatchScriptIn(scripts)
-	if !ok {
-		return fmt.Errorf("%s not found in %s", dispatchScriptPrimary, scripts)
-	}
-	args := []string{script, opts.PRNumber, opts.StagingDir, opts.OutputDir}
-	if opts.Mode != ModeFiles {
-		args = append(args, string(opts.Mode))
-	}
-
-	env := append([]string{}, os.Environ()...)
-	env = append(env, opts.Env...)
-
-	runner := opts.Runner
-	if runner == nil {
-		runner = defaultRunner(opts.Timeout)
-	}
-	return runner("bash", args, env, "")
-}
-
-func defaultRunner(timeout time.Duration) func(name string, args []string, env []string, dir string) error {
-	return func(name string, args []string, env []string, dir string) error {
-		cmd := exec.Command(name, args...)
-		cmd.Env = env
-		cmd.Dir = dir
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if timeout <= 0 {
-			return cmd.Run()
-		}
-		done := make(chan error, 1)
-		go func() { done <- cmd.Run() }()
-		select {
-		case err := <-done:
-			return err
-		case <-time.After(timeout):
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
-			// Wait for the runner goroutine so we do not leak it after Kill.
-			<-done
-			return fmt.Errorf("dispatch timed out after %s", timeout)
-		}
-	}
+	return judge.Dispatch(judge.DispatchOptions{
+		PRNumber:   opts.PRNumber,
+		StagingDir: opts.StagingDir,
+		OutputDir:  opts.OutputDir,
+		Mode:       judge.DispatchMode(opts.Mode),
+	})
 }
 
 // FindScript returns path to a named script under scripts dir.

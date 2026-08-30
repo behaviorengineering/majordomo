@@ -11,6 +11,9 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/agent"
+	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/filereview"
+	"github.com/behaviorengineering/majordomo/internal/judge"
 	"github.com/behaviorengineering/majordomo/internal/report"
 	"github.com/behaviorengineering/majordomo/internal/staging"
 )
@@ -27,11 +30,18 @@ type Options struct {
 	SkipPrep    bool
 	SkipDeep    bool
 	SkipReport  bool
+	Until       string // prep|waves|finalize|prose|synth|report; empty = full
 	RepoRoot    string // for prep / deep; empty = cwd
 
 	RoutingPath       string
 	AgentContextPath  string
 	SummaryConfigPath string
+	ContextDir        string // merged context-branch checkout (agenting); optional
+
+	// ConfigDir + RepoID load majordomo-central-config and materialize routing/agentContext
+	// when RoutingPath / AgentContextPath are empty.
+	ConfigDir string
+	RepoID    string
 
 	// BatchTimeout for a single dispatch; 0 → COPILOT_BATCH_TIMEOUT_MINUTES or 8m.
 	BatchTimeout time.Duration
@@ -57,7 +67,14 @@ func Run(opts Options) error {
 		mins := envInt("COPILOT_BATCH_TIMEOUT_MINUTES", 8)
 		opts.BatchTimeout = time.Duration(mins) * time.Minute
 	}
-	if opts.Dispatch == nil {
+	until, err := NormalizeUntil(opts.Until)
+	if err != nil {
+		return err
+	}
+	opts.Until = until
+
+	useDefaultDispatch := opts.Dispatch == nil
+	if useDefaultDispatch {
 		opts.Dispatch = agent.Dispatch
 	}
 	if opts.RunSummary == nil {
@@ -69,20 +86,35 @@ func Run(opts Options) error {
 
 	logf := agent.Logf
 	logf("INFO", "========== majordomo orchestrate ==========")
-	logf("INFO", "PR: %s  pipeline: %s  concurrency: %d", opts.PRNumber, opts.Pipeline, opts.Concurrency)
+	if opts.Until != "" {
+		logf("INFO", "until: %s", opts.Until)
+	}
+	logf("INFO", "PR: %s  pipeline: %s  concurrency: %d  judge: strop", opts.PRNumber, opts.Pipeline, opts.Concurrency)
 
 	if !opts.SkipPrep {
 		if opts.BaseBranch == "" {
 			return fmt.Errorf("--base-branch required unless --skip-prep")
 		}
+		routingPath, agentContextPath, cfg, err := config.ResolvePrepPaths(
+			opts.ConfigDir, opts.RepoID, opts.Pipeline,
+			config.MaterializeDirForStaging(opts.StagingDir),
+			opts.RoutingPath, opts.AgentContextPath,
+		)
+		if err != nil {
+			return fmt.Errorf("central config: %w", err)
+		}
+		if opts.ConfigDir != "" && opts.RepoID != "" {
+			config.ApplyPipelineModelEnv(cfg, opts.Pipeline)
+		}
 		logf("INFO", "Running prep against %s → %s", opts.BaseBranch, opts.StagingDir)
-		err := staging.Run(staging.Options{
+		err = staging.Run(staging.Options{
 			BaseBranch:        opts.BaseBranch,
 			StagingDir:        opts.StagingDir,
-			RoutingPath:       opts.RoutingPath,
-			AgentContextPath:  opts.AgentContextPath,
+			RoutingPath:       routingPath,
+			AgentContextPath:  agentContextPath,
 			SummaryConfigPath: opts.SummaryConfigPath,
 			RepoRoot:          opts.RepoRoot,
+			ContextDir:        staging.ResolveContextDir(opts.ContextDir),
 		})
 		if err != nil {
 			if errors.Is(err, staging.ErrNothingToReview) {
@@ -90,6 +122,23 @@ func Run(opts Options) error {
 				return nil
 			}
 			return fmt.Errorf("prep: %w", err)
+		}
+	} else if opts.ConfigDir != "" && opts.RepoID != "" {
+		cfg, err := config.LoadMerged(opts.ConfigDir, opts.RepoID)
+		if err != nil {
+			return fmt.Errorf("central config: %w", err)
+		}
+		config.ApplyPipelineModelEnv(cfg, opts.Pipeline)
+	}
+
+	if !shouldRun(opts.Until, StageWaves) {
+		logf("INFO", "until=%s: stopping after prep", opts.Until)
+		return nil
+	}
+
+	if useDefaultDispatch {
+		if err := judge.EnsureStropReady(); err != nil {
+			return err
 		}
 	}
 
@@ -106,8 +155,23 @@ func Run(opts Options) error {
 	if err := runFileWaves(opts, fileBatches); err != nil {
 		return err
 	}
-	if err := runFinalizeAndProse(opts, plan.Skills); err != nil {
+	if !shouldRun(opts.Until, StageFinalize) {
+		logf("INFO", "until=%s: stopping after waves", opts.Until)
+		return nil
+	}
+	if err := runFinalize(opts, plan.Skills); err != nil {
 		return err
+	}
+	if !shouldRun(opts.Until, StageProse) {
+		logf("INFO", "until=%s: stopping after finalize", opts.Until)
+		return nil
+	}
+	if err := runFileProse(opts, plan.Skills); err != nil {
+		return err
+	}
+	if !shouldRun(opts.Until, StageSynth) {
+		logf("INFO", "until=%s: stopping after prose", opts.Until)
+		return nil
 	}
 	if err := runSynthesis(opts, synthBatches); err != nil {
 		return err
@@ -121,13 +185,18 @@ func Run(opts Options) error {
 		}
 	}
 
-	// Copy top-level staging manifest into output for archiving
+	// Copy top-level staging manifest into output for archiving.
 	srcManifest := filepath.Join(opts.StagingDir, "manifest.json")
 	dstManifest := filepath.Join(opts.OutputDir, "review-manifest.json")
 	if FileExists(srcManifest) {
 		if err := copyFile(srcManifest, dstManifest); err != nil {
 			return fmt.Errorf("copy review-manifest.json: %w", err)
 		}
+	}
+
+	if !shouldRun(opts.Until, StageReport) {
+		logf("INFO", "until=%s: stopping after synth", opts.Until)
+		return nil
 	}
 
 	if !opts.SkipReport {
@@ -185,16 +254,25 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 		agent.Logf("INFO", "%s: checkpoint — skipping", label)
 		return nil
 	}
-
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
-		lastErr = opts.Dispatch(agent.DispatchOptions{
-			PRNumber:   opts.PRNumber,
+		lastErr = filereview.Run(filereview.Options{
 			StagingDir: b.StagingDir,
-			OutputDir:  skillOut,
-			Mode:       agent.ModeFiles,
-			ScriptsDir: opts.ScriptsDir,
-			Timeout:    opts.BatchTimeout,
+			SkillOut:   skillOut,
+			MaxRetries: 2,
+			Logf: func(format string, args ...any) {
+				agent.Logf("INFO", "%s: "+format, append([]any{label}, args...)...)
+			},
+			Judge: func() error {
+				return opts.Dispatch(agent.DispatchOptions{
+					PRNumber:   opts.PRNumber,
+					StagingDir: b.StagingDir,
+					OutputDir:  skillOut,
+					Mode:       agent.ModeFiles,
+					ScriptsDir: opts.ScriptsDir,
+					Timeout:    opts.BatchTimeout,
+				})
+			},
 		})
 		if lastErr == nil {
 			break
@@ -216,7 +294,7 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 	return nil
 }
 
-func runFinalizeAndProse(opts Options, skills []string) error {
+func runFinalize(opts Options, skills []string) error {
 	for _, skill := range skills {
 		if IsSynthesisSkill(skill) {
 			continue
@@ -225,23 +303,31 @@ func runFinalizeAndProse(opts Options, skills []string) error {
 		finalizeCP := filepath.Join(skillOut, "logs", "finalize.done.txt")
 		if FileExists(finalizeCP) {
 			agent.Logf("INFO", "%s finalize: checkpoint — skipping", skill)
-		} else {
-			stagingSkill := filepath.Join(opts.StagingDir, skill)
-			if err := opts.Dispatch(agent.DispatchOptions{
-				PRNumber: opts.PRNumber, StagingDir: stagingSkill,
-				OutputDir: skillOut, Mode: agent.ModeFinalize, ScriptsDir: opts.ScriptsDir,
-			}); err != nil {
-				return fmt.Errorf("finalize %s: %w", skill, err)
-			}
-			// Require summary.md + index.md like groovy
-			if !FileExists(filepath.Join(skillOut, "summary.md")) || !FileExists(filepath.Join(skillOut, "index.md")) {
-				agent.Logf("WARN", "%s finalize: summary.md or index.md missing", skill)
-			}
-			if err := TouchCheckpoint(finalizeCP); err != nil {
-				return fmt.Errorf("finalize %s checkpoint: %w", skill, err)
-			}
+			continue
 		}
+		stagingSkill := filepath.Join(opts.StagingDir, skill)
+		if err := opts.Dispatch(agent.DispatchOptions{
+			PRNumber: opts.PRNumber, StagingDir: stagingSkill,
+			OutputDir: skillOut, Mode: agent.ModeFinalize, ScriptsDir: opts.ScriptsDir,
+		}); err != nil {
+			return fmt.Errorf("finalize %s: %w", skill, err)
+		}
+		if !FileExists(filepath.Join(skillOut, "summary.md")) || !FileExists(filepath.Join(skillOut, "index.md")) {
+			agent.Logf("WARN", "%s finalize: summary.md or index.md missing", skill)
+		}
+		if err := TouchCheckpoint(finalizeCP); err != nil {
+			return fmt.Errorf("finalize %s checkpoint: %w", skill, err)
+		}
+	}
+	return nil
+}
 
+func runFileProse(opts Options, skills []string) error {
+	for _, skill := range skills {
+		if IsSynthesisSkill(skill) {
+			continue
+		}
+		skillOut := filepath.Join(opts.OutputDir, skill)
 		proseCP := filepath.Join(skillOut, "logs", "prose.done.txt")
 		if FileExists(proseCP) {
 			agent.Logf("INFO", "%s prose: checkpoint — skipping", skill)
