@@ -1,6 +1,7 @@
 package aigateway_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/behaviorengineering/majordomo/internal/aigateway"
@@ -57,12 +58,51 @@ func TestGatewayLoopback(t *testing.T) {
 		}
 	}
 	foundDummy := false
+	foundBase := false
+	foundConfig := false
+	foundProvider := false
 	for _, e := range env {
-		if e == "OPENAI_API_KEY="+aigateway.DummyAPIKey {
+		switch {
+		case e == "OPENAI_API_KEY="+aigateway.DummyAPIKey:
 			foundDummy = true
+		case strings.HasPrefix(e, "OPENAI_BASE_URL="+gw.BaseURL()):
+			foundBase = true
+		case strings.HasPrefix(e, "OPENCODE_CONFIG_CONTENT="):
+			foundConfig = true
+			if !strings.Contains(e, gw.BaseURL()) {
+				t.Fatalf("config missing base URL: %s", e)
+			}
+		case e == "OPENCODE_PROVIDER=openai":
+			foundProvider = true
 		}
 	}
 	if !foundDummy {
 		t.Fatal("expected dummy OPENAI_API_KEY in child env")
+	}
+	if !foundBase {
+		t.Fatal("expected OPENAI_BASE_URL in child env")
+	}
+	if !foundConfig {
+		t.Fatal("expected OPENCODE_CONFIG_CONTENT in child env")
+	}
+	if !foundProvider {
+		t.Fatal("expected OPENCODE_PROVIDER=openai in child env")
+	}
+
+	envKeep, err := aigateway.PrepareChildEnv([]string{
+		"PATH=/bin",
+		"OPENCODE_CONFIG=/tmp/oc.json",
+		"OPENCODE_PROVIDER=custom",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range envKeep {
+		if strings.HasPrefix(e, "OPENCODE_CONFIG_CONTENT=") {
+			t.Fatal("must not override existing OPENCODE_CONFIG")
+		}
+		if e == "OPENCODE_PROVIDER=openai" {
+			t.Fatal("must not override existing OPENCODE_PROVIDER")
+		}
 	}
 }
