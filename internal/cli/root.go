@@ -15,8 +15,8 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/contextgate"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	diffpkg "github.com/behaviorengineering/majordomo/internal/diff"
-	"github.com/behaviorengineering/majordomo/internal/orchestrate"
 	"github.com/behaviorengineering/majordomo/internal/observability"
+	"github.com/behaviorengineering/majordomo/internal/orchestrate"
 	"github.com/behaviorengineering/majordomo/internal/poll"
 	"github.com/behaviorengineering/majordomo/internal/publish"
 	"github.com/behaviorengineering/majordomo/internal/report"
@@ -143,18 +143,19 @@ func newPrepCmd() *cobra.Command {
 
 func newDispatchCmd() *cobra.Command {
 	var (
-		scriptsDir string
-		finalize   bool
-		summary    bool
-		score      bool
-		technical  bool
-		techScore  bool
-		prose      bool
-		techDeep   bool
+		scriptsDir  string
+		finalize    bool
+		summary     bool
+		score       bool
+		technical   bool
+		techScore   bool
+		prose       bool
+		techDeep    bool
+		useOpenCode bool
 	)
 	cmd := &cobra.Command{
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
-		Short: "Run one Judge batch (in-process strop)",
+		Short: "Run one Judge batch (in-process strop; --opencode for harness)",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			mode := agent.ModeFiles
@@ -174,13 +175,17 @@ func newDispatchCmd() *cobra.Command {
 			case techDeep:
 				mode = agent.ModeTechnicalDeep
 			}
-			return agent.Dispatch(agent.DispatchOptions{
+			opts := agent.DispatchOptions{
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],
 				Mode:       mode,
 				ScriptsDir: scriptsDir,
-			})
+			}
+			if useOpenCode {
+				return agent.RunOpenCode(opts)
+			}
+			return agent.Dispatch(opts)
 		},
 	}
 	cmd.Flags().StringVar(&scriptsDir, "scripts-dir", "", "pipelines/scripts directory")
@@ -191,6 +196,7 @@ func newDispatchCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&techScore, "tech-score", false, "tech-score mode")
 	cmd.Flags().BoolVar(&prose, "prose", false, "prose mode")
 	cmd.Flags().BoolVar(&techDeep, "technical-deep", false, "technical-deep mode")
+	cmd.Flags().BoolVar(&useOpenCode, "opencode", false, "run agent-dispatch.sh via Bifrost ChildEnv (legacy harness)")
 	return cmd
 }
 

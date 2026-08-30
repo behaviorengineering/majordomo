@@ -37,11 +37,11 @@ type DispatchOptions struct {
 	Mode       Mode
 	// ScriptsDir is retained for ResolveScriptsDir callers (tech-deep helpers); unused by strop Judge.
 	ScriptsDir string
-	// Env unused (kept for test injectables / API stability).
+	// Env is the parent environ for RunOpenCode (nil → os.Environ). Unused by Dispatch.
 	Env []string
-	// Timeout unused by in-process Judge (kept for API stability).
+	// Timeout kills the OpenCode script process when > 0. Unused by in-process Judge.
 	Timeout time.Duration
-	// Runner unused by in-process Judge (kept for API stability).
+	// Runner overrides script exec for RunOpenCode tests. Unused by Dispatch.
 	Runner func(name string, args []string, env []string, dir string) error
 }
 

@@ -144,6 +144,13 @@ if ! opencode_provider_key_present; then
     exit 1
 fi
 
+# When Majordomo aigateway.ChildEnv set OPENAI_BASE_URL but left config empty
+# (manual runs), point the openai provider at the loopback gateway.
+if [ -n "${OPENAI_BASE_URL:-}" ] && [ -z "${OPENCODE_CONFIG:-}" ] && [ -z "${OPENCODE_CONFIG_CONTENT:-}" ]; then
+    export OPENCODE_CONFIG_CONTENT="$(printf '%s' "{\"provider\":{\"openai\":{\"options\":{\"baseURL\":\"${OPENAI_BASE_URL}\",\"apiKey\":\"{env:OPENAI_API_KEY}\"}}}}")"
+    export OPENCODE_PROVIDER="${OPENCODE_PROVIDER:-openai}"
+fi
+
 # ---------------------------------------------------------------------------
 # Pre-flight
 # ---------------------------------------------------------------------------

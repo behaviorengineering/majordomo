@@ -73,7 +73,9 @@ Judge (strop/DSPy) talks **OpenAI chat completions only** to an in-process Bifro
 | `GEMINI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY` | Gemini |
 | `MAJORDOMO_MODEL` | Logical model name (gateway maps + fallbacks) |
 
-Provider retries and Anthropic→OpenAI→Gemini failover live in Bifrost. OpenCode children should use `aigateway.ChildEnv` (dummy `OPENAI_API_KEY` + `OPENAI_BASE_URL` to the loopback; real keys stripped).
+Provider retries and Anthropic→OpenAI→Gemini failover live in Bifrost.
+
+**OpenCode harness:** `majordomo dispatch --opencode …` (or `agent.RunOpenCode`) starts the gateway, strips real provider keys from the child env, sets dummy `OPENAI_API_KEY` / `OPENCODE_PROVIDER_API_KEY`, `OPENAI_BASE_URL` to the loopback, and injects `OPENCODE_CONFIG_CONTENT` so OpenCode’s openai provider hits Bifrost. Default `majordomo dispatch` / `orchestrate` stay on in-process strop Judge (no OpenCode).
 
 ## Observability and failure dumps
 

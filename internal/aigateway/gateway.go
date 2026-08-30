@@ -143,8 +143,18 @@ func (g *Gateway) Shutdown() {
 	g.started = false
 }
 
+// PrepareChildEnv starts the process gateway (if needed) and returns ChildEnv(parent).
+func PrepareChildEnv(parent []string) ([]string, error) {
+	gw, err := Ensure()
+	if err != nil {
+		return nil, err
+	}
+	return gw.ChildEnv(parent), nil
+}
+
 // ChildEnv returns env pairs so an OpenCode child uses the loopback only.
-// Real provider keys are stripped.
+// Real provider keys are stripped. When OPENCODE_CONFIG / OPENCODE_CONFIG_CONTENT
+// are unset, injects an OpenAI-compatible provider block aimed at the loopback.
 func (g *Gateway) ChildEnv(parent []string) []string {
 	if g == nil {
 		return parent
@@ -156,11 +166,22 @@ func (g *Gateway) ChildEnv(parent []string) []string {
 		envGoogle:    {},
 		envGoogleAI:  {},
 	}
-	out := make([]string, 0, len(parent)+4)
+	out := make([]string, 0, len(parent)+8)
+	hasConfig := false
+	hasConfigContent := false
+	hasProvider := false
 	for _, e := range parent {
 		key, _, _ := strings.Cut(e, "=")
 		if _, bad := strip[key]; bad {
 			continue
+		}
+		switch key {
+		case "OPENCODE_CONFIG":
+			hasConfig = true
+		case "OPENCODE_CONFIG_CONTENT":
+			hasConfigContent = true
+		case "OPENCODE_PROVIDER":
+			hasProvider = true
 		}
 		out = append(out, e)
 	}
@@ -169,6 +190,17 @@ func (g *Gateway) ChildEnv(parent []string) []string {
 		"OPENAI_BASE_URL="+g.baseURL,
 		"OPENCODE_PROVIDER_API_KEY="+DummyAPIKey,
 	)
+	if !hasProvider {
+		out = append(out, "OPENCODE_PROVIDER=openai")
+	}
+	if !hasConfig && !hasConfigContent {
+		// OpenCode needs provider.options.baseURL; OPENAI_BASE_URL alone is not enough.
+		cfg := fmt.Sprintf(
+			`{"provider":{"openai":{"options":{"baseURL":%q,"apiKey":"{env:OPENAI_API_KEY}"}}}}`,
+			g.baseURL,
+		)
+		out = append(out, "OPENCODE_CONFIG_CONTENT="+cfg)
+	}
 	return out
 }
 

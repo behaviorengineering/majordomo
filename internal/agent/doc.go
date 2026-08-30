@@ -1,3 +1,5 @@
-// Package agent executes OpenCode (via agent-dispatch.sh) for review batches.
-// Skill wiring and generate/score loops live here.
+// Package agent owns review dispatch helpers.
+//
+// Dispatch runs the in-process strop Judge. RunOpenCode shells to
+// agent-dispatch.sh with aigateway.ChildEnv (loopback OpenAI only).
 package agent
