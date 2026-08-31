@@ -9,8 +9,10 @@ import (
 // ExtraHeaderArgs returns git -c http.extraHeader=... args for forge HTTPS auth.
 // An empty token yields nil (no auth config).
 //
-// GitHub git smart HTTP rejects Authorization: Bearer (REST API only). Use Basic
-// with username x-access-token, matching actions/checkout.
+// GitHub and GitLab git smart HTTP expect HTTP Basic, not API-only headers:
+// GitHub: username x-access-token (actions/checkout).
+// GitLab: username oauth2 (same as clone-served-repo.sh URL embedding).
+// PRIVATE-TOKEN is for the GitLab REST API only and is ignored by git HTTP.
 func ExtraHeaderArgs(token, scm string) []string {
 	if strings.TrimSpace(token) == "" {
 		return nil
@@ -18,7 +20,8 @@ func ExtraHeaderArgs(token, scm string) []string {
 	var header string
 	switch strings.ToLower(strings.TrimSpace(scm)) {
 	case "gitlab":
-		header = "PRIVATE-TOKEN: " + token
+		basic := base64.StdEncoding.EncodeToString([]byte("oauth2:" + token))
+		header = "Authorization: Basic " + basic
 	case "bitbucket":
 		basic := base64.StdEncoding.EncodeToString([]byte("x-token-auth:" + token))
 		header = "Authorization: Basic " + basic
