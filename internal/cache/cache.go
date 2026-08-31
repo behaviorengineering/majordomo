@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/githttps"
 )
 
 var cacheBranchRE = regexp.MustCompile(`^majordomo-pr-reviewer-cache/[a-z0-9][a-z0-9-]*$`)
@@ -39,7 +41,7 @@ type PushOptions struct {
 	Token    string // BITBUCKET_TOKEN or GITHUB_TOKEN
 }
 
-// Push pushes the cache branch with Bearer auth (port of push-to-cache.py).
+// Push pushes the cache branch with forge HTTPS auth (port of push-to-cache.py).
 func Push(opts PushOptions) error {
 	if err := ValidateReviewCacheBranch(opts.Branch); err != nil {
 		return err
@@ -61,9 +63,11 @@ func Push(opts PushOptions) error {
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("worktree not found: %s", opts.Worktree)
 	}
-	auth := "Authorization: Bearer " + token
+	authArgs := githttps.ExtraHeaderArgs(token, githttps.InferSCM(opts.Remote))
 	run := func(args ...string) error {
-		cmd := exec.Command("git", append([]string{"-C", opts.Worktree, "-c", "http.extraHeader=" + auth}, args...)...)
+		cmdArgs := append([]string{"-C", opts.Worktree}, authArgs...)
+		cmdArgs = append(cmdArgs, args...)
+		cmd := exec.Command("git", cmdArgs...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		return cmd.Run()

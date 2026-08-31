@@ -5,20 +5,12 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/githttps"
 )
 
 func authConfigArgs(token, scm string) []string {
-	if token == "" {
-		return nil
-	}
-	var header string
-	switch strings.ToLower(strings.TrimSpace(scm)) {
-	case "gitlab":
-		header = "PRIVATE-TOKEN: " + token
-	default:
-		header = "Authorization: Bearer " + token
-	}
-	return []string{"-c", "http.extraHeader=" + header}
+	return githttps.ExtraHeaderArgs(token, scm)
 }
 
 func git(dir, token, scm string, args ...string) (string, error) {
