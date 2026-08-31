@@ -1,0 +1,53 @@
+# Reference: context digest cron (matrix per served repo).
+# Canonical source — copy to YOUR_TOWER/.github/workflows/majordomo-context-digest.yml
+name: majordomo-context-digest
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      MAJORDOMO_GH_IMAGE: ${{ vars.MAJORDOMO_GH_IMAGE }}
+      MAJORDOMO_GLAB_IMAGE: ${{ vars.MAJORDOMO_GLAB_IMAGE }}
+      TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: .majordomo/go.mod
+      - run: go build -o majordomo ./cmd/majordomo
+        working-directory: .majordomo
+      - id: plan
+        run: |
+          set -euo pipefail
+          ./majordomo context repos --config-dir majordomo-central-config --out context-repos.json
+          matrix=$(bash "${TOWER_SCRIPTS}/enrich-context-repos-matrix.sh" context-repos.json)
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+  digest:
+    needs: plan
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.forge_image }}
+    strategy:
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    env:
+      SCM: ${{ matrix.scm }}
+      TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
+    steps:
+      - run: bash "${TOWER_SCRIPTS}/verify-forge-cli.sh"
+      - run: bash "${TOWER_SCRIPTS}/clone-served-repo.sh" served/repo
+      # … majordomo context digest (see xynova/majordomo-tower)

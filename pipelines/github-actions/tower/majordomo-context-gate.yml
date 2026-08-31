@@ -1,0 +1,44 @@
+# Reference: single-repo context gate (resolve scm then containerized digest).
+# Canonical source — copy to YOUR_TOWER/.github/workflows/majordomo-context-gate.yml
+name: majordomo-context-gate
+
+on:
+  repository_dispatch:
+    types: [context-gate]
+  workflow_dispatch:
+    inputs:
+      repo_id:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      scm: ${{ steps.meta.outputs.scm }}
+      forge_image: ${{ steps.meta.outputs.forge_image }}
+    env:
+      MAJORDOMO_GH_IMAGE: ${{ vars.MAJORDOMO_GH_IMAGE }}
+      MAJORDOMO_GLAB_IMAGE: ${{ vars.MAJORDOMO_GLAB_IMAGE }}
+      TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
+    steps:
+      - id: meta
+        run: |
+          set -euo pipefail
+          scm=github
+          img=$(bash "${TOWER_SCRIPTS}/resolve-forge-image.sh" "${scm}")
+          echo "scm=${scm}" >> "$GITHUB_OUTPUT"
+          echo "forge_image=${img}" >> "$GITHUB_OUTPUT"
+
+  digest:
+    needs: resolve
+    container:
+      image: ${{ needs.resolve.outputs.forge_image }}
+    steps:
+      - run: bash .majordomo/pipelines/scripts/tower/verify-forge-cli.sh
+      # … clone + context digest (see xynova/majordomo-tower)
