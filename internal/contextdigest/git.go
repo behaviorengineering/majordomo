@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/githttps"
 )
 
 // Git runs git in dir with optional HTTPS auth for the forge.
@@ -16,17 +18,7 @@ type Git struct {
 }
 
 func (g *Git) authConfigArgs() []string {
-	if g.Token == "" {
-		return nil
-	}
-	var header string
-	switch strings.ToLower(strings.TrimSpace(g.SCM)) {
-	case "gitlab":
-		header = "PRIVATE-TOKEN: " + g.Token
-	default:
-		header = "Authorization: Bearer " + g.Token
-	}
-	return []string{"-c", "http.extraHeader=" + header}
+	return githttps.ExtraHeaderArgs(g.Token, g.SCM)
 }
 
 func (g *Git) run(args ...string) (string, error) {
