@@ -708,7 +708,7 @@ func newContextCmd() *cobra.Command {
 	}
 	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
 	_ = validate.MarkFlagRequired("dir")
-	var digestConfigDir, digestRepoID, digestWorkDir string
+	var digestConfigDir, digestRepoID, digestWorkDir, digestOut string
 	var skipStory, skipCompact, forceCompact bool
 	digest := &cobra.Command{
 		Use:   "digest",
@@ -725,7 +725,16 @@ func newContextCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			enc := json.NewEncoder(cmd.OutOrStdout())
+			out := cmd.OutOrStdout()
+			if digestOut != "" && digestOut != "-" {
+				f, err := os.Create(digestOut)
+				if err != nil {
+					return fmt.Errorf("create --out %s: %w", digestOut, err)
+				}
+				defer f.Close()
+				out = f
+			}
+			enc := json.NewEncoder(out)
 			enc.SetIndent("", "  ")
 			return enc.Encode(res)
 		},
@@ -733,6 +742,7 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().StringVar(&digestConfigDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
 	digest.Flags().StringVar(&digestRepoID, "repo-id", "", "served repo id")
 	digest.Flags().StringVar(&digestWorkDir, "workdir", "", "served-repo clone with origin remote")
+	digest.Flags().StringVar(&digestOut, "out", "-", "write result JSON (default stdout; logs stay on stdout)")
 	digest.Flags().BoolVar(&skipStory, "skip-story", false, "cursor/meta only; skip story and agenting updates")
 	digest.Flags().BoolVar(&skipCompact, "skip-compact", false, "skip chronology compaction")
 	digest.Flags().BoolVar(&forceCompact, "force-compact", false, "run compaction even under entry threshold")
