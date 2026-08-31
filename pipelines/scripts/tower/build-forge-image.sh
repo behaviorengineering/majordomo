@@ -24,15 +24,19 @@ if [ ! -f "${majordomo_root}/pipelines/scripts/build-copilot-image.sh" ]; then
   exit 1
 fi
 
+dockerfile_rel="$(
+  if [[ "${dockerfile}" == */* ]]; then
+    echo "${dockerfile}"
+  else
+    echo "dockerfiles/${dockerfile}"
+  fi
+)"
+
 export DOCKER_BUILD_TARGET="${DOCKER_BUILD_TARGET:-public}"
+# build-copilot-image.sh resolves dockerfile paths from the current working directory.
+cd "${majordomo_root}"
 bash "${majordomo_root}/pipelines/scripts/build-copilot-image.sh" \
   "${registry}" \
   "${image_name}" \
   "${tag}" \
-  "$(
-    if [[ "${dockerfile}" == */* ]]; then
-      echo "${dockerfile}"
-    else
-      echo "dockerfiles/${dockerfile}"
-    fi
-  )"
+  "${dockerfile_rel}"
