@@ -25,8 +25,14 @@ jobs:
     env:
       MAJORDOMO_GH_IMAGE: ${{ vars.MAJORDOMO_GH_IMAGE }}
       MAJORDOMO_GLAB_IMAGE: ${{ vars.MAJORDOMO_GLAB_IMAGE }}
+      MAJORDOMO_IMAGE: ${{ vars.MAJORDOMO_IMAGE }}
       TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
     steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: bash "${TOWER_SCRIPTS}/extract-majordomo-cli.sh" "${MAJORDOMO_IMAGE}" "${{ github.workspace }}/majordomo"
       - id: meta
         run: |
           set -euo pipefail
@@ -34,11 +40,23 @@ jobs:
           img=$(bash "${TOWER_SCRIPTS}/resolve-forge-image.sh" "${scm}")
           echo "scm=${scm}" >> "$GITHUB_OUTPUT"
           echo "forge_image=${img}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: majordomo-cli
+          path: majordomo
 
   digest:
     needs: resolve
+    defaults:
+      run:
+        shell: bash
     container:
       image: ${{ needs.resolve.outputs.forge_image }}
     steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: majordomo-cli
+          path: ${{ github.workspace }}
+      - run: chmod +x "${{ github.workspace }}/majordomo"
       - run: bash .majordomo/pipelines/scripts/tower/verify-forge-cli.sh
       # … clone + context digest (see xynova/majordomo-tower)

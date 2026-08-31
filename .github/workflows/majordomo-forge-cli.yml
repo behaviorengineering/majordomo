@@ -5,6 +5,7 @@ on:
     paths:
       - "dockerfiles/Dockerfile.gh"
       - "dockerfiles/Dockerfile.glab"
+      - "dockerfiles/Dockerfile.cli"
       - "dockerfiles/sa-tools/scripts/**"
       - "pipelines/scripts/build-copilot-image.sh"
       - ".github/workflows/majordomo-forge-cli.yml"
@@ -13,6 +14,7 @@ on:
     paths:
       - "dockerfiles/Dockerfile.gh"
       - "dockerfiles/Dockerfile.glab"
+      - "dockerfiles/Dockerfile.cli"
       - "dockerfiles/sa-tools/scripts/**"
       - "pipelines/scripts/build-copilot-image.sh"
       - ".github/workflows/majordomo-forge-cli.yml"
@@ -65,3 +67,28 @@ jobs:
         run: |
           docker run --rm "local/majordomo-glab:gha-${{ github.sha }}" \
             sh -c 'glab --version && echo OK'
+
+  build-cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build majordomo CLI (public)
+        env:
+          SKIP_PUSH: "true"
+        run: |
+          bash ./pipelines/scripts/build-copilot-image.sh \
+            local \
+            majordomo \
+            "gha-${{ github.sha }}" \
+            dockerfiles/Dockerfile.cli
+
+      - name: Smoke majordomo CLI
+        run: |
+          docker run --rm "local/majordomo:gha-${{ github.sha }}" --help >/dev/null
+          bash ./pipelines/scripts/tower/extract-majordomo-cli.sh \
+            "local/majordomo:gha-${{ github.sha }}" \
+            "${{ github.workspace }}/majordomo"
+          ./majordomo --help >/dev/null
+          echo OK

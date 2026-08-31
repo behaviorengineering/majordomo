@@ -20,34 +20,48 @@ jobs:
     env:
       MAJORDOMO_GH_IMAGE: ${{ vars.MAJORDOMO_GH_IMAGE }}
       MAJORDOMO_GLAB_IMAGE: ${{ vars.MAJORDOMO_GLAB_IMAGE }}
+      MAJORDOMO_IMAGE: ${{ vars.MAJORDOMO_IMAGE }}
       TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: .majordomo/go.mod
-      - run: go build -o majordomo ./cmd/majordomo
-        working-directory: .majordomo
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: bash "${TOWER_SCRIPTS}/extract-majordomo-cli.sh" "${MAJORDOMO_IMAGE}" "${{ github.workspace }}/majordomo"
       - id: plan
         run: |
           set -euo pipefail
           ./majordomo context repos --config-dir majordomo-central-config --out context-repos.json
           matrix=$(bash "${TOWER_SCRIPTS}/enrich-context-repos-matrix.sh" context-repos.json)
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: majordomo-cli
+          path: majordomo
 
   digest:
     needs: plan
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.forge_image }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
     env:
       SCM: ${{ matrix.scm }}
       TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
     steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@v6
+        with:
+          name: majordomo-cli
+          path: ${{ github.workspace }}
+      - run: chmod +x "${{ github.workspace }}/majordomo"
       - run: bash "${TOWER_SCRIPTS}/verify-forge-cli.sh"
       - run: bash "${TOWER_SCRIPTS}/clone-served-repo.sh" served/repo
       # … majordomo context digest (see xynova/majordomo-tower)

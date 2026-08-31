@@ -31,11 +31,20 @@ Copy or diff against these files when adding or updating tower workflows:
 | File | Purpose |
 |------|---------|
 | [majordomo-forge-images.yml](majordomo-forge-images.yml) | Build/push `majordomo-gh` and `majordomo-glab` to your registry |
+| [majordomo-cli-image.yml](majordomo-cli-image.yml) | Build/push `majordomo` CLI image (`/majordomo` binary) |
 | [majordomo-review.yml](majordomo-review.yml) | PR review inside SCM-matching forge container |
 | [majordomo-context-digest.yml](majordomo-context-digest.yml) | Scheduled context digest (matrix by served repo) |
 | [majordomo-context-gate.yml](majordomo-context-gate.yml) | Single-repo digest acceleration |
 
-Replace `YOUR_GHCR_REGISTRY` (e.g. `ghcr.io/xynova/majordomo-tower`) in the forge-images workflow.
+Replace `YOUR_GHCR_REGISTRY` (e.g. `ghcr.io/xynova/majordomo-tower`) in the forge-images and cli-image workflows.
+
+Tower jobs extract the CLI with:
+
+```bash
+bash .majordomo/pipelines/scripts/tower/extract-majordomo-cli.sh "${MAJORDOMO_IMAGE}" ./majordomo
+```
+
+Set `MAJORDOMO_IMAGE` (e.g. `ghcr.io/<org>/<tower>/majordomo:latest`) alongside the forge image variables.
 
 ## Sync habit
 
