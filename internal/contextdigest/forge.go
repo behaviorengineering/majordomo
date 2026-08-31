@@ -208,9 +208,9 @@ func glabRepoArgs(owner, name string) []string {
 }
 
 func (f *Forge) findGitLabOpen(baseBranch, headBranch string, env, repoArgs []string) (string, error) {
+	// glab mr list defaults to open MRs; it has no --state flag (unlike gh pr list).
 	args := append([]string{
 		"mr", "list",
-		"--state", "opened",
 		"--target-branch", baseBranch,
 		"--source-branch", headBranch,
 		"-F", "json",

@@ -1,11 +1,11 @@
 package contextdigest
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -55,7 +55,9 @@ func TestIsBehind(t *testing.T) {
 func TestGitLabAuthHeader(t *testing.T) {
 	g := &Git{SCM: "gitlab", Token: "tok"}
 	args := g.authConfigArgs()
-	if len(args) != 2 || !strings.Contains(args[1], "PRIVATE-TOKEN: tok") {
+	wantBasic := base64.StdEncoding.EncodeToString([]byte("oauth2:tok"))
+	want := "http.extraHeader=Authorization: Basic " + wantBasic
+	if len(args) != 2 || args[1] != want {
 		t.Fatalf("gitlab auth = %v", args)
 	}
 }
