@@ -112,7 +112,16 @@ majordomo version
 majordomo submodule
 ```
 
-Releases are cut from `v*` tags via GoReleaser (`.goreleaser.yaml`, `.github/workflows/release.yml`). Each release includes archives for linux/darwin/windows (`amd64`/`arm64`) and notes since the previous tag.
+### Releases (for agents)
+
+Default bump on each releasable merge to `main` is **patch** (`vX.Y.(Z+1)`), via `.github/workflows/auto-patch-release.yml`. That job creates an annotated tag and runs GoReleaser in the same workflow (CI job-token tag pushes do not reliably trigger a second pipeline).
+
+- Skip when every commit subject since the last `v*` tag is only `docs:`, `chore:`, or `ci:` (conventional prefixes), or the subject contains `[skip release]`.
+- Use `workflow_dispatch` with bump `minor` or `major` for additive or breaking public API (or an explicit human ask).
+- Human-pushed `v*` tags still publish through `.github/workflows/release.yml`.
+- Each release includes archives for linux/darwin/windows (`amd64`/`arm64`) and notes since the previous tag (`.goreleaser.yaml`).
+
+Control towers should pin `.majordomo/` to a resolvable `v*` tag after each release, not a floating SHA.
 
 **From source** (developers working in this repo):
 
