@@ -181,17 +181,14 @@ func (f *Forge) openGitLab(baseBranch, headBranch, title, body string) (string, 
 		}
 		return existing, nil
 	}
-	path, cleanup, err := writeTempBody(body)
-	if err != nil {
-		return "", err
-	}
-	defer cleanup()
+	// glab accepts --description (inline), not --description-file (unlike gh --body-file).
 	args := append([]string{
 		"mr", "create",
 		"--target-branch", baseBranch,
 		"--source-branch", headBranch,
 		"--title", title,
-		"--description-file", path,
+		"--description", body,
+		"-y",
 	}, repoArgs...)
 	out, err := f.runCLI("glab", args, env)
 	if err != nil {
@@ -208,9 +205,9 @@ func glabRepoArgs(owner, name string) []string {
 }
 
 func (f *Forge) findGitLabOpen(baseBranch, headBranch string, env, repoArgs []string) (string, error) {
+	// glab mr list defaults to open MRs; it has no --state flag (unlike gh pr list).
 	args := append([]string{
 		"mr", "list",
-		"--state", "opened",
 		"--target-branch", baseBranch,
 		"--source-branch", headBranch,
 		"-F", "json",
@@ -233,17 +230,13 @@ func (f *Forge) findGitLabOpen(baseBranch, headBranch string, env, repoArgs []st
 }
 
 func (f *Forge) updateGitLabMR(iid, title, body string, env []string, repoArgs []string) error {
-	path, cleanup, err := writeTempBody(body)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
 	args := append([]string{
 		"mr", "update", iid,
 		"--title", title,
-		"--description-file", path,
+		"--description", body,
+		"-y",
 	}, repoArgs...)
-	_, err = f.runCLI("glab", args, env)
+	_, err := f.runCLI("glab", args, env)
 	return err
 }
 

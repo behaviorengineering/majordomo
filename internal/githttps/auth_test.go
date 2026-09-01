@@ -33,8 +33,9 @@ func TestExtraHeaderArgsGitHubBasic(t *testing.T) {
 func TestExtraHeaderArgsGitLab(t *testing.T) {
 	t.Parallel()
 	got := ExtraHeaderArgs("glpat", "gitlab")
-	want := []string{"-c", "http.extraHeader=PRIVATE-TOKEN: glpat"}
-	if len(got) != 2 || got[1] != want[1] {
+	wantBasic := base64.StdEncoding.EncodeToString([]byte("oauth2:glpat"))
+	want := []string{"-c", "http.extraHeader=Authorization: Basic " + wantBasic}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("gitlab: got %#v want %#v", got, want)
 	}
 }

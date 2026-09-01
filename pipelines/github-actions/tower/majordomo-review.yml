@@ -1,6 +1,6 @@
 # Reference: PR review in SCM-matching forge container.
 # Canonical source — copy to YOUR_TOWER/.github/workflows/majordomo-review.yml
-# Set MAJORDOMO_GH_IMAGE / MAJORDOMO_GLAB_IMAGE repository variables.
+# Set MAJORDOMO_GH_IMAGE / MAJORDOMO_GLAB_IMAGE / MAJORDOMO_IMAGE repository variables.
 name: majordomo-review
 
 on:
@@ -41,10 +41,30 @@ permissions:
   statuses: write
 
 jobs:
+  prepare-cli:
+    runs-on: ubuntu-latest
+    env:
+      MAJORDOMO_IMAGE: ${{ vars.MAJORDOMO_IMAGE }}
+      TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: bash "${TOWER_SCRIPTS}/extract-majordomo-cli.sh" "${MAJORDOMO_IMAGE}" "${{ github.workspace }}/majordomo"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: majordomo-cli
+          path: majordomo
+
   review:
+    needs: prepare-cli
     runs-on: ubuntu-latest
     container:
       image: ${{ github.event.client_payload.forge_image || inputs.forge_image || ((github.event.client_payload.scm || inputs.scm || 'github') == 'gitlab' && vars.MAJORDOMO_GLAB_IMAGE) || ((github.event.client_payload.scm || inputs.scm || 'github') == 'github' && vars.MAJORDOMO_GH_IMAGE) || '' }}
+    defaults:
+      run:
+        shell: bash
     env:
       SCM: ${{ github.event.client_payload.scm || inputs.scm || 'github' }}
       TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
@@ -52,11 +72,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
-      - uses: actions/setup-go@v6
+      - uses: actions/download-artifact@v6
         with:
-          go-version-file: .majordomo/go.mod
-      - run: go build -o "${{ github.workspace }}/majordomo" ./cmd/majordomo
-        working-directory: .majordomo
+          name: majordomo-cli
+          path: ${{ github.workspace }}
+      - run: chmod +x "${{ github.workspace }}/majordomo"
       - name: Verify forge CLI on PATH
         if: env.SCM == 'github' || env.SCM == 'gitlab'
         run: bash "${TOWER_SCRIPTS}/verify-forge-cli.sh"

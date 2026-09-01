@@ -39,9 +39,12 @@ export REGISTRY_TOKEN="${REGISTRY_TOKEN:-}"
 
 IS_SA_TOOL=false
 IS_AGENT_IMAGE=false
+IS_CLI_IMAGE=false
 if [[ "${DOCKERFILE_PATH}" == *"/sa-tools/"* ]] || [[ "${DOCKERFILE_PATH}" == sa-tools/* ]] \
     || [[ "$(basename "${DOCKERFILE_DIR}")" == "sa-tools" ]]; then
     IS_SA_TOOL=true
+elif [[ "${DOCKERFILE_BASE}" == "Dockerfile.cli" ]]; then
+    IS_CLI_IMAGE=true
 elif [[ "${DOCKERFILE_BASE}" == "Dockerfile.agent" ]] \
     || [[ "${DOCKERFILE_BASE}" == "Dockerfile.gh" ]] \
     || [[ "${DOCKERFILE_BASE}" == "Dockerfile.glab" ]] \
@@ -52,7 +55,7 @@ fi
 if [ "${IS_SA_TOOL}" = true ]; then
     BUILD_CONTEXT="${DOCKERFILE_DIR}"
     DOCKERFILE_FLAG="${DOCKERFILE_ABS}"
-elif [ "${IS_AGENT_IMAGE}" = true ]; then
+elif [ "${IS_AGENT_IMAGE}" = true ] || [ "${IS_CLI_IMAGE}" = true ]; then
     # majordomo root (native checkout) or .majordomo/ (vendored submodule)
     BUILD_CONTEXT="$(cd "${DOCKERFILE_DIR}/.." && pwd)"
     DOCKERFILE_FLAG="${DOCKERFILE_ABS}"
