@@ -15,3 +15,10 @@ Newest first.
 - **Because:** Wire manage-go-releases practice: patch on releasable main merges, skip docs/chore/ci, keep manual tag release, and document the policy for agents.
 - **In order to:** advance context cursor on default first-parent tape
 - **Evidence:** commit 7a1fc98ab39f524e01ab48f04716eaa8a1e94d96; files: .github/workflows/auto-patch-release.yml, README.md
+
+### 2026-09-01 - majordomo - 12689fa22171
+
+- **Did:** Bump artifact actions to Node 24 runtimes. (#12)
+- **Because:** Use upload-artifact@v7 and download-artifact@v8 in reference tower YAMLs.
+- **In order to:** advance context cursor on default first-parent tape
+- **Evidence:** commit 12689fa2217192d154c700642a75d611c6dbaf96; files: pipelines/github-actions/tower/majordomo-context-digest.yml, pipelines/github-actions/tower/majordomo-context-gate.yml, pipelines/github-actions/tower/majordomo-review.yml
