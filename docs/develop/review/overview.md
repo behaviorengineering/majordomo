@@ -1,9 +1,7 @@
 # Overview
 
-<!-- typology:generated -->
+Review is the bounded context for PR review automation, and operators run it through the Majordomo control plane. It turns a change into staged review work, judge runs, and published results without making the caller track each package boundary.
 
-Bounded context review.
+See [README.md](README.md) for the tree hub and [components.md](components.md) for the package table. For how review hangs together with context and operations end to end, read [architecture.md](../../../architecture/architecture.md).
 
-
-
-Human map: slice → Overview → Owns → Subprograms → Surfaces (CLI, UI, API, Jobs). See [README.md](README.md). Domain packages and program indexes live on [components.md](components.md).
+`review` keeps the workflow together so staging, orchestration, judge, cache, report, publish, and status stay in one context instead of becoming separate slices.
