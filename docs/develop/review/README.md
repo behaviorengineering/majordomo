@@ -2,6 +2,8 @@
 
 <!-- typology:generated -->
 
+Automate pull request review from staged changes through published findings.
+
 Human map follows Typology (slice → owns → subprograms → surfaces). DocPageKind files are leaves.
 
 ```text
