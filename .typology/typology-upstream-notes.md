@@ -13,7 +13,7 @@ The journey went through three stages of clarity:
 2. **Intermediate cluster pass (20 slices):** Merged obvious companion packages, but still treated sequential workflow steps as separate peer slices.
 3. **True bounded contexts (3 slices):** Consolidated around domain lifecycles (`review`, `context`, `operations`).
 
-Hand-written narrative that Typology did not generate: [`architecture.md`](architecture.md).
+Hand-written narrative that Typology did not generate: [`architecture.md`](../docs/architecture/architecture.md).
 
 ## What we did by hand (candidate product features)
 
@@ -47,7 +47,7 @@ Hand-written narrative that Typology did not generate: [`architecture.md`](archi
 
 ## LLM architecture narrative (gaps vs `architecture.md`)
 
-What an LLM needed from outside Typology to write [`architecture.md`](architecture.md), and what Typology should supply or prompt for next:
+What an LLM needed from outside Typology to write [`architecture.md`](../docs/architecture/architecture.md), and what Typology should supply or prompt for next:
 
 | Gap ID | Missing from Typology today | Needed so an LLM can auto-generate architecture prose |
 |--------|-----------------------------|------------------------------------------------------|
@@ -96,4 +96,4 @@ What an LLM needed from outside Typology to write [`architecture.md`](architectu
 - `2026-09-02`: Documented anti-patterns and backlog T1–T8.
 - `2026-09-02`: Bumped typology to `v0.0.5`; from-scratch remap still converged to the same 3 slices.
 - `2026-09-02`: Filled seven develop DocPages; journey `done`. Operator found them too thin for “how the system is put together.”
-- `2026-09-03`: Wrote hand architecture narrative `architecture/architecture.md` and expanded this file with LLM narrative gaps N1–N10 and backlog T9–T14.
+- `2026-09-03`: Wrote hand architecture narrative `docs/architecture/architecture.md` and expanded this file with LLM narrative gaps N1–N10 and backlog T9–T14.

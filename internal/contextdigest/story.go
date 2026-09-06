@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
+	"github.com/behaviorengineering/majordomo/internal/judge"
 )
 
 const maxDiffLines = 120
@@ -107,19 +108,14 @@ func WalkCommits(ctxDir string, g *Git, commits []string, at time.Time, regenFee
 }
 
 // walkCommitContexts applies story updates for pre-loaded commit contexts.
-func walkCommitContexts(ctxDir string, commits []CommitContext, at time.Time, regenFeedback string) error {
+func walkCommitContexts(ctxDir string, commits []CommitContext, at time.Time, regenFeedback string, gen judge.Generator) error {
 	for _, cc := range commits {
 		if err := ProcessCommit(ctxDir, cc, at); err != nil {
 			return err
 		}
 	}
-	if err := applyStoryLLM(ctxDir, commits, regenFeedback); err != nil {
-		logf("WARN", "LLM story digest: %v; using rule-based fallback", err)
-		for _, cc := range commits {
-			if err := touchStorySections(ctxDir, cc); err != nil {
-				return err
-			}
-		}
+	if err := applyStoryLLM(ctxDir, commits, regenFeedback, gen); err != nil {
+		return fmt.Errorf("LLM story digest: %w", err)
 	}
 	return nil
 }

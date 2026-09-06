@@ -16,10 +16,10 @@ func TestListBitbucketComments(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"values": []map[string]any{
 				{
-					"action": "COMMENTED",
+					"action":      "COMMENTED",
 					"createdDate": 123,
-					"user": map[string]string{"name": "alice"},
-					"comment": map[string]string{"text": "@majordomo done"},
+					"user":        map[string]string{"name": "alice"},
+					"comment":     map[string]string{"text": "@majordomo done"},
 				},
 				{"action": "REVIEWED"},
 			},

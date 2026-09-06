@@ -1,6 +1,6 @@
 # Majordomo architecture (as-is)
 
-How the Go control plane in this module is put together today. This is the human architecture narrative. The Typology catalog (`typology.yaml`) and `docs/develop/` DocPages are the machine-checked inventory of slices, packages, and bindings. Keep them aligned when either changes.
+How the Go control plane in this module is put together today. This is the human architecture narrative. The Typology catalog (`.typology/typology.yaml`) and `docs/develop/` DocPages are the machine-checked inventory of slices, packages, and bindings. Keep them aligned when either changes.
 
 Audience: maintainers and agents who need to understand the system before changing packages, workflows, or the catalog.
 
@@ -39,11 +39,11 @@ After discover and human cluster-pass, the as-is map is three bounded contexts:
 
 | Slice | Business why | Develop docs |
 |-------|--------------|--------------|
-| **operations** | Host boundary: CLI, poll reconciliation, shared config, outbound HTTP, git HTTPS auth, AI gateway loopback, telemetry, submodule tooling | [overview](../docs/develop/operations/overview.md) · [components](../docs/develop/operations/components.md) · [cli](../docs/develop/operations/cli.md) |
-| **review** | PR/MR review workflow: stage diffs, SA, orchestrate waves, judge, cache, report, publish, status | [overview](../docs/develop/review/overview.md) · [components](../docs/develop/review/components.md) |
-| **context** | Durable served-repo context branch: validate tree, digest catch-up, human gate, grounding packs | [overview](../docs/develop/context/overview.md) · [components](../docs/develop/context/components.md) |
+| **operations** | Host boundary: CLI, poll reconciliation, shared config, outbound HTTP, git HTTPS auth, AI gateway loopback, telemetry, submodule tooling | [overview](../develop/operations/overview.md) · [components](../develop/operations/components.md) · [cli](../develop/operations/cli.md) |
+| **review** | PR/MR review workflow: stage diffs, SA, orchestrate waves, judge, cache, report, publish, status | [overview](../develop/review/overview.md) · [components](../develop/review/components.md) |
+| **context** | Durable served-repo context branch: validate tree, digest catch-up, human gate, grounding packs | [overview](../develop/context/overview.md) · [components](../develop/context/components.md) |
 
-Catalog source of truth: [`typology.yaml`](typology.yaml). Session history: [`typology-journey.md`](typology-journey.md).
+Catalog source of truth: [`.typology/typology.yaml`](../../.typology/typology.yaml).
 
 ### What is not a slice here
 
@@ -72,7 +72,7 @@ poll (operations)
       → publish / status (forge side effects)
 ```
 
-Typical CLI entrypoints (full list on [operations CLI](../docs/develop/operations/cli.md)):
+Typical CLI entrypoints (full list on [operations CLI](../develop/operations/cli.md)):
 
 - `majordomo poll`
 - `majordomo prep …` / `majordomo orchestrate` / `majordomo run review`
@@ -146,7 +146,7 @@ Shared leaves inside operations: `config` (central YAML), `outbound` (retrying H
 
 ## Couplings (why the slices read each other)
 
-From [`typology.yaml`](typology.yaml) `sliceBindings` (all `reads` today):
+From [`.typology/typology.yaml`](../../.typology/typology.yaml) `sliceBindings` (all `reads` today):
 
 | From → To | Why it exists |
 |-----------|----------------|
@@ -160,7 +160,7 @@ From [`typology.yaml`](typology.yaml) `sliceBindings` (all `reads` today):
 Validate these edges with:
 
 ```bash
-go tool typology validate . --catalog architecture/typology.yaml
+go tool typology validate .
 ```
 
 That checks catalog structure, owned paths, and import consistency against the catalog. It does **not** yet check that this prose narrative still matches the catalog.
@@ -183,24 +183,24 @@ control tower (GHA)
    served repo checkout (product code; optional cache / context branches)
 ```
 
-Longer product plan: [`docs/PLAN-control-tower-github-go.md`](../docs/PLAN-control-tower-github-go.md).
+Longer product plan: [`docs/PLAN-control-tower-github-go.md`](../PLAN-control-tower-github-go.md).
 
 ## How Typology fits this doc
 
 | Artefact | Job |
 |----------|-----|
-| `architecture/typology.yaml` | Machine map: slices, owns, surfaces, bindings |
+| `.typology/typology.yaml` | Machine map: slices, owns, surfaces, bindings |
 | `docs/develop/<slice>/…` | Per-slice inventory leaves (overview, components, cli) |
 | **This file** | Assembled system narrative: paths, why, deployment |
 
-Today an agent fills DocPages one leaf at a time from catalog tables. Producing **this** narrative still requires human or agent judgment outside Typology’s emit templates. Gaps for auto-generating prose like this are tracked in [`typology-upstream-notes.md`](typology-upstream-notes.md) (§ LLM architecture narrative).
+Today an agent fills DocPages one leaf at a time from catalog tables. Producing **this** narrative still requires human or agent judgment outside Typology’s emit templates.
 
 ## Change checklist
 
 When you change package layout or domain boundaries:
 
-1. Update or rediscover into `architecture/typology.draft.yaml`, cluster-pass, then copy to `typology.yaml`.
+1. Rediscover into `tmp/typology/typology.yaml`, apply the cluster-pass, then update `.typology/typology.yaml`.
 2. `go tool typology validate .`
 3. Update this narrative if runtime paths or slice meaning changed.
 4. Update the affected `docs/develop/<slice>/` pages (and remove `<!-- typology:generated -->` only after intentional human/agent fill).
-5. Add any new Typology product gaps to `typology-upstream-notes.md`.
+5. Record any new Typology product gaps in the upstream issue tracker.

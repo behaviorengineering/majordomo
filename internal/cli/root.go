@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -709,18 +710,35 @@ func newContextCmd() *cobra.Command {
 	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
 	_ = validate.MarkFlagRequired("dir")
 	var digestConfigDir, digestRepoID, digestWorkDir, digestOut string
+	var digestTypologyBinary, digestModuleScope, digestBootstrapPolicy string
 	var skipStory, skipCompact, forceCompact bool
 	digest := &cobra.Command{
 		Use:   "digest",
 		Short: "Catch up the served-repo context branch when the cursor is behind default HEAD",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			otelCfg := observability.ResolveConfig("")
+			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
+				fmt.Fprintf(os.Stderr, "otel init: %v\n", otelErr)
+			}
+			defer func() {
+				flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_ = observability.Flush(flushCtx)
+				_ = observability.Shutdown(flushCtx)
+			}()
+			_, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.context.digest")
+			defer observability.EndSpanWithStatus(span, &err)
+
 			res, err := contextdigest.Run(contextdigest.Options{
-				ConfigDir:    digestConfigDir,
-				RepoID:       digestRepoID,
-				WorkDir:      digestWorkDir,
-				SkipStory:    skipStory,
-				SkipCompact:  skipCompact,
-				ForceCompact: forceCompact,
+				ConfigDir:             digestConfigDir,
+				RepoID:                digestRepoID,
+				WorkDir:               digestWorkDir,
+				TypologyBinary:        digestTypologyBinary,
+				ModuleScope:           digestModuleScope,
+				BootstrapSurveyPolicy: digestBootstrapPolicy,
+				SkipStory:             skipStory,
+				SkipCompact:           skipCompact,
+				ForceCompact:          forceCompact,
 			})
 			if err != nil {
 				return err
@@ -743,6 +761,9 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().StringVar(&digestRepoID, "repo-id", "", "served repo id")
 	digest.Flags().StringVar(&digestWorkDir, "workdir", "", "served-repo clone with origin remote")
 	digest.Flags().StringVar(&digestOut, "out", "-", "write result JSON (default stdout; logs stay on stdout)")
+	digest.Flags().StringVar(&digestTypologyBinary, "typology-binary", os.Getenv("MAJORDOMO_TYPOLOGY_BINARY"), "Typology executable path")
+	digest.Flags().StringVar(&digestModuleScope, "module-scope", os.Getenv("MAJORDOMO_TYPOLOGY_MODULE_SCOPE"), "Typology module scope within the served repo")
+	digest.Flags().StringVar(&digestBootstrapPolicy, "bootstrap-survey-policy", "auto", "bootstrap survey policy: auto|always|never")
 	digest.Flags().BoolVar(&skipStory, "skip-story", false, "cursor/meta only; skip story and agenting updates")
 	digest.Flags().BoolVar(&skipCompact, "skip-compact", false, "skip chronology compaction")
 	digest.Flags().BoolVar(&forceCompact, "force-compact", false, "run compaction even under entry threshold")

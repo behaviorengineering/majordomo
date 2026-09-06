@@ -137,7 +137,22 @@ func Run(opts Options) error {
 	}
 
 	if useDefaultDispatch {
-		if err := judge.EnsureStropReady(); err != nil {
+		if opts.ConfigDir != "" && opts.RepoID != "" {
+			cfg, err := config.LoadMerged(opts.ConfigDir, opts.RepoID)
+			if err != nil {
+				return err
+			}
+			fallback := ""
+			if pipe, ok := cfg.PipelineNamed(opts.Pipeline); ok {
+				fallback = pipe.Model
+			}
+			if _, err := judge.EnsureRuntimeFromConfig(cfg, judge.RuntimeOptions{
+				Tasks:         judge.ReviewTasks(),
+				FallbackModel: fallback,
+			}); err != nil {
+				return err
+			}
+		} else if err := judge.EnsureStropReady(); err != nil {
 			return err
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextgate"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
+	"github.com/behaviorengineering/majordomo/internal/judge"
 )
 
 // Result describes one digest run outcome.
@@ -26,14 +27,21 @@ type Result struct {
 
 // Options configures majordomo context digest.
 type Options struct {
-	ConfigDir    string
-	RepoID       string
-	WorkDir      string // served-repo clone with origin remote
-	Now          time.Time
-	Forge        *Forge // optional inject for tests
-	SkipStory    bool
-	SkipCompact  bool
-	ForceCompact bool
+	ConfigDir               string
+	RepoID                  string
+	WorkDir                 string // served-repo clone with origin remote
+	Now                     time.Time
+	Forge                   *Forge // optional inject for tests
+	TypologyBinary          string
+	ModuleScope             string
+	BootstrapSurveyRunner   BootstrapSurveyRunner
+	BootstrapStoryGenerator BootstrapStoryGenerator
+	TypologyRefineGenerator TypologyRefineGenerator
+	BootstrapSurveyPolicy   string
+	Judge                   judge.Generator // optional; built from config when nil
+	SkipStory               bool
+	SkipCompact             bool
+	ForceCompact            bool
 }
 
 func logf(level, format string, args ...any) {
@@ -135,6 +143,18 @@ func Run(opts Options) (Result, error) {
 		action = "seed"
 		logf("INFO", "context base branch %s missing; seeding orphan", baseBranch)
 		if err := seedOrphan(ctxDir, baseBranch, cfg.Repository.ID, defaultHEAD, now, token, scm, cfg.Repository.CloneURL); err != nil {
+			return Result{}, err
+		}
+		ctxGit := &Git{Dir: ctxDir, Token: token, SCM: scm}
+		// Story bootstrap lands on the update branch so the first open PR has
+		// commits against the schema-only base (see docs/advanced/10-repo-context-branch.md).
+		if err := CheckoutOrCreate(ctxGit, updateBranch, baseBranch); err != nil {
+			return Result{}, err
+		}
+		if err := ensureDigestJudge(&opts, cfg); err != nil {
+			return Result{}, err
+		}
+		if err := bootstrapContextBranch(ctxDir, opts, cfg.Repository.ID, defaultHEAD, now); err != nil {
 			return Result{}, err
 		}
 		needsWrite = true
@@ -269,7 +289,10 @@ func Run(opts Options) (Result, error) {
 				}
 				commitCtxs = append(commitCtxs, cc)
 			}
-			if err := walkCommitContexts(ctxDir, commitCtxs, now, regenFeedback); err != nil {
+			if err := ensureDigestJudge(&opts, cfg); err != nil {
+				return Result{}, err
+			}
+			if err := walkCommitContexts(ctxDir, commitCtxs, now, regenFeedback, opts.Judge); err != nil {
 				return Result{}, err
 			}
 		}
@@ -328,7 +351,7 @@ func Run(opts Options) (Result, error) {
 	return finishDigestRun(finishParams{
 		cfg: cfg, forge: forge, ctxDir: ctxDir,
 		ctxGit: &Git{Dir: ctxDir, Token: token, SCM: scm},
-		token: token, scm: scm, baseBranch: baseBranch, updateBranch: updateBranch,
+		token:  token, scm: scm, baseBranch: baseBranch, updateBranch: updateBranch,
 		action: action, defaultBranch: defaultBranch, defaultHEAD: defaultHEAD,
 		cursorBefore: cursorBefore, cursorAfter: cursorAfter, commits: commits, needsWrite: needsWrite,
 		gateSidecar: gateSidecar, openPRNum: openPRNum, cloneURL: cfg.Repository.CloneURL,
@@ -336,24 +359,24 @@ func Run(opts Options) (Result, error) {
 }
 
 type finishParams struct {
-	cfg              config.RepoConfig
-	forge            *Forge
-	ctxDir           string
-	ctxGit           *Git
-	token, scm       string
-	baseBranch       string
-	updateBranch     string
-	action           string
-	defaultBranch    string
-	defaultHEAD      string
-	cursorBefore     string
-	cursorAfter      string
-	commits          []string
-	needsWrite       bool
-	gateSidecar      contextgate.Sidecar
-	openPRNum        string
-	cloneURL         string
-	message          string
+	cfg           config.RepoConfig
+	forge         *Forge
+	ctxDir        string
+	ctxGit        *Git
+	token, scm    string
+	baseBranch    string
+	updateBranch  string
+	action        string
+	defaultBranch string
+	defaultHEAD   string
+	cursorBefore  string
+	cursorAfter   string
+	commits       []string
+	needsWrite    bool
+	gateSidecar   contextgate.Sidecar
+	openPRNum     string
+	cloneURL      string
+	message       string
 }
 
 func finishDigestRun(p finishParams) (Result, error) {
@@ -365,9 +388,6 @@ func finishDigestRun(p finishParams) (Result, error) {
 		if p.action == "seed" {
 			if err := Push(p.ctxGit, p.baseBranch); err != nil {
 				return Result{}, fmt.Errorf("push context base: %w", err)
-			}
-			if err := CheckoutOrCreate(p.ctxGit, p.updateBranch, p.baseBranch); err != nil {
-				return Result{}, err
 			}
 		}
 		if err := Push(p.ctxGit, p.updateBranch); err != nil {
@@ -427,6 +447,20 @@ func handleRewrite(ctxDir string, g *Git, cursor, newHead string, at time.Time, 
 	if err := CompleteRewrite(ctxDir, newHead, at); err != nil {
 		return err
 	}
+	return nil
+}
+
+func ensureDigestJudge(opts *Options, cfg config.RepoConfig) error {
+	if opts == nil || opts.Judge != nil || opts.SkipStory {
+		return nil
+	}
+	rt, err := judge.EnsureRuntimeFromConfig(cfg, judge.RuntimeOptions{
+		Tasks: judge.DigestTasks(),
+	})
+	if err != nil {
+		return fmt.Errorf("judge runtime: %w", err)
+	}
+	opts.Judge = rt
 	return nil
 }
 

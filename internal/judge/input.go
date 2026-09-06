@@ -14,4 +14,8 @@ func newMapInput(fields map[string]interface{}, version int) mapInput {
 }
 
 func (m mapInput) ToMap() map[string]interface{} { return m.fields }
-func (m mapInput) GetVersion() int               { return m.version }
+
+// EvaluationMap returns the generator_input bag for EvaluateWorkflow.
+func (m mapInput) EvaluationMap() map[string]interface{} { return m.fields }
+
+func (m mapInput) GetVersion() int { return m.version }

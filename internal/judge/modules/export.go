@@ -11,6 +11,15 @@ func FileReviewModule() core.Module { return fileReviewModule() }
 // DigestStoryModule builds the digest story section generator.
 func DigestStoryModule() core.Module { return digestStoryModule() }
 
+// BootstrapStoryModule builds the bootstrap story generator.
+func BootstrapStoryModule() core.Module { return bootstrapStoryModule() }
+
+// TypologyClusterModule builds the unattended typology cluster-pass generator.
+func TypologyClusterModule() core.Module { return typologyClusterModule() }
+
+// TypologyRefineModule builds the unattended typology refine generator.
+func TypologyRefineModule() core.Module { return typologyRefineModule() }
+
 // SummaryModule builds the summary generator.
 func SummaryModule() core.Module { return summaryModule() }
 

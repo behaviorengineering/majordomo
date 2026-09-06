@@ -6,16 +6,16 @@ import (
 
 // Majordomo summary-score criterion IDs (product pack; not inside strop).
 const (
-	CriterionIDH2Structure          criteria.CriterionID = "majordomo_summary_h2_structure"
-	CriterionIDWhatGotBuiltBlocks   criteria.CriterionID = "majordomo_summary_what_got_built"
-	CriterionIDJudgmentH3           criteria.CriterionID = "majordomo_summary_judgment_h3"
-	CriterionIDNoGenericPhrases     criteria.CriterionID = "majordomo_summary_no_generic_phrases"
-	CriterionIDNoEmDashConnectors   criteria.CriterionID = "majordomo_summary_no_emdash"
-	CriterionIDWhyNamesArtifact     criteria.CriterionID = "majordomo_summary_why_names_artifact"
-	CriterionIDNoFilenamesInProse   criteria.CriterionID = "majordomo_summary_no_filenames_in_prose"
-	CriterionIDCallerFacingH3s      criteria.CriterionID = "majordomo_summary_caller_facing_h3s"
-	CriterionIDNoPrescriptiveFix    criteria.CriterionID = "majordomo_summary_no_prescriptive_fix"
-	CriterionIDTeamConsequence      criteria.CriterionID = "majordomo_summary_team_consequence"
+	CriterionIDH2Structure        criteria.CriterionID = "majordomo_summary_h2_structure"
+	CriterionIDWhatGotBuiltBlocks criteria.CriterionID = "majordomo_summary_what_got_built"
+	CriterionIDJudgmentH3         criteria.CriterionID = "majordomo_summary_judgment_h3"
+	CriterionIDNoGenericPhrases   criteria.CriterionID = "majordomo_summary_no_generic_phrases"
+	CriterionIDNoEmDashConnectors criteria.CriterionID = "majordomo_summary_no_emdash"
+	CriterionIDWhyNamesArtifact   criteria.CriterionID = "majordomo_summary_why_names_artifact"
+	CriterionIDNoFilenamesInProse criteria.CriterionID = "majordomo_summary_no_filenames_in_prose"
+	CriterionIDCallerFacingH3s    criteria.CriterionID = "majordomo_summary_caller_facing_h3s"
+	CriterionIDNoPrescriptiveFix  criteria.CriterionID = "majordomo_summary_no_prescriptive_fix"
+	CriterionIDTeamConsequence    criteria.CriterionID = "majordomo_summary_team_consequence"
 )
 
 // CriterionIDs is the ordered pack used by summary evaluation modules.

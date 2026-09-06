@@ -61,7 +61,9 @@ majordomo context validate --dir <worktree>
 
 ## Bootstrap
 
-Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + recent PR if any), not a reconstruction of the whole tape.
+Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + Typology survey/refine proposal when available), not a reconstruction of the whole tape.
+
+For Go served repos, seed survey runs Typology `discover` / `show graph` / draft `architecture` under the analysis worktree only, then an unattended LLM **cluster + refine** loop with structure sanitize and boundary rubrics (surfaces, debt when findings, objectives). Durable context evidence is refined catalog, journey/cluster notes, post-refine architecture, graph, and manifest under `evidence/typology/` on the update branch. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`.
 
 ## Digest trigger (v1)
 

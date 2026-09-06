@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/behaviorengineering/majordomo/internal/agenting"
+	"gopkg.in/yaml.v3"
 )
 
 // RequiredFiles is the canonical context-branch tree (relative paths).
@@ -53,7 +54,99 @@ func ValidateTree(dir string) error {
 	if err != nil {
 		return err
 	}
+	if err := validateTypologyEvidence(dir); err != nil {
+		return err
+	}
 	return validateAgenting(dir)
+}
+
+func validateTypologyEvidence(dir string) error {
+	evidenceDir := filepath.Join(dir, "evidence", "typology")
+	st, err := os.Stat(evidenceDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("typology evidence: %w", err)
+	}
+	if !st.IsDir() {
+		return fmt.Errorf("typology evidence %s is not a directory", evidenceDir)
+	}
+
+	manifestPath := filepath.Join(evidenceDir, "manifest.yaml")
+	manifest, err := ParseTypologyManifest(manifestPath)
+	if err != nil {
+		return err
+	}
+	if err := ValidateTypologyManifest(manifest); err != nil {
+		return err
+	}
+	if err := validateTypologyEvidenceFile(evidenceDir, manifest.ArchitecturePath); err != nil {
+		return err
+	}
+	if strings.TrimSpace(manifest.SnapshotPath) != "" {
+		if err := validateTypologyEvidenceFile(evidenceDir, manifest.SnapshotPath); err != nil {
+			return err
+		}
+		if err := validateTypologySnapshot(filepath.Join(evidenceDir, manifest.SnapshotPath)); err != nil {
+			return err
+		}
+	}
+	refine := strings.ToLower(strings.TrimSpace(manifest.RefineStatus))
+	if refine == TypologyRefineComplete {
+		for _, rel := range []string{
+			manifest.GraphPath,
+			manifest.PackageContractsPath,
+			manifest.ClusterProposalPath,
+			manifest.RefinedSnapshotPath,
+			manifest.JourneyPath,
+		} {
+			if err := validateTypologyEvidenceFile(evidenceDir, rel); err != nil {
+				return err
+			}
+		}
+		if err := validateTypologySnapshot(filepath.Join(evidenceDir, manifest.RefinedSnapshotPath)); err != nil {
+			return err
+		}
+	}
+	if refine == TypologyRefinePending {
+		for _, rel := range []string{manifest.GraphPath, manifest.PackageContractsPath} {
+			if strings.TrimSpace(rel) == "" {
+				continue
+			}
+			if err := validateTypologyEvidenceFile(evidenceDir, rel); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateTypologyEvidenceFile(baseDir, relPath string) error {
+	joined := filepath.Join(baseDir, relPath)
+	st, err := os.Stat(joined)
+	if err != nil {
+		return fmt.Errorf("typology evidence missing %s: %w", relPath, err)
+	}
+	if st.IsDir() {
+		return fmt.Errorf("typology evidence %s is a directory", relPath)
+	}
+	return nil
+}
+
+func validateTypologySnapshot(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read typology snapshot: %w", err)
+	}
+	var doc any
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parse typology snapshot: %w", err)
+	}
+	if doc == nil {
+		return fmt.Errorf("typology snapshot %s is empty", path)
+	}
+	return nil
 }
 
 func validateAgenting(dir string) error {

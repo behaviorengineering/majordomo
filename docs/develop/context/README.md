@@ -2,6 +2,8 @@
 
 <!-- typology:generated -->
 
+Maintain durable repository context for consistent review jobs.
+
 Human map follows Typology (slice → owns → subprograms → surfaces). DocPageKind files are leaves.
 
 ```text

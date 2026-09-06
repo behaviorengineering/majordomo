@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/behaviorengineering/strop/evaluation"
 	"github.com/behaviorengineering/strop/orchestration"
 	"github.com/behaviorengineering/strop/streaming"
 
@@ -29,20 +28,26 @@ var storySections = []storySection{
 }
 
 type digestSectionRunner struct {
-	cc             CommitContext
-	regenFeedback  string
-	changedFiles   string
+	cc            CommitContext
+	regenFeedback string
+	changedFiles  string
+	gen           judge.Generator
 }
 
 func (r *digestSectionRunner) Run(ctx context.Context, req orchestration.SectionFieldRequest, _ streaming.EventChannel) (*orchestration.SectionFieldResponse, error) {
-	out, err := judge.Generate(ctx, jmodules.TaskDigestStory, map[string]interface{}{
-		"section_id":      req.SectionID,
-		"current_text":    req.SourceText,
-		"commit_subject":  r.cc.Subject,
-		"commit_diff":     r.cc.Diff,
-		"changed_files":   r.changedFiles,
-		"regen_feedback":  r.regenFeedback,
-	}, req.Version)
+	gen := r.gen
+	if gen == nil {
+		gen = packageJudgeGenerator{}
+	}
+	fields := map[string]interface{}{
+		"section_id":     req.SectionID,
+		"current_text":   req.SourceText,
+		"commit_subject": r.cc.Subject,
+		"commit_diff":    r.cc.Diff,
+		"changed_files":  r.changedFiles,
+		"regen_feedback": r.regenFeedback,
+	}
+	out, err := gen.Generate(ctx, jmodules.TaskDigestStory, fields, req.Version)
 	if err != nil {
 		return nil, err
 	}
@@ -50,18 +55,26 @@ func (r *digestSectionRunner) Run(ctx context.Context, req orchestration.Section
 	if strings.TrimSpace(text) == "" {
 		text = req.SourceText
 	}
+	agg, err := gen.Evaluate(ctx, jmodules.TaskDigestStory, fields, map[string]interface{}{
+		"updated_text": text,
+	}, req.Version)
+	if err != nil {
+		return nil, fmt.Errorf("digest story evaluation: %w", err)
+	}
 	return &orchestration.SectionFieldResponse{
 		OutputText: text,
 		Rationale:  "digest story generator",
-		Eval: &evaluation.AggregatedEvaluation{
-			WeightedScore:        10,
-			ConsolidatedFeedback: "ok",
-		},
+		Eval:       agg,
 	}, nil
 }
 
-func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string) error {
-	if !judge.StoryLLMAvailable() {
+func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string, gen judge.Generator) error {
+	if gen == nil {
+		if !judge.StoryLLMAvailable() {
+			return fmt.Errorf("LLM story digest unavailable")
+		}
+		gen = packageJudgeGenerator{}
+	} else if !gen.Ready() {
 		return fmt.Errorf("LLM story digest unavailable")
 	}
 	codec := orchestration.SectionCodec[map[string]string]{
@@ -93,8 +106,8 @@ func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string)
 	def := orchestration.DocumentSectionDefinition{
 		Name:         "majordomo_story",
 		SectionIDs:   sectionIDs,
-		MaxAttempts:  1,
-		MinPassScore: 0,
+		MaxAttempts:  3,
+		MinPassScore: judge.MinEvalPassScore,
 	}
 
 	for _, cc := range commits {
@@ -106,6 +119,7 @@ func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string)
 			cc:            cc,
 			regenFeedback: regenFeedback,
 			changedFiles:  strings.Join(cc.Files, ", "),
+			gen:           gen,
 		}
 		strat := orchestration.NewSectionWalkStrategy(orchestration.SectionWalkConfig[map[string]string]{
 			Sections: def,
