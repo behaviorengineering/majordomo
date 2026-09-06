@@ -132,6 +132,7 @@ Enforce DDD anti-patterns:
 - Do not create standalone cli or platform slices; put CLI under surfaces of the domain they invoke.
 - Do not create projection-as-slice peers.
 - Do not treat exec-adapter packages (for example cliexec with Run/Command exports and hasMain false) as CLI surfaces.
+- Every draft package path must remain claimed under owns[] or surfaces[]; demoting an exec adapter off kind: cli must keep it under owns[], never drop it.
 
 Keep small platform leaves (config, telemetry, auth) separate.
 Record boundary violations and open debt in a debt table.
@@ -167,6 +168,7 @@ Catalog rules:
 - Surfaces are ui, cli, or api interaction artefacts for user-facing delivery.
 - Packages under cmd/, http/api, ui, dashboard, or server MUST sit under surfaces[], not domain-only owns[].
 - Process-exec adapters such as cliexec are infrastructure under owns[], NEVER kind: cli surfaces.
+- Every draft package path MUST appear under owns[] or surfaces[] in the refined catalog. Demoting an exec adapter off kind: cli MUST keep that package under owns[]; MUST NOT drop it.
 - Blank programs are allowed for pure domain slices; do not invent subprograms or actuators without path evidence.
 - Do not emit docs or docs.pages; DocPages are for later human emit, not this proposal.
 - Do not invent history; this is a proposal for the context branch, not a confirmed served-repo catalog.

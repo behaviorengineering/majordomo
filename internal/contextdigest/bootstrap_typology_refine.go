@@ -224,6 +224,10 @@ func isExecAdapterPath(path string) bool {
 }
 
 func looksLikeInteractionPath(path string) bool {
+	// Exec adapters must stay under owns[]; never treat them as delivery surfaces.
+	if isExecAdapterPath(path) {
+		return false
+	}
 	p := strings.ToLower(filepath.ToSlash(strings.TrimSpace(path)))
 	if p == "" {
 		return false
@@ -347,13 +351,14 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID string) (string, error) {
 			typo.ID = id
 		}
 	}
-	allowed, err := loadDraftAllowedPaths(draftYAML)
+	draft, allowed, err := loadDraftCatalog(draftYAML)
 	if err != nil {
 		return "", err
 	}
 	if len(allowed) > 0 {
 		typo = remapInventedCatalogPaths(typo, allowed)
 	}
+	typo = restoreMissingDraftPackages(typo, draft)
 	if err := catalog.SaveYAML(path, typo); err != nil {
 		return "", fmt.Errorf("typology refine save sanitized catalog: %w", err)
 	}
@@ -376,32 +381,35 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID string) (string, error) {
 	if err := rejectInventedCatalogPaths(typo, allowed); err != nil {
 		return "", err
 	}
+	if err := rejectMissingDraftPackages(typo, allowed); err != nil {
+		return "", err
+	}
 	return string(sanitized), nil
 }
 
-func loadDraftAllowedPaths(draftYAML string) (map[string]struct{}, error) {
+func loadDraftCatalog(draftYAML string) (catalog.Typology, map[string]struct{}, error) {
 	draftYAML = strings.TrimSpace(draftYAML)
 	if draftYAML == "" {
-		return nil, nil
+		return catalog.Typology{}, nil, nil
 	}
 	tmp, err := os.CreateTemp("", "majordomo-draft-*.yaml")
 	if err != nil {
-		return nil, fmt.Errorf("typology refine draft temp: %w", err)
+		return catalog.Typology{}, nil, fmt.Errorf("typology refine draft temp: %w", err)
 	}
 	path := tmp.Name()
 	defer os.Remove(path)
 	if _, err := tmp.WriteString(draftYAML); err != nil {
 		_ = tmp.Close()
-		return nil, fmt.Errorf("typology refine write draft temp: %w", err)
+		return catalog.Typology{}, nil, fmt.Errorf("typology refine write draft temp: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		return nil, fmt.Errorf("typology refine close draft temp: %w", err)
+		return catalog.Typology{}, nil, fmt.Errorf("typology refine close draft temp: %w", err)
 	}
 	draft, err := catalog.LoadYAML(path)
 	if err != nil {
-		return nil, fmt.Errorf("typology refine load draft catalog: %w", err)
+		return catalog.Typology{}, nil, fmt.Errorf("typology refine load draft catalog: %w", err)
 	}
-	return collectCatalogPaths(draft), nil
+	return draft, collectCatalogPaths(draft), nil
 }
 
 func remapInventedCatalogPaths(t catalog.Typology, allowed map[string]struct{}) catalog.Typology {
@@ -560,8 +568,127 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
+// restoreMissingDraftPackages reclaims draft package paths the refine LLM dropped.
+// Exec adapters always land under owns[]; interaction paths reattach to surfaces.
+func restoreMissingDraftPackages(refined, draft catalog.Typology) catalog.Typology {
+	if len(draft.Slices) == 0 || len(refined.Slices) == 0 {
+		return refined
+	}
+	claimed := collectCatalogPaths(refined)
+	type missingComp struct {
+		draftSliceID string
+		comp         catalog.Component
+	}
+	var missing []missingComp
+	for _, s := range draft.Slices {
+		add := func(c catalog.Component) {
+			n := normalizeCatalogPath(c.Path)
+			if n == "" {
+				return
+			}
+			if _, ok := claimed[n]; ok {
+				return
+			}
+			missing = append(missing, missingComp{draftSliceID: s.ID, comp: c})
+			claimed[n] = struct{}{}
+		}
+		for _, c := range s.Owns {
+			add(c)
+		}
+		for _, surf := range s.Surfaces {
+			for _, c := range surf.Components {
+				add(c)
+			}
+		}
+	}
+	if len(missing) == 0 {
+		return refined
+	}
+
+	sliceIdx := make(map[string]int, len(refined.Slices))
+	for i, s := range refined.Slices {
+		if id := strings.TrimSpace(s.ID); id != "" {
+			sliceIdx[id] = i
+		}
+	}
+
+	for _, m := range missing {
+		idx := 0
+		if i, ok := sliceIdx[strings.TrimSpace(m.draftSliceID)]; ok {
+			idx = i
+		}
+		c := m.comp
+		if strings.TrimSpace(c.ID) == "" {
+			c.ID = filepath.Base(normalizeCatalogPath(c.Path))
+		}
+		if isExecAdapterPath(c.Path) || !looksLikeInteractionPath(c.Path) {
+			c.Layer = catalog.LayerDomain
+			c.Kind = ""
+			refined.Slices[idx].Owns = append(refined.Slices[idx].Owns, c)
+			continue
+		}
+		kind := inferInteractionKind(c.Path)
+		placed := false
+		for j := range refined.Slices[idx].Surfaces {
+			if refined.Slices[idx].Surfaces[j].Kind == kind {
+				refined.Slices[idx].Surfaces[j].Components = append(refined.Slices[idx].Surfaces[j].Components, c)
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			sid := strings.TrimSpace(refined.Slices[idx].ID)
+			if sid == "" {
+				sid = "slice"
+			}
+			refined.Slices[idx].Surfaces = append(refined.Slices[idx].Surfaces, catalog.Surface{
+				ID:         sid + "-" + string(kind),
+				Kind:       kind,
+				Components: []catalog.Component{c},
+			})
+		}
+	}
+	return refined
+}
+
+func inferInteractionKind(path string) catalog.InteractionKind {
+	p := strings.ToLower(filepath.ToSlash(strings.TrimSpace(path)))
+	switch {
+	case strings.Contains(p, "ui") || strings.Contains(p, "dashboard"):
+		return catalog.InteractionUI
+	case strings.Contains(p, "http") || strings.Contains(p, "api"):
+		return catalog.InteractionAPI
+	default:
+		return catalog.InteractionCLI
+	}
+}
+
+func rejectMissingDraftPackages(refined catalog.Typology, allowed map[string]struct{}) error {
+	if len(allowed) == 0 {
+		return nil
+	}
+	claimed := collectCatalogPaths(refined)
+	var missing []string
+	for p := range allowed {
+		if _, ok := claimed[p]; !ok {
+			missing = append(missing, p)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	var b strings.Builder
+	b.WriteString("unmapped draft packages (must remain under owns[] or surfaces[]; demote exec adapters into owns[], do not drop them):")
+	for _, p := range missing {
+		fmt.Fprintf(&b, "\n- %s", p)
+	}
+	return fmt.Errorf("%s", b.String())
+}
+
 // sanitizeRefinedCatalog drops dangling bindings, moves likely interaction packages
-// onto surfaces, strips invented DocPages, and normalizes common LLM mistakes.
+// onto surfaces, demotes exec adapters into owns[] (never drops them), strips invented
+// DocPages, and normalizes common LLM mistakes.
 func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 	seenComp := make(map[string]string)
 	for i := range t.Slices {

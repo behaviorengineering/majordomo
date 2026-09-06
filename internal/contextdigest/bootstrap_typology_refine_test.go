@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
+	"github.com/behaviorengineering/typology/catalog"
 )
 
 func TestRefineTypologyEvidenceWritesProposal(t *testing.T) {
@@ -358,8 +359,126 @@ slices:
 	if !ok {
 		t.Fatalf("expected sanitize to demote cliexec off kind: cli, feedback=%s\nout=%s", feedback, out)
 	}
-	if !strings.Contains(out, "internal/cliexec") {
+	tmp, err := os.CreateTemp("", "majordomo-demote-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := tmp.Name()
+	defer os.Remove(path)
+	if _, err := tmp.WriteString(out); err != nil {
+		_ = tmp.Close()
+		t.Fatal(err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+	typo, err := catalog.LoadYAML(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned := false
+	onCLI := false
+	for _, s := range typo.Slices {
+		for _, c := range s.Owns {
+			if normalizeCatalogPath(c.Path) == "internal/cliexec" {
+				owned = true
+			}
+		}
+		for _, surf := range s.Surfaces {
+			if surf.Kind != catalog.InteractionCLI {
+				continue
+			}
+			for _, c := range surf.Components {
+				if normalizeCatalogPath(c.Path) == "internal/cliexec" {
+					onCLI = true
+				}
+			}
+		}
+	}
+	if !owned {
 		t.Fatalf("expected cliexec retained under owns, got %s", out)
+	}
+	if onCLI {
+		t.Fatalf("expected cliexec demoted off kind: cli, got %s", out)
+	}
+}
+
+func TestValidateRefinedCatalogYAMLRestoresOmittedExecAdapter(t *testing.T) {
+	raw := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+    surfaces:
+      - id: demo-cli
+        kind: cli
+        components:
+          - id: demo-cmd
+            path: cmd/demo
+`
+	draft := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+      - id: cliexec
+        path: ./internal/cliexec
+    surfaces:
+      - id: demo-cli
+        kind: cli
+        components:
+          - id: demo-cmd
+            path: cmd/demo
+`
+	out, err := validateRefinedCatalogYAML(raw, draft, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp, err := os.CreateTemp("", "majordomo-restore-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := tmp.Name()
+	defer os.Remove(path)
+	if _, err := tmp.WriteString(out); err != nil {
+		_ = tmp.Close()
+		t.Fatal(err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+	typo, err := catalog.LoadYAML(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned := false
+	onCLI := false
+	for _, s := range typo.Slices {
+		for _, c := range s.Owns {
+			if normalizeCatalogPath(c.Path) == "internal/cliexec" {
+				owned = true
+			}
+		}
+		for _, surf := range s.Surfaces {
+			if surf.Kind != catalog.InteractionCLI {
+				continue
+			}
+			for _, c := range surf.Components {
+				if normalizeCatalogPath(c.Path) == "internal/cliexec" {
+					onCLI = true
+				}
+			}
+		}
+	}
+	if !owned {
+		t.Fatalf("expected omitted cliexec restored under owns, got %s", out)
+	}
+	if onCLI {
+		t.Fatalf("expected restored cliexec not on kind: cli, got %s", out)
 	}
 }
 
