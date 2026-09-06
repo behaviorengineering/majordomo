@@ -3,9 +3,12 @@
 #   docker build -t majordomo -f dockerfiles/Dockerfile.cli .
 #   docker create --name md majordomo && docker cp md:/majordomo ./majordomo && docker rm md
 
-FROM golang:1.26.5-bookworm AS build
+FROM golang:1.27-bookworm AS build
 
 WORKDIR /src
+
+# Match go.mod toolchain; auto-download if the base tag lags slightly.
+ENV GOTOOLCHAIN=auto
 
 COPY go.mod go.sum ./
 RUN go mod download
