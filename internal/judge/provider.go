@@ -14,23 +14,9 @@ const defaultModuleTimeout = 2 * time.Minute
 
 // ResolveProvider returns an OpenAI-schema ProviderConfig aimed at the embedded
 // Bifrost loopback. Real Anthropic/OpenAI/Gemini keys are owned by aigateway.
+// Prefer ResolveGatewayProvider or NewRuntime for task-specific models.
 func ResolveProvider() (stropdspy.ProviderConfig, error) {
-	gw, err := aigateway.Ensure()
-	if err != nil {
-		return stropdspy.ProviderConfig{}, err
-	}
-	account, _ := aigateway.NewAccountFromEnv()
-	model := strings.TrimSpace(os.Getenv("MAJORDOMO_MODEL"))
-	if model == "" {
-		model = aigateway.LogicalModel(account)
-	}
-	return stropdspy.ProviderConfig{
-		APIKey:    aigateway.DummyAPIKey,
-		Model:     model,
-		BaseURL:   gw.BaseURL(),
-		APISchema: "openai",
-		Timeout:   "120s",
-	}, nil
+	return ResolveGatewayProvider(strings.TrimSpace(os.Getenv("MAJORDOMO_MODEL")))
 }
 
 // LLMConfigured reports whether the embedded gateway can start (at least one real key).

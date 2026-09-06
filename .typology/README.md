@@ -15,12 +15,23 @@ Before you change this catalog or the code it describes, load these skills:
 
 If your host does not have these skills, install the Typology module and symlink the skills from `$TYPOLOGY_ROOT/skills/` into your host skills directory (see the Typology module `AGENTS.md`).
 
+In this control-tower layout the skills are also linked as:
+
+- `.majordomo/.cursor/skills/typology-journey` (and `typology-catalog`, `typology-cli`, `typology-docs`)
+- tower `.cursor/skills/typology-*` (same names)
+
+## Context digest vs confirmed catalog
+
+`majordomo context digest` seed may run an unattended Typology **cluster + refine** loop and store a **proposal** under the served-repo context branch at `evidence/typology/` (`refined_snapshot.yaml`, `snapshot.yaml`, `journey.md`, `cluster_proposal.md`, post-refine `architecture.md`, `graph.txt`, `manifest.yaml`). Discover drafts stay ephemeral under the analysis worktree (`tmp/typology/`) and are never committed to the context branch. That proposal feeds the teaching story. It does **not** write or emit this repository's confirmed `.typology/typology.yaml`.
+
+Humans promote a proposal into the confirmed catalog with the interactive Typology journey (load `typology-journey`), then `emit` / `validate` here. Digest proposes; operators own the confirmed map.
+
 ## Consumer bootstrap
 
 Before running Typology commands in a consumer, register the CLI as a Go tool:
 
 ```bash
-go run github.com/behaviorengineering/typology/cmd/typology@v0.0.6 init .
+go run github.com/behaviorengineering/typology/cmd/typology@v0.0.7 init .
 go tool typology version
 ```
 

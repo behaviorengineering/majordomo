@@ -201,17 +201,19 @@ type Pipeline struct {
 
 // RepoConfig is one file under majordomo-central-config/<repo-id>.yaml.
 type RepoConfig struct {
-	SCM            string               `yaml:"scm"` // github | gitlab | bitbucket | generic
-	Repository     Repository           `yaml:"repository"`
-	SCMAPI         SCMAPI               `yaml:"scmApi"`
-	Trigger        Trigger              `yaml:"trigger"`
-	Cache          Cache                `yaml:"cache"`
-	PollCache      PollCache            `yaml:"pollCache"`
-	Context        Context              `yaml:"context"`
-	Review         Review               `yaml:"review"`
-	PublishMode    string               `yaml:"publishMode,omitempty"` // legacy alias
-	StaticAnalysis []StaticAnalysisTool `yaml:"staticAnalysis,omitempty"`
-	Pipelines      map[string]Pipeline  `yaml:"pipelines,omitempty"`
+	SCM            string                       `yaml:"scm"` // github | gitlab | bitbucket | generic
+	Repository     Repository                   `yaml:"repository"`
+	SCMAPI         SCMAPI                       `yaml:"scmApi"`
+	Trigger        Trigger                      `yaml:"trigger"`
+	Cache          Cache                        `yaml:"cache"`
+	PollCache      PollCache                    `yaml:"pollCache"`
+	Context        Context                      `yaml:"context"`
+	Review         Review                       `yaml:"review"`
+	PublishMode    string                       `yaml:"publishMode,omitempty"` // legacy alias
+	StaticAnalysis []StaticAnalysisTool         `yaml:"staticAnalysis,omitempty"`
+	Pipelines      map[string]Pipeline          `yaml:"pipelines,omitempty"`
+	AIProviders    map[string]AIProviderConfig  `yaml:"ai_providers,omitempty"`
+	JobConfigs     map[string]JobConfig         `yaml:"job_configs,omitempty"`
 }
 
 // EffectivePublishMode returns review.publishMode, else top-level publishMode, else "auto".

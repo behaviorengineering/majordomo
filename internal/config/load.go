@@ -176,6 +176,8 @@ func mergeConfig(base, over RepoConfig) RepoConfig {
 		out.StaticAnalysis = append([]StaticAnalysisTool(nil), over.StaticAnalysis...)
 	}
 	out.Pipelines = mergePipelines(base.Pipelines, over.Pipelines)
+	out.AIProviders = mergeAIProviders(base.AIProviders, over.AIProviders)
+	out.JobConfigs = mergeJobConfigs(base.JobConfigs, over.JobConfigs)
 	return out
 }
 

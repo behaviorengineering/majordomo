@@ -2,21 +2,13 @@ package judge
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"sync"
 
-	"github.com/XiaoConstantine/dspy-go/pkg/core"
-	"github.com/behaviorengineering/strop/dspy/factory"
 	"github.com/behaviorengineering/strop/dspy/registry"
 	"github.com/behaviorengineering/strop/dspy/runner"
-	dspyTracing "github.com/behaviorengineering/strop/dspy/tracing"
-	"github.com/behaviorengineering/strop/runreport"
+	"github.com/behaviorengineering/strop/evaluation"
 
 	"github.com/behaviorengineering/majordomo/internal/aigateway"
-	"github.com/behaviorengineering/majordomo/internal/observability"
-
-	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 )
 
 var (
@@ -27,67 +19,12 @@ var (
 )
 
 func ensureRegistry() (*registry.ModuleRegistry, *runner.JobRunner, error) {
-	registryOnce.Do(func() {
-		provider, err := ResolveProvider()
-		if err != nil {
-			registryErr = err
-			return
-		}
-		reg := registry.NewModuleRegistry()
-		llmFactory := factory.NewLLMFactory(func(modelID string, providerType string) {
-			reg.RegisterModelProvider(modelID, providerType)
-		}, defaultModuleTimeout)
-		llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
-
-		otelOn := true
-		if v := os.Getenv("MAJORDOMO_OTEL_ENABLED"); v == "0" {
-			otelOn = false
-		}
-		svc := os.Getenv("MAJORDOMO_OTEL_SERVICE_NAME")
-		if svc == "" {
-			svc = observability.DefaultServiceName
-		}
-		interceptorSetup := factory.NewInterceptorSetup(
-			otelOn, svc, nil, defaultModuleTimeout,
-			dspyTracing.OpenInferenceModuleInterceptor,
-			nil,
-			reg.GetModelProvider,
-			reg.GetModuleModel,
-			func(moduleName, modelID string) { reg.RegisterModuleModel(moduleName, modelID) },
-			nil,
-			runreport.Config{},
-		)
-		configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
-		genFactory := factory.NewGeneratorFactory(configurator)
-		ctx := context.Background()
-
-		type entry struct {
-			task string
-			new  func() core.Module
-		}
-		for _, e := range []entry{
-			{jmodules.TaskFileReview, jmodules.FileReviewModule},
-			{jmodules.TaskDigestStory, jmodules.DigestStoryModule},
-			{jmodules.TaskSummary, jmodules.SummaryModule},
-			{jmodules.TaskTechnical, jmodules.TechnicalModule},
-		} {
-			mod, err := genFactory.CreateGenerator(ctx, provider, func() (core.Module, error) {
-				return e.new(), nil
-			}, e.task, nil)
-			if err != nil {
-				registryErr = fmt.Errorf("register %s: %w", e.task, err)
-				return
-			}
-			reg.RegisterGenerator(e.task, mod)
-		}
-
-		sharedReg = reg
-		sharedRunner = NewJobRunner(reg, nil, nil, nil)
-	})
-	if registryErr != nil {
-		return nil, nil, registryErr
+	rt, err := DefaultRuntime()
+	if err != nil {
+		registryErr = err
+		return nil, nil, err
 	}
-	return sharedReg, sharedRunner, nil
+	return rt.reg, rt.runner, nil
 }
 
 // StropReady reports whether strop generator modules are registered and an LLM key is configured.
@@ -111,19 +48,27 @@ func SharedRunner() (*runner.JobRunner, error) {
 	return jr, err
 }
 
-// Generate runs one registered generator task.
+// Generate runs one registered generator task on the process-wide runtime.
 func Generate(ctx context.Context, task string, fields map[string]interface{}, version int) (map[string]interface{}, error) {
-	jr, err := SharedRunner()
+	rt, err := DefaultRuntime()
 	if err != nil {
 		return nil, err
 	}
-	cfg := runner.GenerationConfig{
-		ModuleName:   task,
-		JobName:      task,
-		StepName:     task,
-		ErrorMessage: task,
+	return rt.Generate(ctx, task, fields, version)
+}
+
+// Evaluate runs one registered evaluation workflow on the process-wide runtime.
+func Evaluate(
+	ctx context.Context,
+	task string,
+	inputFields, outputFields map[string]interface{},
+	version int,
+) (*evaluation.AggregatedEvaluation, error) {
+	rt, err := DefaultRuntime()
+	if err != nil {
+		return nil, err
 	}
-	return jr.Generate(ctx, cfg, newMapInput(fields, version), nil)
+	return rt.Evaluate(ctx, task, inputFields, outputFields, version)
 }
 
 // StoryLLMAvailable is true when digest story generation can call strop.
@@ -137,5 +82,10 @@ func ResetRegistryForTests() {
 	registryErr = nil
 	sharedReg = nil
 	sharedRunner = nil
+	defaultRuntimeOnce = sync.Once{}
+	defaultRuntimeMu.Lock()
+	defaultRuntime = nil
+	defaultRuntimeErr = nil
+	defaultRuntimeMu.Unlock()
 	aigateway.ResetForTests()
 }

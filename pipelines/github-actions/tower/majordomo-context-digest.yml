@@ -29,6 +29,11 @@ jobs:
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - run: bash "${TOWER_SCRIPTS}/extract-majordomo-cli.sh" "${MAJORDOMO_IMAGE}" "${{ github.workspace }}/majordomo"
+      - name: Build Typology CLI
+        run: |
+          set -euo pipefail
+          GOBIN="${{ github.workspace }}" go install github.com/behaviorengineering/typology/cmd/typology@v0.0.8
+          chmod +x "${{ github.workspace }}/typology"
       - id: plan
         run: |
           set -euo pipefail
@@ -39,6 +44,10 @@ jobs:
         with:
           name: majordomo-cli
           path: majordomo
+      - uses: actions/upload-artifact@v7
+        with:
+          name: typology-cli
+          path: typology
 
   digest:
     needs: plan
@@ -51,7 +60,9 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
     env:
+      REPO_ID: ${{ matrix.repo_id }}
       SCM: ${{ matrix.scm }}
+      MODULE_SCOPE: ${{ matrix.module_scope || '' }}
       TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
     steps:
       - uses: actions/checkout@v6
@@ -61,7 +72,20 @@ jobs:
         with:
           name: majordomo-cli
           path: ${{ github.workspace }}
-      - run: chmod +x "${{ github.workspace }}/majordomo"
+      - uses: actions/download-artifact@v8
+        with:
+          name: typology-cli
+          path: ${{ github.workspace }}
+      - run: chmod +x "${{ github.workspace }}/majordomo" "${{ github.workspace }}/typology"
       - run: bash "${TOWER_SCRIPTS}/verify-forge-cli.sh"
       - run: bash "${TOWER_SCRIPTS}/clone-served-repo.sh" served/repo
-      # … majordomo context digest (see xynova/majordomo-tower)
+      - run: |
+          set -euo pipefail
+          ./majordomo context digest \
+            --config-dir majordomo-central-config \
+            --repo-id "${REPO_ID}" \
+            --workdir "${PWD}/served/repo" \
+            --typology-binary "${PWD}/typology" \
+            --module-scope "${MODULE_SCOPE}" \
+            --bootstrap-survey-policy auto \
+            --out digest-result.json

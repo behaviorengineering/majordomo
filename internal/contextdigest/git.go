@@ -219,9 +219,10 @@ func CommitAll(g *Git, message string) (bool, error) {
 	return true, err
 }
 
-// Push pushes local HEAD to origin branch.
+// Push pushes the named local branch to origin (by ref, not by HEAD).
 func Push(g *Git, branch string) error {
-	_, err := g.run("push", "origin", "HEAD:"+branch)
+	ref := "refs/heads/" + branch
+	_, err := g.run("push", "origin", ref+":"+ref)
 	return err
 }
 
