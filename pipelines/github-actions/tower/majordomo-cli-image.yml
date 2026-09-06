@@ -8,6 +8,8 @@ on:
   push:
     branches: [main, master]
     paths:
+      # Tower copies: gitlink-only submodule pins do not match nested paths.
+      - ".majordomo"
       - ".majordomo/dockerfiles/Dockerfile.cli"
       - ".majordomo/go.mod"
       - ".majordomo/go.sum"
@@ -17,6 +19,7 @@ on:
       - ".github/workflows/majordomo-cli-image.yml"
   pull_request:
     paths:
+      - ".majordomo"
       - ".majordomo/dockerfiles/Dockerfile.cli"
       - ".majordomo/go.mod"
       - ".majordomo/go.sum"
