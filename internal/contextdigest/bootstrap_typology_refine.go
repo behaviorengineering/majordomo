@@ -601,10 +601,22 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 				if owner, ok := seenComp[c.ID]; ok && owner != s.ID {
 					continue
 				}
+				// Exec adapters are never CLI delivery surfaces; demote to owns[].
+				if surf.Kind == catalog.InteractionCLI && isExecAdapterPath(c.Path) {
+					c.Layer = catalog.LayerDomain
+					seenComp[c.ID] = s.ID
+					s.Owns = append(s.Owns, c)
+					continue
+				}
 				seenComp[c.ID] = s.ID
 				comps = append(comps, c)
 			}
 			surf.Components = comps
+			if len(comps) == 0 && surf.Kind == catalog.InteractionCLI {
+				// Drop empty CLI surfaces created only for mis-placed adapters.
+				delete(seenKind, surf.Kind)
+				continue
+			}
 			surfaces = append(surfaces, surf)
 		}
 		if len(moved) > 0 {

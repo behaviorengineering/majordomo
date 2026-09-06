@@ -321,6 +321,48 @@ slices:
 	}
 }
 
+func TestValidateRefinedCatalogYAMLDemotesExecAdapterOffCLISurface(t *testing.T) {
+	raw := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+    surfaces:
+      - id: demo-cli
+        kind: cli
+        components:
+          - id: demo-cmd
+            path: cmd/demo
+          - id: cliexec
+            path: ./internal/cliexec
+`
+	draft := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+      - id: cliexec
+        path: ./internal/cliexec
+      - id: demo-cmd
+        path: cmd/demo
+`
+	out, err := validateRefinedCatalogYAML(raw, draft, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok, feedback := evaluateTypologyBoundaries(out, "# Journey\n\n## Status\n\nOpen.\n\n## Technical debt & boundary violations\n\n| Violation | Severity | Notes |\n| --- | --- | --- |\n| sample | low | recorded |\n", "## Findings\n\n- sample\n")
+	if !ok {
+		t.Fatalf("expected sanitize to demote cliexec off kind: cli, feedback=%s\nout=%s", feedback, out)
+	}
+	if !strings.Contains(out, "internal/cliexec") {
+		t.Fatalf("expected cliexec retained under owns, got %s", out)
+	}
+}
+
 func TestEvaluateTypologyBoundariesRejectsExecAdapterCLISurface(t *testing.T) {
 	refined := `id: demo
 slices:
