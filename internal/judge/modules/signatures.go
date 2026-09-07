@@ -133,9 +133,10 @@ Enforce DDD anti-patterns:
 - Do not create standalone cli or platform slices; put CLI under surfaces of the domain they invoke.
 - Do not create projection-as-slice peers.
 - Do not treat exec-adapter packages (for example cliexec with Run/Command exports and hasMain false) as CLI surfaces.
-- Every draft package path must remain claimed under owns[] or surfaces[]; demoting an exec adapter off kind: cli must keep it under owns[], never drop it.
+- Every draft package path must remain claimed under owns[] or surfaces[] or libraries[].owns[]; demoting an exec adapter off kind: cli must keep it under owns[], never drop it.
 
-Keep small platform leaves (config, telemetry, auth) separate.
+Declare domain-free platform utility leaves (config, telemetry, auth, logger) under libraries[] with a technical purpose when the draft or graph shows them. Prefer libraries over inventing a platform slice or stuffing them into an arbitrary domain hub.
+Propose library placement and slice-to-library bindings as operator-facing debt when humans have not confirmed them; do not treat draft library rows as final approvals.
 Record boundary violations and open debt in a debt table.
 Output markdown only with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale.
 Do not emit catalog YAML in this step.`)
@@ -165,18 +166,21 @@ Use package_contracts when placing packages: hasMain or real cmd/ delivery packa
 Catalog rules:
 - Every slice MUST have a non-empty business objective that states why the bounded context exists in one concrete sentence (for example who it serves and what outcome it owns).
 - MUST NOT use hollow template objectives such as "Provide X functionality", "Provide X capabilities", or "Provide X services".
-- Components are packages under owns or under surfaces.
+- Components are packages under owns, under surfaces, or under libraries[].owns.
+- Libraries are technical package groups with a purpose and owns[] only (no surfaces, programs, or docs). Use them for domain-free utilities (config, llm clients, exec helpers without product knowledge).
+- MUST NOT invent libraries[] membership or slice-to-library bindings to clear findings. Keep draft library rows only when the discover draft already listed them; otherwise propose library vs slice placement as journey debt for humans.
+- MUST NOT invent a platform or capability slice to claim those packages.
 - Surfaces are ui, cli, or api interaction artefacts for user-facing delivery.
 - Packages under cmd/, http/api, ui, dashboard, or server MUST sit under surfaces[], not domain-only owns[].
-- Process-exec adapters such as cliexec are infrastructure under owns[], NEVER kind: cli surfaces.
-- Every draft package path MUST appear under owns[] or surfaces[] in the refined catalog. Demoting an exec adapter off kind: cli MUST keep that package under owns[]; MUST NOT drop it.
+- Process-exec adapters such as cliexec are infrastructure under owns[] or a library when they have no domain knowledge, NEVER kind: cli surfaces.
+- Every draft package path MUST appear under owns[], surfaces[], or libraries[].owns[] in the refined catalog. Demoting an exec adapter off kind: cli MUST keep that package claimed; MUST NOT drop it.
 - Blank programs are allowed for pure domain slices; do not invent subprograms or actuators without path evidence.
 - Do not emit docs or docs.pages; DocPages are for later human emit, not this proposal.
 - Do not invent history; this is a proposal for the context branch, not a confirmed served-repo catalog.
 - Preserve real package paths from the draft and graph verbatim in every component path: field (with or without ./ is fine).
 - MUST NOT invent or rewrite filesystem package folders (for example localgit -> git/local). Put desired folder renames in the journey debt table only.
 - Slice ids MAY rename or merge; package path: values MUST still match draft/graph paths.
-- Include sliceBindings/componentBindings only when evidenced by the draft or graph narrative in the proposal.
+- Include sliceBindings/componentBindings only when evidenced by the draft or graph narrative in the proposal. SliceBinding from remains a slice; to may be a slice or library when humans already confirmed that coupling in the draft.
 - Journey markdown MUST include Status, decisions taken, and a Technical debt and boundary violations table.
 - Journey debt rows describe remaining open work only. If Status says refinement is complete, do not keep "Merge into" as a pending action.
 - If the architecture draft still lists findings, the debt table MUST have at least one concrete row (not "None").
@@ -199,22 +203,23 @@ func typologyHumanInterventionModule() *dspymodules.DirectivesCoT {
 		},
 		[]core.OutputField{
 			out("journey_md", "Updated journey with open Status and debt covering every finding"),
-			out("human_intervention_md", "Operator-facing priority decisions humans must make"),
+			out("human_intervention_md", "Tutor-voice operator briefing of priority decisions humans must make"),
 			out("weaknesses_seed_md", "Weaknesses markdown bullets for bootstrap story seeding"),
-			out("pr_priority_md", "Short priority bullets for the context PR body"),
+			out("pr_priority_md", "Context PR summary markdown in tutor voice for a cold reader"),
 		},
 	).WithInstruction(`You are the Majordomo human-intervention flagger after Typology refine.
 Humans give direction and leadership. Your job is to surface architecture findings the unattended refine must NOT invent away.
 
 Rules:
 - findings_list is authoritative. Every finding MUST appear in journey debt, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
-- MUST NOT invent sliceBindings, rewrite package ownership, or invent catalog YAML to clear findings.
-- Frame each finding as a human decision: approve a binding, merge slices, or accept temporary debt.
+- MUST NOT invent sliceBindings, libraries[] rows, rewrite package ownership, or invent catalog YAML to clear findings.
+- Frame each finding as a human decision: approve a binding (including slice-to-library), confirm a library vs slice placement, merge slices, or accept temporary debt.
+- Missing slice-to-library bindings are human decisions the same way missing slice-to-slice bindings are.
 - When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
 - Journey MUST include Status, decisions already taken, and a Technical debt and boundary violations table that names every finding.
-- human_intervention_md is markdown for operators: priorities, what not to invent, evidence pointers into architecture/journey.
+- human_intervention_md is a tutor briefing for operators: situation, why it matters, the decision, and evidence pointers into architecture/journey.
 - weaknesses_seed_md is markdown bullets suitable for weaknesses.md (same priorities).
-- pr_priority_md is a short scannable bullet list for the GitHub PR body (no long preamble).
+- pr_priority_md is the GitHub context-PR summary a cold reader sees first. Write it in a tutor voice. Assume the reader has never seen this repo. Lead with what is going on and why it matters, then the human choice. Gloss jargon in the same sentence (a SliceBinding is an approved allowed coupling from a bounded context to another slice or to a library; a library is a technical package group with no product objective). Name packages by role (UI, git adapters, CLI runner, shared config) as well as id so coverage checks still match. MUST NOT use only imperative task titles such as "Formalize Config Access". MUST NOT dump catalog ids without a gloss.
 - When findings_list is empty, say no open architecture findings and keep Status coherent with an empty/open debt note.
 - When validation_feedback is present, fix those issues before emitting.
 
