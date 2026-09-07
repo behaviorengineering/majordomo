@@ -57,13 +57,15 @@ or journey debt contradicts Status.`,
 		evaluatorLabel:    "Typology Intervention Evaluator",
 		consolidatorLabel: "Typology Intervention Consolidator",
 		criterionIDs:      typologypack.InterventionCriterionIDs,
-		focusAreas:        "human-decision coverage of architecture findings without inventing bindings",
+		focusAreas:        "human-decision coverage of architecture findings without inventing bindings; tutor-voice cold-read PR summary",
 		feedbackSuffix: `Score generator_output journey_md, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
 Reject missing findings from findings_list.
 Reject Status complete while findings remain.
-Reject invented sliceBindings or ownership rewrites that pretend findings are resolved.`,
-		scoreSuffix:        `Prefer low scores when priorities omit findings or invent architecture decisions for humans.`,
-		consolidatorSuffix: "Merge intervention feedback. Prefer complete human callouts over polish.",
+Reject invented sliceBindings, libraries membership, or ownership rewrites that pretend findings are resolved.
+Reject pr_priority_md that is only imperative task titles or catalog jargon with no gloss (for example "Formalize Config Access: Resolve missing bindings").
+Reject copy that assumes the reader already knows SliceBinding, package roles, or why the seed cannot invent approvals.`,
+		scoreSuffix:        `Prefer low scores when priorities omit findings, invent architecture decisions, or fail a cold read.`,
+		consolidatorSuffix: "Merge intervention feedback. Prefer complete human callouts and tutor-voice explanations over polish.",
 	},
 	jmodules.TaskBootstrapStory: {
 		evaluatorKey:      "bootstrap_quality",

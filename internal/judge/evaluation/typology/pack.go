@@ -9,9 +9,10 @@ const (
 	CriterionIDAdapterSurfaces   criteria.CriterionID = "majordomo_typology_adapter_surfaces"
 	CriterionIDJourneyConsistent criteria.CriterionID = "majordomo_typology_journey_consistent"
 
-	CriterionIDInterventionCoverage criteria.CriterionID = "majordomo_typology_intervention_coverage"
-	CriterionIDInterventionNoInvent criteria.CriterionID = "majordomo_typology_intervention_no_invent"
-	CriterionIDInterventionStatus   criteria.CriterionID = "majordomo_typology_intervention_status"
+	CriterionIDInterventionCoverage   criteria.CriterionID = "majordomo_typology_intervention_coverage"
+	CriterionIDInterventionNoInvent   criteria.CriterionID = "majordomo_typology_intervention_no_invent"
+	CriterionIDInterventionStatus     criteria.CriterionID = "majordomo_typology_intervention_status"
+	CriterionIDInterventionTutorVoice criteria.CriterionID = "majordomo_typology_intervention_tutor_voice"
 )
 
 // CriterionIDs is the typology refine boundary rubric pack.
@@ -28,6 +29,7 @@ var InterventionCriterionIDs = []criteria.CriterionID{
 	CriterionIDInterventionCoverage,
 	CriterionIDInterventionNoInvent,
 	CriterionIDInterventionStatus,
+	CriterionIDInterventionTutorVoice,
 }
 
 // Register adds typology refine rubrics onto the shared strop criterion registry.
@@ -92,9 +94,9 @@ func Register(r *criteria.CriterionRegistry) {
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDInterventionNoInvent,
 		Name:        "Do not invent architecture to clear findings",
-		Description: `The flagger must not invent sliceBindings or rewrite package ownership to dismiss findings. It requests human decisions.`,
-		Scoring: `2 points: Outputs ask humans to approve bindings, merges, or temporary debt without inventing catalog fixes.
-0 points: Output invents bindings or ownership changes as if findings were resolved.`,
+		Description: `The flagger must not invent sliceBindings, libraries membership, or rewrite package ownership to dismiss findings. It requests human decisions.`,
+		Scoring: `2 points: Outputs ask humans to approve bindings (including slice-to-library), library vs slice placement, merges, or temporary debt without inventing catalog fixes.
+0 points: Output invents bindings, libraries, or ownership changes as if findings were resolved.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})
@@ -105,6 +107,15 @@ func Register(r *criteria.CriterionRegistry) {
 		Scoring: `1 point: Status remains open while findings exist, or findings are empty.
 0 points: Status claims complete while findings remain.`,
 		MaxPoints: 1.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDInterventionTutorVoice,
+		Name:        "PR priority is a cold-read tutor briefing",
+		Description: `pr_priority_md (and human_intervention_md) must teach a reader who has never seen this repo. Gloss jargon in the same sentence. Lead with situation and why, then the human decision. Keep package or slice ids so coverage still matches.`,
+		Scoring: `2 points: Each finding is explained in product terms with a gloss and a decision.
+0 points: Jargon-only bullets or imperative titles such as "Formalize Config Access" with no explanation.`,
+		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})
 }
