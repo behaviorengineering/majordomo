@@ -42,10 +42,12 @@ On `majordomo-context/<repo-id>`:
 README.md           how to read; never-merge-to-default; humans talk on the PR, do not edit
 meta.yaml           schema_version, repo_id, last_merged_sha, last_digest_at
 mission.md          why the project exists
-architecture.md     layers, entrypoints, ownership (living story)
+architecture.md     teaching story (layers, entrypoints, ownership)
 conventions.md      how this repo is built and reviewed
 weaknesses.md       known risks; cite chronology headings when claiming history
 chronology.md       important evidenced decisions, newest first; compactable
+evidence/typology/  Typology seed proposal for this digest (not confirmed catalog)
+  architecture_brief.md  Typology architecture brief (not the teaching story)
 agenting/           grounding packs for review (not review SKILL.md)
   index.yaml        pack id → globs + modes
   <area>/GROUNDING.md
@@ -63,7 +65,7 @@ majordomo context validate --dir <worktree>
 
 Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + Typology survey/refine proposal when available), not a reconstruction of the whole tape.
 
-For Go served repos, seed survey runs Typology `discover` / `show graph` / draft `architecture` under the analysis worktree only, then an unattended LLM **cluster + refine** loop with structure sanitize and boundary rubrics (surfaces, debt when findings, objectives). After post-refine architecture, a dedicated **human-intervention** step flags remaining architecture findings as operator decisions (approve bindings, merge slices, or accept temporary debt). It must not invent `sliceBindings` or package moves to clear findings. It rewrites journey Status/debt so open findings cannot hide under "complete", seeds `weaknesses.md` with the same priorities, and writes `evidence/typology/human_intervention.md` plus optional `pr_priority.md`. Durable context evidence is refined catalog, journey/cluster notes, post-refine architecture, human-intervention notes, graph, and manifest under `evidence/typology/` on the update branch. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. When priorities exist, the context update PR body leads with a **Priority: human decisions** section so operators see open Typology decisions first.
+For Go served repos, seed survey runs Typology `discover` / `show graph` / draft `architecture` under the analysis worktree only, then an unattended LLM **cluster + refine** loop with structure sanitize and boundary rubrics (surfaces, debt when findings, objectives). After post-refine architecture, a dedicated **human-intervention** step flags remaining architecture findings as operator decisions (approve bindings, merge slices, or accept temporary debt). It must not invent `sliceBindings` or package moves to clear findings. It rewrites journey Status/debt so open findings cannot hide under "complete", seeds `weaknesses.md` with the same priorities, and writes `evidence/typology/human_intervention.md` plus optional `pr_priority.md`. Durable context evidence is refined catalog, journey/cluster notes, post-refine `architecture_brief.md`, human-intervention notes, graph, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. When priorities exist, the context update PR body leads with a **Priority: human decisions** section so operators see open Typology decisions first.
 
 ## Digest trigger (v1)
 

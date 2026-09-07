@@ -52,7 +52,7 @@ slices:
 		Mode:                 contextstore.TypologyModeDiscover,
 		ModuleScope:          ".",
 		SnapshotPath:         "snapshot.yaml",
-		ArchitecturePath:     "architecture.md",
+		ArchitecturePath:     contextstore.TypologyArchitectureBriefPath,
 		RefineStatus:         contextstore.TypologyRefinePending,
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
@@ -92,7 +92,7 @@ slices:
 	if updated.HumanInterventionPath != "human_intervention.md" {
 		t.Fatalf("human_intervention_path=%q", updated.HumanInterventionPath)
 	}
-	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", "architecture.md", "human_intervention.md"} {
+	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md"} {
 		if _, err := os.Stat(filepath.Join(evidence, name)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

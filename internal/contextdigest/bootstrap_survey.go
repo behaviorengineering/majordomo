@@ -141,7 +141,7 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		Mode:                 mode,
 		ModuleScope:          moduleScope,
 		SnapshotPath:         "snapshot.yaml",
-		ArchitecturePath:     "architecture.md",
+		ArchitecturePath:     contextstore.TypologyArchitectureBriefPath,
 		RefineStatus:         contextstore.TypologyRefinePending,
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
@@ -157,7 +157,8 @@ func writeFallbackSurvey(input BootstrapSurveyInput) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(input.EvidenceDir, "architecture.md"), []byte(architecture), 0o644); err != nil {
+	architecture = ensureTypologyArchitectureBanner(architecture)
+	if err := os.WriteFile(filepath.Join(input.EvidenceDir, contextstore.TypologyArchitectureBriefPath), []byte(architecture), 0o644); err != nil {
 		return err
 	}
 	manifest := contextstore.TypologyManifest{
@@ -165,7 +166,7 @@ func writeFallbackSurvey(input BootstrapSurveyInput) error {
 		SourceSHA:        input.SourceSHA,
 		GeneratedAt:      input.GeneratedAt.UTC().Format(time.RFC3339),
 		Mode:             contextstore.TypologyModeFallback,
-		ArchitecturePath: "architecture.md",
+		ArchitecturePath: contextstore.TypologyArchitectureBriefPath,
 		RefineStatus:     contextstore.TypologyRefineSkipped,
 	}
 	return writeTypologyManifest(input.EvidenceDir, manifest)

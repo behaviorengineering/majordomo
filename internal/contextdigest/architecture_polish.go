@@ -15,6 +15,7 @@ func polishTypologyArchitectureBrief(path string) error {
 		return fmt.Errorf("polish typology architecture: read %s: %w", path, err)
 	}
 	body := polishTypologyArchitectureBriefText(string(raw), filepath.Dir(path))
+	body = ensureTypologyArchitectureBanner(body)
 	if body == string(raw) {
 		return nil
 	}

@@ -63,9 +63,12 @@ Leaves (out-degree 0):
 	if !strings.Contains(body, "- `./cmd/gitboard`") {
 		t.Fatalf("expected graph package inventory:\n%s", body)
 	}
+	if !strings.Contains(body, typologyArchitectureRoleMarker) {
+		t.Fatalf("expected Typology evidence banner:\n%s", body)
+	}
 }
 
-func TestPolishTypologyArchitectureBriefNoopWhenAlreadyGood(t *testing.T) {
+func TestPolishTypologyArchitectureBriefAddsBannerWhenAlreadyGood(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "architecture.md")
 	raw := `## Observed topology
@@ -80,12 +83,14 @@ The repository contains **3 Go packages** in the inspected modules:
 	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := os.ReadFile(path)
 	if err := polishTypologyArchitectureBrief(path); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := os.ReadFile(path)
-	if string(before) != string(after) {
-		t.Fatalf("expected noop, got:\n%s", after)
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(after), typologyArchitectureRoleMarker) {
+		t.Fatalf("expected Typology evidence banner:\n%s", after)
 	}
 }

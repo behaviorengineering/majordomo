@@ -172,7 +172,7 @@ func matchSimpleGlob(pattern, name string) bool {
 func ReshapeStory(ctxDir, newHead, why string) error {
 	note := fmt.Sprintf("# Architecture\n\nReshaped after history rewrite (HEAD `%s`).\n\n**Why:** %s\n\nRe-read the codebase on default; prior first-parent tape is obsolete.\n",
 		shortSHA(newHead), strings.TrimSpace(why))
-	if err := os.WriteFile(filepath.Join(ctxDir, "architecture.md"), []byte(note), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(ctxDir, "architecture.md"), []byte(ensureStoryArchitectureBanner(note)), 0o644); err != nil {
 		return err
 	}
 	return nil

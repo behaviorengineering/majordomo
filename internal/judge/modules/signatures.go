@@ -88,6 +88,7 @@ Prefer the refined Typology catalog and journey notes over raw package inventory
 The README should describe the context branch and its seed origin.
 Mission, architecture, conventions, and weaknesses must be evidence-backed and should not mention historical events that are not in the supplied evidence.
 Architecture should describe proposed bounded contexts (slices), surfaces, and known boundary debt from the journey notes.
+Root architecture_md is the teaching story for humans and review grounding. Keep the Typology evidence brief (typology_architecture input) as source material; do not pretend it is the confirmed catalog.
 Do not copy hollow template slice objectives; paraphrase into concrete teaching language grounded in the catalog and README.
 Chronology must stay honest, with at most a single explicit seed marker. Do not reconstruct past decisions.
 The grounding output should summarize the accepted mission and architecture for agenting.
