@@ -138,6 +138,9 @@ func TestJobForTask(t *testing.T) {
 	if JobForTask("bootstrap_story") != JobContextDigest {
 		t.Fatal("bootstrap")
 	}
+	if JobForTask("typology_human_intervention") != JobContextDigest {
+		t.Fatal("typology_human_intervention")
+	}
 	if JobForTask("filereview") != JobPRReview {
 		t.Fatal("filereview")
 	}

@@ -27,21 +27,22 @@ type Result struct {
 
 // Options configures majordomo context digest.
 type Options struct {
-	ConfigDir               string
-	RepoID                  string
-	WorkDir                 string // served-repo clone with origin remote
-	Now                     time.Time
-	Forge                   *Forge // optional inject for tests
-	TypologyBinary          string
-	ModuleScope             string
-	BootstrapSurveyRunner   BootstrapSurveyRunner
-	BootstrapStoryGenerator BootstrapStoryGenerator
-	TypologyRefineGenerator TypologyRefineGenerator
-	BootstrapSurveyPolicy   string
-	Judge                   judge.Generator // optional; built from config when nil
-	SkipStory               bool
-	SkipCompact             bool
-	ForceCompact            bool
+	ConfigDir                  string
+	RepoID                     string
+	WorkDir                    string // served-repo clone with origin remote
+	Now                        time.Time
+	Forge                      *Forge // optional inject for tests
+	TypologyBinary             string
+	ModuleScope                string
+	BootstrapSurveyRunner      BootstrapSurveyRunner
+	BootstrapStoryGenerator    BootstrapStoryGenerator
+	TypologyRefineGenerator    TypologyRefineGenerator
+	HumanInterventionGenerator HumanInterventionGenerator
+	BootstrapSurveyPolicy      string
+	Judge                      judge.Generator // optional; built from config when nil
+	SkipStory                  bool
+	SkipCompact                bool
+	ForceCompact               bool
 }
 
 func logf(level, format string, args ...any) {
@@ -396,7 +397,7 @@ func finishDigestRun(p finishParams) (Result, error) {
 	}
 
 	title := fmt.Sprintf("context digest: %s", cfg.Repository.ID)
-	body := digestPRBody(len(p.commits), p.defaultHEAD, p.gateSidecar)
+	body := digestPRBody(len(p.commits), p.defaultHEAD, p.gateSidecar, loadPRPriorityMarkdown(p.ctxDir))
 	pr, err := p.forge.OpenUpdatePR(p.baseBranch, p.updateBranch, title, body)
 	if err != nil {
 		return Result{}, err

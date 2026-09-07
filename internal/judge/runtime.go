@@ -36,6 +36,7 @@ func DigestTasks() []string {
 	return []string{
 		jmodules.TaskTypologyCluster,
 		jmodules.TaskTypologyRefine,
+		jmodules.TaskTypologyHumanIntervention,
 		jmodules.TaskBootstrapStory,
 		jmodules.TaskDigestStory,
 	}
@@ -52,6 +53,7 @@ func AllGeneratorTasks() []string {
 		jmodules.TaskFileReview,
 		jmodules.TaskTypologyCluster,
 		jmodules.TaskTypologyRefine,
+		jmodules.TaskTypologyHumanIntervention,
 		jmodules.TaskBootstrapStory,
 		jmodules.TaskDigestStory,
 		jmodules.TaskSummary,
@@ -138,13 +140,14 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 	}
 
 	ctors := map[string]func() core.Module{
-		jmodules.TaskFileReview:      jmodules.FileReviewModule,
-		jmodules.TaskTypologyCluster: jmodules.TypologyClusterModule,
-		jmodules.TaskTypologyRefine:  jmodules.TypologyRefineModule,
-		jmodules.TaskBootstrapStory:  jmodules.BootstrapStoryModule,
-		jmodules.TaskDigestStory:     jmodules.DigestStoryModule,
-		jmodules.TaskSummary:         jmodules.SummaryModule,
-		jmodules.TaskTechnical:       jmodules.TechnicalModule,
+		jmodules.TaskFileReview:                jmodules.FileReviewModule,
+		jmodules.TaskTypologyCluster:           jmodules.TypologyClusterModule,
+		jmodules.TaskTypologyRefine:            jmodules.TypologyRefineModule,
+		jmodules.TaskTypologyHumanIntervention: jmodules.TypologyHumanInterventionModule,
+		jmodules.TaskBootstrapStory:            jmodules.BootstrapStoryModule,
+		jmodules.TaskDigestStory:               jmodules.DigestStoryModule,
+		jmodules.TaskSummary:                   jmodules.SummaryModule,
+		jmodules.TaskTechnical:                 jmodules.TechnicalModule,
 	}
 
 	providers := make(map[string]stropdspy.ProviderConfig, len(tasks))

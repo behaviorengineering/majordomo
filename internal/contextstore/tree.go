@@ -100,6 +100,7 @@ func validateTypologyEvidence(dir string) error {
 			manifest.ClusterProposalPath,
 			manifest.RefinedSnapshotPath,
 			manifest.JourneyPath,
+			manifest.HumanInterventionPath,
 		} {
 			if err := validateTypologyEvidenceFile(evidenceDir, rel); err != nil {
 				return err
