@@ -36,6 +36,27 @@ The following findings need a correction or an explicit boundary-debt decision:
 	}
 }
 
+func TestExtractArchitectureFindingsFromDriftHeading(t *testing.T) {
+	arch := `# Architecture
+
+## Drift and design questions
+
+- ` + "`localgit`" + `: SliceBinding localgit -> gitboard missing
+- ` + "`pruneagent`" + `: SliceBinding pruneagent -> gitboard missing
+
+## Agent review protocol
+
+Ignore this.
+`
+	got := extractArchitectureFindings(arch)
+	if len(got) != 2 {
+		t.Fatalf("findings=%v", got)
+	}
+	if !architectureHasFindings(arch) {
+		t.Fatal("expected architectureHasFindings true for Drift heading")
+	}
+}
+
 func TestValidateHumanInterventionOutputsRejectsCompleteStatus(t *testing.T) {
 	findings := []string{"`localgit`: SliceBinding missing"}
 	journey := "## Status\nRefinement complete.\n\n## Technical debt\n\n| Package | Debt |\n| --- | --- |\n| localgit | binding |\n"

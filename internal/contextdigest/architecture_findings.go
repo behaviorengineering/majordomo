@@ -12,6 +12,17 @@ const (
 	prPriorityRel        = "evidence/typology/pr_priority.md"
 )
 
+// isArchitectureFindingsHeading reports headings that list open architecture issues.
+func isArchitectureFindingsHeading(line string) bool {
+	low := strings.ToLower(strings.TrimSpace(line))
+	if !strings.HasPrefix(low, "#") {
+		return false
+	}
+	return strings.Contains(low, "finding") ||
+		strings.Contains(low, "drift") ||
+		strings.Contains(low, "design question")
+}
+
 // extractArchitectureFindings returns bullet/content lines under a findings heading.
 func extractArchitectureFindings(architectureMD string) []string {
 	lines := strings.Split(architectureMD, "\n")
@@ -20,7 +31,7 @@ func extractArchitectureFindings(architectureMD string) []string {
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
 		low := strings.ToLower(trim)
-		if strings.HasPrefix(low, "#") && strings.Contains(low, "finding") {
+		if isArchitectureFindingsHeading(trim) {
 			inFindings = true
 			continue
 		}

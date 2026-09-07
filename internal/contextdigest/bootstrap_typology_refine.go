@@ -291,7 +291,7 @@ func architectureHasFindings(arch string) bool {
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
 		low := strings.ToLower(trim)
-		if strings.HasPrefix(low, "#") && strings.Contains(low, "finding") {
+		if isArchitectureFindingsHeading(trim) {
 			inFindings = true
 			continue
 		}
