@@ -22,9 +22,9 @@ In this control-tower layout the skills are also linked as:
 
 ## Context digest vs confirmed catalog
 
-`majordomo context digest` seed may run an unattended Typology **cluster + refine** loop and store a **proposal** under the served-repo context branch at `evidence/typology/` (`refined_snapshot.yaml`, `snapshot.yaml`, `journey.md`, `cluster_proposal.md`, post-refine `architecture.md`, `graph.txt`, `manifest.yaml`). Discover drafts stay ephemeral under the analysis worktree (`tmp/typology/`) and are never committed to the context branch. That proposal feeds the teaching story. It does **not** write or emit this repository's confirmed `.typology/typology.yaml`.
+`majordomo context digest` seed may run an unattended Typology **cluster + refine** loop, then a **human-intervention** flagger for open architecture findings, and store a **proposal** under the served-repo context branch at `evidence/typology/` (`refined_snapshot.yaml`, `snapshot.yaml`, `journey.md`, `cluster_proposal.md`, post-refine `architecture.md`, `human_intervention.md`, optional `pr_priority.md`, `graph.txt`, `manifest.yaml`). Discover drafts stay ephemeral under the analysis worktree (`tmp/typology/`) and are never committed to the context branch. That proposal feeds the teaching story and, when findings remain, the context PR summary leads with priority human decisions. It does **not** write or emit this repository's confirmed `.typology/typology.yaml`.
 
-Humans promote a proposal into the confirmed catalog with the interactive Typology journey (load `typology-journey`), then `emit` / `validate` here. Digest proposes; operators own the confirmed map.
+Humans promote a proposal into the confirmed catalog with the interactive Typology journey (load `typology-journey`), then `emit` / `validate` here. Digest proposes and flags decisions; operators own the confirmed map and must not expect the seed path to invent bindings to clear validate.
 
 ## Consumer bootstrap
 

@@ -415,10 +415,17 @@ func writeTempBody(content string) (path string, cleanup func(), err error) {
 	return path, cleanup, nil
 }
 
-func digestPRBody(commits int, headSHA string, gate contextgate.Sidecar) string {
+func digestPRBody(commits int, headSHA string, gate contextgate.Sidecar, priorityMD string) string {
 	var b strings.Builder
 	b.WriteString(contextPRMarker)
 	b.WriteString("\n\n")
+	if p := strings.TrimSpace(priorityMD); p != "" {
+		if !strings.HasPrefix(strings.ToLower(p), "## priority") {
+			b.WriteString("## Priority: human decisions\n\n")
+		}
+		b.WriteString(p)
+		b.WriteString("\n\n")
+	}
 	b.WriteString("Context digest catch-up.\n\n")
 	if commits > 0 {
 		fmt.Fprintf(&b, "Advanced cursor through %d default-branch commit(s); tip `%s`.\n", commits, headSHA)

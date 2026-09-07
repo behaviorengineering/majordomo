@@ -185,6 +185,42 @@ Output refined_catalog_yaml as YAML only (no markdown fences). Output journey_md
 	return newGenerator(sig, TaskTypologyRefine)
 }
 
+func typologyHumanInterventionModule() *dspymodules.DirectivesCoT {
+	sig := core.NewSignature(
+		[]core.InputField{
+			in("repo_id", "Served repository id"),
+			in("architecture_md", "Post-refine Typology architecture brief"),
+			in("refined_catalog_yaml", "Refined Typology catalog YAML"),
+			in("journey_md", "Journey notes from typology refine"),
+			in("cluster_proposal_md", "Cluster-pass proposal markdown"),
+			in("findings_list", "Deterministic list of open architecture findings; each must be flagged for humans"),
+			in("validation_feedback", "Optional prior validation feedback to fix"),
+		},
+		[]core.OutputField{
+			out("journey_md", "Updated journey with open Status and debt covering every finding"),
+			out("human_intervention_md", "Operator-facing priority decisions humans must make"),
+			out("weaknesses_seed_md", "Weaknesses markdown bullets for bootstrap story seeding"),
+			out("pr_priority_md", "Short priority bullets for the context PR body"),
+		},
+	).WithInstruction(`You are the Majordomo human-intervention flagger after Typology refine.
+Humans give direction and leadership. Your job is to surface architecture findings the unattended refine must NOT invent away.
+
+Rules:
+- findings_list is authoritative. Every finding MUST appear in journey debt, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
+- MUST NOT invent sliceBindings, rewrite package ownership, or invent catalog YAML to clear findings.
+- Frame each finding as a human decision: approve a binding, merge slices, or accept temporary debt.
+- When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
+- Journey MUST include Status, decisions already taken, and a Technical debt and boundary violations table that names every finding.
+- human_intervention_md is markdown for operators: priorities, what not to invent, evidence pointers into architecture/journey.
+- weaknesses_seed_md is markdown bullets suitable for weaknesses.md (same priorities).
+- pr_priority_md is a short scannable bullet list for the GitHub PR body (no long preamble).
+- When findings_list is empty, say no open architecture findings and keep Status coherent with an empty/open debt note.
+- When validation_feedback is present, fix those issues before emitting.
+
+Output markdown only in the four fields (no YAML catalog).`)
+	return newGenerator(sig, TaskTypologyHumanIntervention)
+}
+
 func summaryModule() *dspymodules.DirectivesCoT {
 	sig := core.NewSignature(
 		[]core.InputField{

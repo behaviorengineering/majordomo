@@ -20,6 +20,9 @@ func TypologyClusterModule() core.Module { return typologyClusterModule() }
 // TypologyRefineModule builds the unattended typology refine generator.
 func TypologyRefineModule() core.Module { return typologyRefineModule() }
 
+// TypologyHumanInterventionModule builds the post-refine human-decision flagger.
+func TypologyHumanInterventionModule() core.Module { return typologyHumanInterventionModule() }
+
 // SummaryModule builds the summary generator.
 func SummaryModule() core.Module { return summaryModule() }
 

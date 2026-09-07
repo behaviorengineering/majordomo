@@ -253,7 +253,32 @@ func looksLikeInteractionPath(path string) bool {
 
 func journeyStatusClaimsComplete(journey string) bool {
 	lower := strings.ToLower(journey)
-	return strings.Contains(lower, "status:") && (strings.Contains(lower, "completed") || strings.Contains(lower, "complete"))
+	if !(strings.Contains(lower, "completed") || strings.Contains(lower, "complete")) {
+		return false
+	}
+	if strings.Contains(lower, "status:") {
+		return true
+	}
+	// Markdown ## Status section claiming refinement/merge complete.
+	lines := strings.Split(lower, "\n")
+	inStatus := false
+	for _, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "#") && strings.Contains(trim, "status") {
+			inStatus = true
+			continue
+		}
+		if inStatus && strings.HasPrefix(trim, "#") {
+			break
+		}
+		if !inStatus || trim == "" {
+			continue
+		}
+		if strings.Contains(trim, "complete") || strings.Contains(trim, "completed") {
+			return true
+		}
+	}
+	return false
 }
 
 func journeyDebtStillSaysMerge(journey string) bool {
@@ -266,7 +291,7 @@ func architectureHasFindings(arch string) bool {
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
 		low := strings.ToLower(trim)
-		if strings.HasPrefix(low, "#") && strings.Contains(low, "finding") {
+		if isArchitectureFindingsHeading(trim) {
 			inFindings = true
 			continue
 		}
@@ -924,6 +949,16 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		return err
 	}
 
+	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen); err != nil {
+		return err
+	}
+
+	// Preserve human_intervention_path written by the flagger.
+	updated, err := contextstore.ParseTypologyManifest(filepath.Join(evidenceDir, "manifest.yaml"))
+	if err != nil {
+		return err
+	}
+	manifest.HumanInterventionPath = updated.HumanInterventionPath
 	manifest.RefineStatus = contextstore.TypologyRefineComplete
 	return writeTypologyManifest(evidenceDir, manifest)
 }

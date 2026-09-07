@@ -89,10 +89,16 @@ slices:
 	if updated.RefineStatus != contextstore.TypologyRefineComplete {
 		t.Fatalf("refine_status=%q", updated.RefineStatus)
 	}
-	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", "architecture.md"} {
+	if updated.HumanInterventionPath != "human_intervention.md" {
+		t.Fatalf("human_intervention_path=%q", updated.HumanInterventionPath)
+	}
+	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", "architecture.md", "human_intervention.md"} {
 		if _, err := os.Stat(filepath.Join(evidence, name)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(evidence, "pr_priority.md")); !os.IsNotExist(err) {
+		t.Fatalf("pr_priority.md must be absent when architecture has no findings: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(evidence, "draft_snapshot.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("draft must not be written to evidence: %v", err)

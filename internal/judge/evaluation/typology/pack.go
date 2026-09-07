@@ -8,6 +8,10 @@ const (
 	CriterionIDObjectives        criteria.CriterionID = "majordomo_typology_objectives"
 	CriterionIDAdapterSurfaces   criteria.CriterionID = "majordomo_typology_adapter_surfaces"
 	CriterionIDJourneyConsistent criteria.CriterionID = "majordomo_typology_journey_consistent"
+
+	CriterionIDInterventionCoverage criteria.CriterionID = "majordomo_typology_intervention_coverage"
+	CriterionIDInterventionNoInvent criteria.CriterionID = "majordomo_typology_intervention_no_invent"
+	CriterionIDInterventionStatus   criteria.CriterionID = "majordomo_typology_intervention_status"
 )
 
 // CriterionIDs is the typology refine boundary rubric pack.
@@ -17,6 +21,13 @@ var CriterionIDs = []criteria.CriterionID{
 	CriterionIDObjectives,
 	CriterionIDAdapterSurfaces,
 	CriterionIDJourneyConsistent,
+}
+
+// InterventionCriterionIDs is the human-intervention flagger rubric pack.
+var InterventionCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionNoInvent,
+	CriterionIDInterventionStatus,
 }
 
 // Register adds typology refine rubrics onto the shared strop criterion registry.
@@ -66,6 +77,33 @@ func Register(r *criteria.CriterionRegistry) {
 		Description: `When Status claims refinement or merges are complete, debt rows must not still instruct Merge into as pending work.`,
 		Scoring: `1 point: Journey status and debt table agree on what remains open.
 0 points: Status says complete while debt still lists Merge into actions.`,
+		MaxPoints: 1.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDInterventionCoverage,
+		Name:        "Every architecture finding is flagged for humans",
+		Description: `Each open architecture finding appears in journey debt, human_intervention_md, and pr_priority_md.`,
+		Scoring: `2 points: Every findings_list entry is represented in debt and priority outputs.
+0 points: Any finding is missing from those surfaces.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDInterventionNoInvent,
+		Name:        "Do not invent architecture to clear findings",
+		Description: `The flagger must not invent sliceBindings or rewrite package ownership to dismiss findings. It requests human decisions.`,
+		Scoring: `2 points: Outputs ask humans to approve bindings, merges, or temporary debt without inventing catalog fixes.
+0 points: Output invents bindings or ownership changes as if findings were resolved.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDInterventionStatus,
+		Name:        "Status stays open while findings remain",
+		Description: `When findings_list is non-empty, journey Status must not claim refinement complete.`,
+		Scoring: `1 point: Status remains open while findings exist, or findings are empty.
+0 points: Status claims complete while findings remain.`,
 		MaxPoints: 1.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})

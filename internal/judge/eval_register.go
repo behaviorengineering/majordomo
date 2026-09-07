@@ -51,6 +51,20 @@ Reject journeys that claim merges are done while debt rows still say Merge into.
 or journey debt contradicts Status.`,
 		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog and journey fixes over style notes.",
 	},
+	jmodules.TaskTypologyHumanIntervention: {
+		evaluatorKey:      "typology_intervention_quality",
+		consolidatorKey:   "typology_intervention_quality_consolidator",
+		evaluatorLabel:    "Typology Intervention Evaluator",
+		consolidatorLabel: "Typology Intervention Consolidator",
+		criterionIDs:      typologypack.InterventionCriterionIDs,
+		focusAreas:        "human-decision coverage of architecture findings without inventing bindings",
+		feedbackSuffix: `Score generator_output journey_md, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
+Reject missing findings from findings_list.
+Reject Status complete while findings remain.
+Reject invented sliceBindings or ownership rewrites that pretend findings are resolved.`,
+		scoreSuffix:        `Prefer low scores when priorities omit findings or invent architecture decisions for humans.`,
+		consolidatorSuffix: "Merge intervention feedback. Prefer complete human callouts over polish.",
+	},
 	jmodules.TaskBootstrapStory: {
 		evaluatorKey:      "bootstrap_quality",
 		consolidatorKey:   "bootstrap_quality_consolidator",

@@ -24,20 +24,21 @@ const (
 // Discover drafts stay ephemeral under the analysis worktree and are not
 // listed here for committed evidence.
 type TypologyManifest struct {
-	RepoID              string `yaml:"repo_id,omitempty"`
-	SourceSHA           string `yaml:"source_sha"`
-	GeneratedAt         string `yaml:"generated_at,omitempty"`
-	TypologyVersion     string `yaml:"typology_version,omitempty"`
-	Mode                string `yaml:"mode"`
-	ModuleScope         string `yaml:"module_scope,omitempty"`
-	SnapshotPath        string `yaml:"snapshot_path,omitempty"`
-	ArchitecturePath    string `yaml:"architecture_path"`
-	RefineStatus        string `yaml:"refine_status,omitempty"`
-	GraphPath           string `yaml:"graph_path,omitempty"`
-	PackageContractsPath string `yaml:"package_contracts_path,omitempty"`
-	ClusterProposalPath string `yaml:"cluster_proposal_path,omitempty"`
-	RefinedSnapshotPath string `yaml:"refined_snapshot_path,omitempty"`
-	JourneyPath         string `yaml:"journey_path,omitempty"`
+	RepoID                string `yaml:"repo_id,omitempty"`
+	SourceSHA             string `yaml:"source_sha"`
+	GeneratedAt           string `yaml:"generated_at,omitempty"`
+	TypologyVersion       string `yaml:"typology_version,omitempty"`
+	Mode                  string `yaml:"mode"`
+	ModuleScope           string `yaml:"module_scope,omitempty"`
+	SnapshotPath          string `yaml:"snapshot_path,omitempty"`
+	ArchitecturePath      string `yaml:"architecture_path"`
+	RefineStatus          string `yaml:"refine_status,omitempty"`
+	GraphPath             string `yaml:"graph_path,omitempty"`
+	PackageContractsPath  string `yaml:"package_contracts_path,omitempty"`
+	ClusterProposalPath   string `yaml:"cluster_proposal_path,omitempty"`
+	RefinedSnapshotPath   string `yaml:"refined_snapshot_path,omitempty"`
+	JourneyPath           string `yaml:"journey_path,omitempty"`
+	HumanInterventionPath string `yaml:"human_intervention_path,omitempty"`
 }
 
 // ParseTypologyManifest reads a manifest from path.
@@ -109,6 +110,7 @@ func ValidateTypologyManifest(m TypologyManifest) error {
 			{m.ClusterProposalPath, "cluster_proposal_path"},
 			{m.RefinedSnapshotPath, "refined_snapshot_path"},
 			{m.JourneyPath, "journey_path"},
+			{m.HumanInterventionPath, "human_intervention_path"},
 		} {
 			if err := validateRelativeEvidencePath(pair.path, pair.field); err != nil {
 				return err
