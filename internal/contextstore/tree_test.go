@@ -88,7 +88,7 @@ func TestValidateTreeTypologyEvidence(t *testing.T) {
 		Mode:             TypologyModeDiscover,
 		ModuleScope:      ".",
 		SnapshotPath:     "snapshot.yaml",
-		ArchitecturePath: "architecture.md",
+		ArchitecturePath: TypologyArchitectureBriefPath,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestValidateTreeFallbackEvidence(t *testing.T) {
 		SourceSHA:        "abc123def456",
 		GeneratedAt:      at.Format(time.RFC3339),
 		Mode:             TypologyModeFallback,
-		ArchitecturePath: "architecture.md",
+		ArchitecturePath: TypologyArchitectureBriefPath,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestValidateTreeRejectsBadTypologySnapshot(t *testing.T) {
 		GeneratedAt:      at.Format(time.RFC3339),
 		Mode:             TypologyModeDiscover,
 		SnapshotPath:     "snapshot.yaml",
-		ArchitecturePath: "architecture.md",
+		ArchitecturePath: TypologyArchitectureBriefPath,
 	}); err != nil {
 		t.Fatal(err)
 	}

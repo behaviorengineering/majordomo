@@ -32,10 +32,10 @@ func TestFlagHumanInterventionWritesPrioritiesAndWeaknesses(t *testing.T) {
 - ` + "`remotegit`" + `: SliceBinding remotegit -> gitboard missing
 `
 	for name, body := range map[string]string{
-		"architecture.md":       arch,
-		"refined_snapshot.yaml": "id: demo\nslices: []\n",
-		"journey.md":            "# Journey\n\n## Status\n\nRefinement complete.\n",
-		"cluster_proposal.md":   "# Cluster\n",
+		contextstore.TypologyArchitectureBriefPath: arch,
+		"refined_snapshot.yaml":                    "id: demo\nslices: []\n",
+		"journey.md":                               "# Journey\n\n## Status\n\nRefinement complete.\n",
+		"cluster_proposal.md":                      "# Cluster\n",
 	} {
 		if err := os.WriteFile(filepath.Join(evidence, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -46,7 +46,7 @@ func TestFlagHumanInterventionWritesPrioritiesAndWeaknesses(t *testing.T) {
 		SourceSHA:            "abc",
 		GeneratedAt:          time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
 		Mode:                 contextstore.TypologyModeDiscover,
-		ArchitecturePath:     "architecture.md",
+		ArchitecturePath:     contextstore.TypologyArchitectureBriefPath,
 		RefineStatus:         contextstore.TypologyRefinePending,
 		SnapshotPath:         "snapshot.yaml",
 		GraphPath:            "graph.txt",
@@ -123,7 +123,7 @@ func TestFlagHumanInterventionSkipsFallback(t *testing.T) {
 		RepoID:           "demo",
 		SourceSHA:        "abc",
 		Mode:             contextstore.TypologyModeFallback,
-		ArchitecturePath: "architecture.md",
+		ArchitecturePath: contextstore.TypologyArchitectureBriefPath,
 		RefineStatus:     contextstore.TypologyRefineSkipped,
 	}
 	if err := writeTypologyManifest(evidence, manifest); err != nil {

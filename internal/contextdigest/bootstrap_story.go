@@ -232,7 +232,7 @@ func persistBootstrapStory(ctxDir string, out BootstrapStoryOutput) error {
 	if err := writeText(filepath.Join(ctxDir, "mission.md"), out.MissionMD); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "architecture.md"), out.ArchitectureMD); err != nil {
+	if err := writeText(filepath.Join(ctxDir, "architecture.md"), ensureStoryArchitectureBanner(out.ArchitectureMD)); err != nil {
 		return err
 	}
 	if err := writeText(filepath.Join(ctxDir, "conventions.md"), out.ConventionsMD); err != nil {

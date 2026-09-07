@@ -39,7 +39,7 @@ func TestLocalBootstrapSurveyRunnerFallback(t *testing.T) {
 	if manifest.RepoID != "demo" {
 		t.Fatalf("repo_id=%q", manifest.RepoID)
 	}
-	if _, err := os.Stat(filepath.Join(evidence, "architecture.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(evidence, contextstore.TypologyArchitectureBriefPath)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(evidence, "snapshot.yaml")); !os.IsNotExist(err) {

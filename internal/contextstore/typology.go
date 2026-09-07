@@ -18,6 +18,11 @@ const (
 	TypologyRefinePending  = "pending"
 	TypologyRefineComplete = "complete"
 	TypologyRefineSkipped  = "skipped"
+
+	// TypologyArchitectureBriefPath is the evidence file for the Typology architecture brief.
+	// It is intentionally not named architecture.md so PR reviewers do not confuse it with
+	// the teaching-story root architecture.md.
+	TypologyArchitectureBriefPath = "architecture_brief.md"
 )
 
 // TypologyManifest records how a bootstrap survey was produced.

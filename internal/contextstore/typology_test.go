@@ -13,7 +13,7 @@ func TestValidateTypologyManifestRequiresPackageContractsWhenPending(t *testing.
 		SourceSHA:        "abc",
 		GeneratedAt:      time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
 		Mode:             TypologyModeDiscover,
-		ArchitecturePath: "architecture.md",
+		ArchitecturePath: TypologyArchitectureBriefPath,
 		RefineStatus:     TypologyRefinePending,
 		GraphPath:        "graph.txt",
 	}
@@ -34,7 +34,7 @@ func TestValidateTypologyManifestRequiresHumanInterventionWhenComplete(t *testin
 		SourceSHA:            "abc",
 		GeneratedAt:          time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
 		Mode:                 TypologyModeDiscover,
-		ArchitecturePath:     "architecture.md",
+		ArchitecturePath:     TypologyArchitectureBriefPath,
 		RefineStatus:         TypologyRefineComplete,
 		SnapshotPath:         "snapshot.yaml",
 		GraphPath:            "graph.txt",
