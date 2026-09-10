@@ -294,6 +294,7 @@ Checkout the **merged** context tip only. Open context update PRs are not ground
 
 ## Related
 
+- [Typology cluster: mechanical walk vs RLM](10.1-typology-cluster-decision.md)
 - [PLAN: Control Tower](../PLAN-control-tower-github-go.md) (Decision 5)
 - `internal/contextstore` (schema)
 - `internal/contextdigest` (catch-up job)
