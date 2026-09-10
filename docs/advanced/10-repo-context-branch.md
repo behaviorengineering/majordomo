@@ -39,7 +39,7 @@ Update PRs (later digest job):
 On `majordomo-context/<repo-id>`:
 
 ```text
-README.md           how to read; never-merge-to-default; humans talk on the PR, do not edit
+README.md           how to read (Reading order TOC + Prev/Next entry); never-merge-to-default; humans talk on the PR, do not edit
 meta.yaml           schema_version, repo_id, last_merged_sha, last_digest_at
 mission.md          why the project exists
 architecture.md     teaching story (layers, entrypoints, ownership)
@@ -47,12 +47,18 @@ conventions.md      how this repo is built and reviewed
 weaknesses.md       known risks; cite chronology headings when claiming history
 chronology.md       important evidenced decisions, newest first; compactable
 evidence/typology/  Typology seed proposal for this digest (not confirmed catalog)
+  README.md              reading index for the briefing path (required when evidence exists)
   architecture_brief.md  Typology architecture brief (not the teaching story)
+  cluster_proposal.md    optional grouping overlay
+  journey.md             refine decisions and debt
+  human_intervention.md  operator priorities
+  pr_priority.md         optional cold-reader PR counsel
 agenting/           grounding packs for review (not review SKILL.md)
   index.yaml        pack id → globs + modes
   <area>/GROUNDING.md
 ```
 
+Guided markdown under the root and `evidence/typology/` carries a **Reading path** Prev/Next banner. Machine appendix files (`package_roles.yaml`, `package_contracts.md`, `graph.txt`, snapshots, `manifest.yaml`) are listed in the typology README only.
 Do not put application source on this branch. When `agenting/index.yaml` is present, `majordomo context validate` checks the index and each pack's `GROUNDING.md`. Bootstrap seeds `agenting/overview`.
 
 Validate a worktree with:

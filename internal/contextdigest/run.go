@@ -315,6 +315,10 @@ func Run(opts Options) (Result, error) {
 			}
 		}
 
+		if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+			return Result{}, err
+		}
+
 		needs, err := NeedsMetaUpdate(ctxDir, cursorAfter)
 		if err != nil {
 			return Result{}, err

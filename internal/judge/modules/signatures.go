@@ -64,7 +64,8 @@ func digestStoryModule() *dspymodules.DirectivesCoT {
 		[]core.OutputField{out("updated_text", "Updated section markdown; preserve structure; only add evidenced claims")},
 	).WithInstruction(`Update one teaching-story section after a default-branch commit.
 Amend only when the commit diff supports a concrete claim. If nothing applies, return current_text unchanged.
-Never invent architecture or risks. Chronology is handled separately.`)
+Never invent architecture or risks. Chronology is handled separately.
+Preserve <!-- majordomo-reading-nav:start --> / <!-- majordomo-reading-nav:end --> banners when present.`)
 	return newGenerator(sig, TaskDigestStory)
 }
 
@@ -104,6 +105,7 @@ func bootstrapStoryModule() *dspymodules.DirectivesCoT {
 Write all outputs as present-tense, user-facing markdown.
 Prefer the refined Typology catalog and journey notes over raw package inventory when they are present.
 The README should describe the context branch and its seed origin.
+README MUST keep a ## Reading order section (story path then evidence/typology). Preserve <!-- majordomo-reading-toc:start --> / <!-- majordomo-reading-toc:end --> and <!-- majordomo-reading-nav:start --> / <!-- majordomo-reading-nav:end --> blocks when present; digest re-applies them if dropped.
 Mission, architecture, conventions, and weaknesses must be evidence-backed and should not mention historical events that are not in the supplied evidence.
 Architecture should describe proposed bounded contexts (slices), surfaces, and known boundary debt from the journey notes.
 Root architecture_md is the teaching story for humans and review grounding. Keep the Typology evidence brief (typology_architecture input) as source material; do not pretend it is the confirmed catalog.
@@ -112,7 +114,7 @@ Chronology must stay honest, with at most a single explicit seed marker. Do not 
 The grounding output should summarize the accepted mission and architecture for agenting.
 If evidence is thin, keep the section minimal rather than inventing details.
 When validation_feedback is present, fix those issues before emitting.
-Preserve each file's markdown shape and heading conventions.`)
+Preserve each file's markdown shape and heading conventions. Preserve majordomo-reading-nav banners when present.`)
 	return newGenerator(sig, TaskBootstrapStory)
 }
 

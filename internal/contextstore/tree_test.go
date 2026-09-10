@@ -163,5 +163,5 @@ func writeTypologyEvidence(dir string, m TypologyManifest) error {
 			return err
 		}
 	}
-	return nil
+	return ApplyReadingPath(dir)
 }

@@ -46,6 +46,9 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 	if err := writeBootstrapStory(ctxDir, analysisDir, at, sourceSHA, opts.BootstrapStoryGenerator, opts.Judge); err != nil {
 		return err
 	}
+	if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+		return err
+	}
 	ctxGit := &Git{Dir: ctxDir}
 	if err := configureCommitIdentity(ctxGit); err != nil {
 		return err

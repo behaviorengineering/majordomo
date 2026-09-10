@@ -86,6 +86,10 @@ type packageRoleNode struct {
 	Evidence       []string `yaml:"evidence"`
 	InspectedStage int      `yaml:"inspected_stage"`
 	CandidateRole  string   `yaml:"candidate_role"`
+	MechanicalRole string   `yaml:"mechanical_role,omitempty"`
+	LLMRole        string   `yaml:"llm_role,omitempty"`
+	Agreement      string   `yaml:"agreement,omitempty"`
+	RLMIterations  int      `yaml:"rlm_iterations,omitempty"`
 }
 
 type packageRoleEdge struct {
