@@ -122,6 +122,7 @@ func writeTypologyReadingIndex(evidenceDir string) error {
 	b.WriteString("4. [`journey.md`](journey.md) — refine decisions and debt\n")
 	b.WriteString("5. [`human_intervention.md`](human_intervention.md) — operator priorities\n")
 	b.WriteString("6. [`pr_priority.md`](pr_priority.md) — when present; cold-reader PR counsel\n")
+	b.WriteString("7. Per-finding PR comments — upserted on the context update PR for conversation/trace (not SCM Resolve threads)\n")
 	b.WriteString("7. Back to the [story TOC](../../README.md)\n\n")
 	b.WriteString("## Appendix (reference, no Prev/Next)\n\n")
 	for _, name := range TypologyAppendixFiles {

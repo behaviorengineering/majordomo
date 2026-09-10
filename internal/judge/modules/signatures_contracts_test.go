@@ -42,9 +42,9 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 	}
 }
 
-func TestTypologyHumanInterventionModuleInputs(t *testing.T) {
+func TestTypologyInterventionBriefModuleInputs(t *testing.T) {
 	t.Parallel()
-	mod := jmodules.TypologyHumanInterventionModule()
+	mod := jmodules.TypologyInterventionBriefModule()
 	want := map[string]bool{"findings_list": false, "architecture_md": false, "journey_md": false}
 	for _, in := range mod.GetSignature().Inputs {
 		if _, ok := want[in.Name]; ok {
@@ -56,7 +56,7 @@ func TestTypologyHumanInterventionModuleInputs(t *testing.T) {
 			t.Fatalf("missing input %s", name)
 		}
 	}
-	outs := map[string]bool{"human_intervention_md": false, "pr_priority_md": false, "weaknesses_seed_md": false, "journey_md": false}
+	outs := map[string]bool{"human_intervention_md": false}
 	for _, out := range mod.GetSignature().Outputs {
 		if _, ok := outs[out.Name]; ok {
 			outs[out.Name] = true
@@ -70,7 +70,6 @@ func TestTypologyHumanInterventionModuleInputs(t *testing.T) {
 	inst := strings.ToLower(mod.GetSignature().Instruction)
 	for _, needle := range []string{
 		"tutor",
-		"cold",
 		"libraries",
 		"slice-to-library",
 		"lean",
@@ -78,8 +77,6 @@ func TestTypologyHumanInterventionModuleInputs(t *testing.T) {
 		"see journey_md",
 		"must not defer",
 		"majordomo",
-		"context branch",
-		"must not imply humans already consented",
 		"rubber-stamp",
 		"library placement",
 	} {
@@ -87,8 +84,31 @@ func TestTypologyHumanInterventionModuleInputs(t *testing.T) {
 			t.Fatalf("instruction missing %q: %s", needle, mod.GetSignature().Instruction)
 		}
 	}
-	if strings.Contains(inst, "no long preamble") {
-		t.Fatalf("instruction still forbids preamble: %s", mod.GetSignature().Instruction)
+}
+
+func TestTypologyInterventionPRPriorityAndFindingComment(t *testing.T) {
+	t.Parallel()
+	pr := jmodules.TypologyInterventionPRPriorityModule()
+	inst := strings.ToLower(pr.GetSignature().Instruction)
+	for _, needle := range []string{"cold", "tutor", "lean", "context branch"} {
+		if !strings.Contains(inst, needle) {
+			t.Fatalf("pr priority missing %q", needle)
+		}
+	}
+	comment := jmodules.TypologyFindingCommentModule()
+	foundFinding, foundOut := false, false
+	for _, in := range comment.GetSignature().Inputs {
+		if in.Name == "finding" {
+			foundFinding = true
+		}
+	}
+	for _, out := range comment.GetSignature().Outputs {
+		if out.Name == "comment_md" {
+			foundOut = true
+		}
+	}
+	if !foundFinding || !foundOut {
+		t.Fatalf("finding comment module finding=%v out=%v", foundFinding, foundOut)
 	}
 }
 
@@ -157,7 +177,9 @@ func TestTypologyModulesShareConsultantCounselContract(t *testing.T) {
 	for _, mod := range []core.Module{
 		jmodules.TypologyClusterModule(),
 		jmodules.TypologyRefineModule(),
-		jmodules.TypologyHumanInterventionModule(),
+		jmodules.TypologyInterventionBriefModule(),
+		jmodules.TypologyInterventionPRPriorityModule(),
+		jmodules.TypologyFindingCommentModule(),
 	} {
 		inst := strings.ToLower(mod.GetSignature().Instruction)
 		for _, needle := range []string{

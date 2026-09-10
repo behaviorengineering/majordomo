@@ -23,8 +23,27 @@ func TypologyRefineModule() core.Module { return typologyRefineModule() }
 // TypologyInspectModule builds the low-confidence package role inspector.
 func TypologyInspectModule() core.Module { return typologyInspectModule() }
 
-// TypologyHumanInterventionModule builds the post-refine human-decision flagger.
+// TypologyHumanInterventionModule is the legacy alias for the operator brief module.
 func TypologyHumanInterventionModule() core.Module { return typologyHumanInterventionModule() }
+
+// TypologyInterventionJourneyModule rewrites journey status and debt for open findings.
+func TypologyInterventionJourneyModule() core.Module { return typologyInterventionJourneyModule() }
+
+// TypologyInterventionBriefModule writes human_intervention.md.
+func TypologyInterventionBriefModule() core.Module { return typologyInterventionBriefModule() }
+
+// TypologyInterventionWeaknessesModule seeds weaknesses.md.
+func TypologyInterventionWeaknessesModule() core.Module {
+	return typologyInterventionWeaknessesModule()
+}
+
+// TypologyInterventionPRPriorityModule writes pr_priority.md for the PR body.
+func TypologyInterventionPRPriorityModule() core.Module {
+	return typologyInterventionPRPriorityModule()
+}
+
+// TypologyFindingCommentModule writes one PR comment body for a single finding.
+func TypologyFindingCommentModule() core.Module { return typologyFindingCommentModule() }
 
 // SummaryModule builds the summary generator.
 func SummaryModule() core.Module { return summaryModule() }

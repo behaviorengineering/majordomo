@@ -36,11 +36,40 @@ var ClusterCriterionIDs = []criteria.CriterionID{
 	CriterionIDClusterDelivery,
 }
 
-// InterventionCriterionIDs is the human-intervention flagger rubric pack.
+// InterventionCriterionIDs is the human-intervention flagger rubric pack (legacy combined).
 var InterventionCriterionIDs = []criteria.CriterionID{
 	CriterionIDInterventionCoverage,
 	CriterionIDInterventionNoInvent,
 	CriterionIDInterventionStatus,
+	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
+}
+
+// InterventionJourneyCriterionIDs scores journey rewrite after findings.
+var InterventionJourneyCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionStatus,
+	CriterionIDInterventionCounsel,
+}
+
+// InterventionBriefCriterionIDs scores the operator briefing.
+var InterventionBriefCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionNoInvent,
+	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
+}
+
+// InterventionPRPriorityCriterionIDs scores the cold-reader PR summary.
+var InterventionPRPriorityCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
+}
+
+// FindingCommentCriterionIDs scores one PR comment for a single finding.
+var FindingCommentCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionNoInvent,
 	CriterionIDInterventionTutorVoice,
 	CriterionIDInterventionCounsel,
 }

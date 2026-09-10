@@ -79,23 +79,94 @@ HTTP/embed packages are CLI furniture, journey debt contradicts Status, journey 
 		consolidatorKey:   "typology_intervention_quality_consolidator",
 		evaluatorLabel:    "Typology Intervention Evaluator",
 		consolidatorLabel: "Typology Intervention Consolidator",
-		criterionIDs:      typologypack.InterventionCriterionIDs,
-		focusAreas:        "human-decision coverage without inventing bindings; tutor-voice cold-read PR summary with consultant counsel",
-		feedbackSuffix: `Score generator_output journey_md, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
+		criterionIDs:      typologypack.InterventionBriefCriterionIDs,
+		focusAreas:        "operator briefing coverage without inventing bindings; tutor-voice counsel",
+		feedbackSuffix: `Score generator_output human_intervention_md.
 Reject missing findings from findings_list.
-Reject Status complete while findings remain.
-Reject invented sliceBindings, libraries membership, or ownership rewrites that pretend findings are resolved.
-Reject asking humans to rubber-stamp mechanical slice-to-library bindings Majordomo should have written into the proposal catalog.
-Reject pr_priority_md that is only imperative task titles or catalog jargon with no gloss (for example "Formalize Config Access: Resolve missing bindings").
-Reject copy that assumes the reader already knows SliceBinding, package roles, or why the seed cannot invent approvals.
+Reject invented sliceBindings or ownership rewrites.
+Reject asking humans to rubber-stamp mechanical slice-to-library bindings.
 Reject import inventory without smell, alternatives, and a lean.
 Reject "approve or refactor" as the whole advice.
-Reject "see journey_md" or other deferral to another file for the real argument.
-Reject a gloss or explanation that has no recommended lean.
-Reject corporate "we" claims that sound like a consented product-repo reorganization (for example "we successfully reorganized", "we consolidated", "we are proceeding").
-Reject copy that treats Typology catalog merges as already-landed product work instead of Majordomo context-branch proposals.`,
-		scoreSuffix:        `Prefer low scores when priorities omit findings, invent architecture decisions, ask for mechanical library-binding stamps, fail a cold read, argue without a lean, or imply humans already shipped the reorganization.`,
-		consolidatorSuffix: "Merge intervention feedback. Prefer complete human callouts with counsel over polish.",
+Reject "see journey_md".
+Reject corporate "we reorganized" framing.`,
+		scoreSuffix:        `Prefer low scores when the briefing omits findings, invents architecture, or argues without a lean.`,
+		consolidatorSuffix: "Merge brief feedback. Prefer complete human callouts with counsel over polish.",
+	},
+	jmodules.TaskTypologyInterventionJourney: {
+		evaluatorKey:      "typology_intervention_journey_quality",
+		consolidatorKey:   "typology_intervention_journey_consolidator",
+		evaluatorLabel:    "Typology Intervention Journey Evaluator",
+		consolidatorLabel: "Typology Intervention Journey Consolidator",
+		criterionIDs:      typologypack.InterventionJourneyCriterionIDs,
+		focusAreas:        "open Status and debt coverage for every finding",
+		feedbackSuffix: `Score generator_output journey_md.
+Reject Status complete while findings remain.
+Reject missing findings from the debt table.
+Reject hollow "Approve binding or refactor" debt rows.
+Reject corporate "we reorganized" framing.`,
+		scoreSuffix:        `Prefer low scores when journey hides findings or debt lacks counsel.`,
+		consolidatorSuffix: "Merge journey feedback. Prefer open Status and argued debt.",
+	},
+	jmodules.TaskTypologyInterventionBrief: {
+		evaluatorKey:      "typology_intervention_brief_quality",
+		consolidatorKey:   "typology_intervention_brief_consolidator",
+		evaluatorLabel:    "Typology Intervention Brief Evaluator",
+		consolidatorLabel: "Typology Intervention Brief Consolidator",
+		criterionIDs:      typologypack.InterventionBriefCriterionIDs,
+		focusAreas:        "operator briefing coverage without inventing bindings; tutor-voice counsel",
+		feedbackSuffix: `Score generator_output human_intervention_md.
+Reject missing findings from findings_list.
+Reject invented sliceBindings or ownership rewrites.
+Reject asking humans to rubber-stamp mechanical slice-to-library bindings.
+Reject import inventory without smell, alternatives, and a lean.
+Reject "see journey_md".
+Reject corporate "we reorganized" framing.`,
+		scoreSuffix:        `Prefer low scores when the briefing omits findings, invents architecture, or argues without a lean.`,
+		consolidatorSuffix: "Merge brief feedback. Prefer complete human callouts with counsel over polish.",
+	},
+	jmodules.TaskTypologyInterventionWeaknesses: {
+		evaluatorKey:      "typology_intervention_weaknesses_quality",
+		consolidatorKey:   "typology_intervention_weaknesses_consolidator",
+		evaluatorLabel:    "Typology Intervention Weaknesses Evaluator",
+		consolidatorLabel: "Typology Intervention Weaknesses Consolidator",
+		criterionIDs:      []criteria.CriterionID{typologypack.CriterionIDInterventionCoverage, typologypack.CriterionIDInterventionCounsel},
+		focusAreas:        "weaknesses seed covers every finding with a lean",
+		feedbackSuffix: `Score generator_output weaknesses_seed_md.
+Reject missing findings from findings_list.
+Reject hollow approve-or-refactor bullets without a lean.`,
+		scoreSuffix:        `Prefer low scores when weaknesses omit findings or leans.`,
+		consolidatorSuffix: "Merge weaknesses feedback.",
+	},
+	jmodules.TaskTypologyInterventionPRPriority: {
+		evaluatorKey:      "typology_intervention_pr_priority_quality",
+		consolidatorKey:   "typology_intervention_pr_priority_consolidator",
+		evaluatorLabel:    "Typology Intervention PR Priority Evaluator",
+		consolidatorLabel: "Typology Intervention PR Priority Consolidator",
+		criterionIDs:      typologypack.InterventionPRPriorityCriterionIDs,
+		focusAreas:        "cold-read PR summary with tutor voice and counsel",
+		feedbackSuffix: `Score generator_output pr_priority_md.
+Reject missing findings from findings_list.
+Reject imperative task titles or jargon with no gloss.
+Reject "see journey_md".
+Reject corporate "we reorganized" framing.
+Reject counsel without a lean.`,
+		scoreSuffix:        `Prefer low scores when the PR summary fails a cold read or omits findings.`,
+		consolidatorSuffix: "Merge PR priority feedback.",
+	},
+	jmodules.TaskTypologyFindingComment: {
+		evaluatorKey:      "typology_finding_comment_quality",
+		consolidatorKey:   "typology_finding_comment_consolidator",
+		evaluatorLabel:    "Typology Finding Comment Evaluator",
+		consolidatorLabel: "Typology Finding Comment Consolidator",
+		criterionIDs:      typologypack.FindingCommentCriterionIDs,
+		focusAreas:        "single-finding PR comment tutor counsel",
+		feedbackSuffix: `Score generator_output comment_md for the single finding input.
+Reject inventing catalog YAML or mechanical binding rubber-stamps.
+Reject "see journey_md".
+Reject counsel without smell, alternatives, and a lean.
+Reject corporate "we reorganized" framing.`,
+		scoreSuffix:        `Prefer low scores when the comment fails tutor counsel for that finding.`,
+		consolidatorSuffix: "Merge finding-comment feedback.",
 	},
 	jmodules.TaskBootstrapStory: {
 		evaluatorKey:      "bootstrap_quality",

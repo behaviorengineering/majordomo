@@ -480,140 +480,15 @@ func digestPRBody(commits int, headSHA string, gate contextgate.Sidecar, priorit
 
 // ListPRComments returns PR/MR comments oldest-first.
 func (f *Forge) ListPRComments(prNumber string) ([]contextgate.Comment, error) {
-	scm := strings.ToLower(strings.TrimSpace(f.SCM))
-	switch scm {
-	case "github":
-		return f.listGitHubComments(prNumber)
-	case "gitlab":
-		return f.listGitLabComments(prNumber)
-	case "bitbucket":
-		return f.listBitbucketComments(prNumber)
-	default:
-		return nil, fmt.Errorf("unsupported scm %q for comments", scm)
-	}
-}
-
-func (f *Forge) listGitHubComments(prNumber string) ([]contextgate.Comment, error) {
-	repo := f.repoSlug()
-	env := f.ghEnv()
-	args := []string{
-		"api", "repos/" + repo + "/issues/" + prNumber + "/comments",
-		"--jq", ".[] | {body: .body, user: .user.login, created_at: .created_at}",
-	}
-	out, err := f.runCLI("gh", args, env)
+	withIDs, err := f.ListPRCommentsWithIDs(prNumber)
 	if err != nil {
 		return nil, err
 	}
-	return decodeCommentLines(out)
-}
-
-func (f *Forge) listGitLabComments(iid string) ([]contextgate.Comment, error) {
-	env := f.glabEnv()
-	repoArgs := glabRepoArgs(f.Owner, f.Name)
-	args := append([]string{
-		"mr", "note", "list", iid,
-		"-F", "json",
-	}, repoArgs...)
-	out, err := f.runCLI("glab", args, env)
-	if err != nil {
-		return nil, err
+	out := make([]contextgate.Comment, 0, len(withIDs))
+	for _, c := range withIDs {
+		out = append(out, contextgate.Comment{Body: c.Body, Author: c.Author, PostedAt: c.PostedAt})
 	}
-	var rows []struct {
-		Body string `json:"body"`
-		User struct {
-			Username string `json:"username"`
-		} `json:"author"`
-		CreatedAt string `json:"created_at"`
-	}
-	if err := json.Unmarshal([]byte(out), &rows); err != nil {
-		return decodeCommentLines(out)
-	}
-	var comments []contextgate.Comment
-	for _, r := range rows {
-		comments = append(comments, contextgate.Comment{
-			Body: r.Body, Author: r.User.Username, PostedAt: r.CreatedAt,
-		})
-	}
-	return comments, nil
-}
-
-func (f *Forge) listBitbucketComments(prNumber string) ([]contextgate.Comment, error) {
-	base := strings.TrimRight(f.BaseURL, "/") + "/rest/api/1.0/projects/" + url.PathEscape(f.Owner) +
-		"/repos/" + url.PathEscape(f.Name) + "/pull-requests/" + url.PathEscape(prNumber) + "/activities"
-	var comments []contextgate.Comment
-	start := 0
-	const pageSize = 50
-	for {
-		api := fmt.Sprintf("%s?start=%d&limit=%d", base, start, pageSize)
-		req, err := http.NewRequest(http.MethodGet, api, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Authorization", "Bearer "+f.Token)
-		req.Header.Set("Accept", "application/json")
-		resp, err := f.client().Do(req)
-		if err != nil {
-			return nil, err
-		}
-		raw, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode >= 300 {
-			return nil, fmt.Errorf("bitbucket list activities HTTP %d: %s", resp.StatusCode, string(raw))
-		}
-		var out struct {
-			Values []struct {
-				Action      string `json:"action"`
-				CreatedDate int64  `json:"createdDate"`
-				User        struct {
-					Name string `json:"name"`
-				} `json:"user"`
-				Comment struct {
-					Text string `json:"text"`
-				} `json:"comment"`
-			} `json:"values"`
-			IsLastPage    bool `json:"isLastPage"`
-			NextPageStart *int `json:"nextPageStart"`
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			return nil, fmt.Errorf("decode bitbucket activities: %w", err)
-		}
-		for _, row := range out.Values {
-			if row.Action != "COMMENTED" || strings.TrimSpace(row.Comment.Text) == "" {
-				continue
-			}
-			comments = append(comments, contextgate.Comment{
-				Body:     row.Comment.Text,
-				Author:   row.User.Name,
-				PostedAt: fmt.Sprint(row.CreatedDate),
-			})
-		}
-		if out.IsLastPage || out.NextPageStart == nil {
-			break
-		}
-		start = *out.NextPageStart
-	}
-	return comments, nil
-}
-
-func decodeCommentLines(out string) ([]contextgate.Comment, error) {
-	var comments []contextgate.Comment
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		if line == "" {
-			continue
-		}
-		var row struct {
-			Body      string `json:"body"`
-			User      string `json:"user"`
-			CreatedAt string `json:"created_at"`
-		}
-		if err := json.Unmarshal([]byte(line), &row); err != nil {
-			continue
-		}
-		comments = append(comments, contextgate.Comment{
-			Body: row.Body, Author: row.User, PostedAt: row.CreatedAt,
-		})
-	}
-	return comments, nil
+	return out, nil
 }
 
 // MergeUpdatePR merges an open context update PR when autoMerge is enabled.

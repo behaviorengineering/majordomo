@@ -257,43 +257,130 @@ MUST NOT invent a role from English function names. If unsure, return role unkno
 }
 
 func typologyHumanInterventionModule() *dspymodules.DirectivesCoT {
+	// Legacy alias: brief-only so old task names keep a registered module.
+	return typologyInterventionBriefModule()
+}
+
+func typologyInterventionSharedInputs() []core.InputField {
+	return []core.InputField{
+		in("repo_id", "Served repository id"),
+		in("architecture_md", "Post-refine Typology architecture brief"),
+		in("refined_catalog_yaml", "Refined Typology catalog YAML"),
+		in("journey_md", "Journey notes from typology refine or prior intervention step"),
+		in("cluster_proposal_md", "Cluster-pass proposal markdown"),
+		in("findings_list", "Deterministic list of open architecture findings; each must be flagged for humans"),
+		in("validation_feedback", "Optional prior validation feedback to fix"),
+	}
+}
+
+func typologyInterventionJourneyModule() *dspymodules.DirectivesCoT {
+	sig := core.NewSignature(
+		typologyInterventionSharedInputs(),
+		[]core.OutputField{
+			out("journey_md", "Updated journey with open Status and debt covering every finding"),
+		},
+	).WithInstruction(`You rewrite typology journey notes after refine so open architecture findings cannot hide.
+` + consultantCounselContract + `
+
+Rules:
+- findings_list is authoritative. Every finding MUST appear in the Technical debt and boundary violations table.
+- When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
+- Journey MUST include Status, decisions already taken, and a debt table that names every finding with smell, alternatives with a cost, and a lean.
+- MUST keep leans from refine counsel. MUST NOT flatten debt rows to hollow "Approve binding or refactor".
+- MUST NOT invent catalog YAML, sliceBindings, or libraries membership.
+- Output markdown only in journey_md.
+When validation_feedback is present, fix those issues before emitting.`)
+	return newGenerator(sig, TaskTypologyInterventionJourney)
+}
+
+func typologyInterventionBriefModule() *dspymodules.DirectivesCoT {
+	sig := core.NewSignature(
+		typologyInterventionSharedInputs(),
+		[]core.OutputField{
+			out("human_intervention_md", "Tutor-voice operator briefing of priority decisions humans must make"),
+		},
+	).WithInstruction(`You write the operator human-intervention briefing after Typology refine.
+Humans give direction and leadership. Surface architecture findings the unattended refine must NOT invent away.
+` + consultantCounselContract + `
+
+Rules:
+- findings_list is authoritative. Every finding MUST appear in human_intervention_md.
+- Output markdown only. MUST NOT invent sliceBindings, libraries[] rows, rewrite package ownership, or invent catalog YAML.
+- Majordomo completes evidenced slice-to-library SliceBindings in the proposal catalog. MUST NOT ask humans to rubber-stamp those mechanical edges.
+- Frame remaining findings as normative human decisions: keep library placement, fold into a domain slice, decouple, approve slice-to-slice binding, merge slices, or accept temporary debt.
+- Tutor briefing: situation, smell/risk, alternatives with a cost, recommended lean, and evidence pointers. MUST NOT punt to journey_md.
+When validation_feedback is present, fix those issues before emitting.`)
+	return newGenerator(sig, TaskTypologyInterventionBrief)
+}
+
+func typologyInterventionWeaknessesModule() *dspymodules.DirectivesCoT {
+	sig := core.NewSignature(
+		append(typologyInterventionSharedInputs(),
+			in("human_intervention_md", "Operator briefing already produced for these findings"),
+		),
+		[]core.OutputField{
+			out("weaknesses_seed_md", "Weaknesses markdown bullets for bootstrap story seeding"),
+		},
+	).WithInstruction(`You seed weaknesses.md from open architecture findings and the operator briefing.
+` + consultantCounselContract + `
+
+Rules:
+- findings_list is authoritative. Every finding MUST appear as a weakness bullet.
+- Keep the same priorities and leans as human_intervention_md, but shorter.
+- Output markdown only starting with # Weaknesses.
+- MUST NOT invent catalog YAML or claim findings are resolved.
+When validation_feedback is present, fix those issues before emitting.`)
+	return newGenerator(sig, TaskTypologyInterventionWeaknesses)
+}
+
+func typologyInterventionPRPriorityModule() *dspymodules.DirectivesCoT {
+	sig := core.NewSignature(
+		append(typologyInterventionSharedInputs(),
+			in("human_intervention_md", "Operator briefing already produced for these findings"),
+		),
+		[]core.OutputField{
+			out("pr_priority_md", "Context PR summary markdown in tutor voice for a cold reader"),
+		},
+	).WithInstruction(`You write the GitHub context-PR summary a cold reader sees first, in a tutor voice.
+` + consultantCounselContract + `
+
+Rules:
+- findings_list is authoritative. Every finding MUST appear in pr_priority_md.
+- Assume the reader has never seen this repo. Lead with what Majordomo's Typology digest is proposing on this context branch and why it matters, then smell, alternatives, and the lean.
+- Frame slice consolidations and library placements as proposed catalog models for grounding, not as work the product team already shipped.
+- Gloss jargon in the same sentence. Name packages by role as well as id so coverage checks still match.
+- MUST NOT use only imperative task titles such as "Formalize Config Access".
+- MUST NOT dump catalog ids without a gloss. MUST NOT say "see journey_md".
+- MUST NOT invent catalog YAML or ask humans to rubber-stamp mechanical slice-to-library bindings.
+When validation_feedback is present, fix those issues before emitting.`)
+	return newGenerator(sig, TaskTypologyInterventionPRPriority)
+}
+
+func typologyFindingCommentModule() *dspymodules.DirectivesCoT {
 	sig := core.NewSignature(
 		[]core.InputField{
 			in("repo_id", "Served repository id"),
 			in("architecture_md", "Post-refine Typology architecture brief"),
 			in("refined_catalog_yaml", "Refined Typology catalog YAML"),
-			in("journey_md", "Journey notes from typology refine"),
-			in("cluster_proposal_md", "Cluster-pass proposal markdown"),
-			in("findings_list", "Deterministic list of open architecture findings; each must be flagged for humans"),
+			in("journey_md", "Updated journey markdown"),
+			in("human_intervention_md", "Operator briefing"),
+			in("finding", "One open architecture finding to discuss on the context PR"),
 			in("validation_feedback", "Optional prior validation feedback to fix"),
 		},
 		[]core.OutputField{
-			out("journey_md", "Updated journey with open Status and debt covering every finding"),
-			out("human_intervention_md", "Tutor-voice operator briefing of priority decisions humans must make"),
-			out("weaknesses_seed_md", "Weaknesses markdown bullets for bootstrap story seeding"),
-			out("pr_priority_md", "Context PR summary markdown in tutor voice for a cold reader"),
+			out("comment_md", "Tutor-voice PR comment body for this single finding"),
 		},
-	).WithInstruction(`You are the Majordomo human-intervention flagger after Typology refine.
-Humans give direction and leadership. Your job is to surface architecture findings the unattended refine must NOT invent away.
+	).WithInstruction(`You write one context-PR comment for a single open architecture finding so humans can discuss it in-thread.
 ` + consultantCounselContract + `
 
 Rules:
-- findings_list is authoritative. Every finding MUST appear in journey debt, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
-- Output markdown only. MUST NOT invent sliceBindings, libraries[] rows, rewrite package ownership, or invent catalog YAML in these fields.
-- Majordomo completes evidenced slice-to-library SliceBindings in the proposal catalog when it classifies packages as libraries. MUST NOT ask humans to rubber-stamp those mechanical edges.
-- Frame remaining findings as normative human decisions: keep the library placement, fold packages into a domain slice, decouple the import, approve a slice-to-slice binding, merge slices, or accept temporary debt.
-- Missing slice-to-slice bindings still need counsel. Missing slice-to-library bindings after refine should be rare; if one remains, argue library placement vs decouple, not "approve this binding".
-- When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
-- Journey MUST include Status, decisions already taken, and a Technical debt and boundary violations table that names every finding.
-- Journey rewrite MUST keep leans from refine counsel. MUST NOT flatten debt rows back to a table of verbs such as "Approve binding or refactor".
-- human_intervention_md is a tutor briefing for operators: situation, smell/risk, alternatives with a cost, recommended lean, and evidence pointers into architecture/journey. MUST NOT punt the argument to journey_md.
-- weaknesses_seed_md is markdown bullets suitable for weaknesses.md (same priorities and leans, shorter).
-- pr_priority_md is the GitHub context-PR summary a cold reader sees first. Write it in a tutor voice with consultant counsel. Assume the reader has never seen this repo. Lead with what Majordomo's Typology digest is proposing on this context branch and why it matters, then smell, alternatives, and the lean. Frame slice consolidations and library placements as proposed catalog models for grounding, not as work the product team already shipped. Gloss jargon in the same sentence (a SliceBinding is an approved allowed coupling from a bounded context to another slice or to a library; a library is a technical package group with no product objective). Name packages by role (UI, git adapters, CLI runner, shared config) as well as id so coverage checks still match. MUST NOT use only imperative task titles such as "Formalize Config Access". MUST NOT dump catalog ids without a gloss. MUST NOT say "see journey_md" or ask the reader to open another file for the real argument. MUST NOT imply humans already consented to a repo reorganization.
-- When findings_list is empty, say no open architecture findings and keep Status coherent with an empty/open debt note.
-- When validation_feedback is present, fix those issues before emitting.
-
-Output markdown only in the four fields (no YAML catalog).`)
-	return newGenerator(sig, TaskTypologyHumanIntervention)
+- Cover only the given finding. Mention enough of the finding text (or a backticked id from it) that coverage checks match.
+- Tutor voice: situation, smell/risk, alternatives with a cost, recommended lean.
+- MUST NOT invent catalog YAML or ask humans to rubber-stamp mechanical slice-to-library bindings.
+- MUST NOT say "see journey_md" for the real argument.
+- Output markdown only in comment_md (no HTML markers; the host adds those).
+When validation_feedback is present, fix those issues before emitting.`)
+	return newGenerator(sig, TaskTypologyFindingComment)
 }
 
 func summaryModule() *dspymodules.DirectivesCoT {

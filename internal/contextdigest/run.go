@@ -409,6 +409,11 @@ func finishDigestRun(p finishParams) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if pr != "" {
+		if err := SyncFindingPRComments(p.forge, pr, p.ctxDir); err != nil {
+			logf("WARN", "sync finding PR comments: %v", err)
+		}
+	}
 	if cfg.Context.AutoMergeEnabled() && p.gateSidecar.ReadyToMerge() && pr != "" {
 		if err := p.forge.MergeUpdatePR(pr); err != nil {
 			logf("WARN", "autoMerge: %v", err)
