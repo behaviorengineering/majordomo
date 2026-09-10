@@ -16,6 +16,7 @@ build/
 Thumbs.db
 
 tmp/
+logs/
 .pipelines-worktree/
 .majordomo/
 

@@ -43,7 +43,8 @@ func ResolveConfig(outputDir string) Config {
 		if outputDir != "" {
 			dumpDir = outputDir + "/logs/inference-failures"
 		} else {
-			dumpDir = "logs/inference-failures"
+			// Cwd-relative scratch when no output dir; keep out of the repo tree.
+			dumpDir = "tmp/logs/inference-failures"
 		}
 	}
 	svc := strings.TrimSpace(os.Getenv("MAJORDOMO_OTEL_SERVICE_NAME"))

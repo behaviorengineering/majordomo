@@ -85,7 +85,7 @@ Tracing is on by default (Phoenix optional). On a failed `run review` / `orchest
 {output-dir}/logs/inference-failures/<trace_id>.json
 ```
 
-or `logs/inference-failures/` when no output dir is set. Attach that JSON to an AI for debug. Set `MAJORDOMO_OTEL_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to `localhost:4317` when Phoenix is running. Disable with `MAJORDOMO_OTEL_ENABLED=0`.
+or `tmp/logs/inference-failures/` when no output dir is set. Attach that JSON to an AI for debug. Set `MAJORDOMO_OTEL_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to `localhost:4317` when Phoenix is running. Disable with `MAJORDOMO_OTEL_ENABLED=0`.
 
 ## Local image builds
 
