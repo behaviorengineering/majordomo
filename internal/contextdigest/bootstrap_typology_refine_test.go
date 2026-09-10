@@ -377,11 +377,6 @@ func TestMechanicalPreClusterSeedsDeliveryAndLibraries(t *testing.T) {
     confidence: 0.9
     evidence: [imports_yaml, yaml_tags]
     inspected_stage: 1
-  - path: internal/traceboot
-    role: observability
-    confidence: 0.9
-    evidence: [imports_otel]
-    inspected_stage: 1
   - path: internal/cliexec
     role: exec_runner
     confidence: 0.9
@@ -422,7 +417,6 @@ edges:
 		"Library candidates",
 		"`dto`: `internal/board`",
 		"`config`: `internal/config`",
-		"`observability`: `internal/traceboot`",
 		"`exec_runner`: `internal/cliexec`",
 		"entrypoint` and `server` are distinct delivery roles",
 	} {

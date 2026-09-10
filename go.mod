@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/XiaoConstantine/dspy-go v0.86.1
 	github.com/behaviorengineering/strop v0.2.4
-	github.com/behaviorengineering/typology v0.0.15-0.20260910032547-8a54f2b04e88
+	github.com/behaviorengineering/typology v0.0.16-0.20260910033005-420b9409f4fb
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13
