@@ -16,7 +16,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-const defaultFailureDumpDir = "logs/inference-failures"
+const defaultFailureDumpDir = "tmp/logs/inference-failures"
 
 type dumpedTrace struct {
 	TraceID           string       `json:"trace_id"`
