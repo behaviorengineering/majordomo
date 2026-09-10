@@ -131,7 +131,7 @@ func TestTypologyClusterModuleLibrariesStance(t *testing.T) {
 		"lean",
 		"counsel",
 		"approve binding or refactor",
-		"authoritative for the seed groups",
+		"authoritative for door-private",
 	} {
 		if !strings.Contains(inst, needle) {
 			t.Fatalf("cluster instruction missing %q: %s", needle, jmodules.TypologyClusterModule().GetSignature().Instruction)
