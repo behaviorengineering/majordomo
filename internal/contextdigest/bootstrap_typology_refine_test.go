@@ -349,6 +349,124 @@ slices:
 	}
 }
 
+func TestMechanicalPreClusterSeedsDeliveryAndLibraries(t *testing.T) {
+	t.Parallel()
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    evidence: [has_main]
+    inspected_stage: 1
+  - path: internal/server
+    role: server
+    confidence: 0.9
+    evidence: ["delivery:ui", "go_embed", "embeds_static"]
+    inspected_stage: 1
+  - path: internal/grpcserver
+    role: server
+    confidence: 0.9
+    evidence: ["delivery:grpc", "imports_grpc", "grpc_service"]
+    inspected_stage: 1
+  - path: internal/board
+    role: dto
+    confidence: 0.9
+    evidence: [json_tags]
+    inspected_stage: 1
+  - path: internal/config
+    role: config
+    confidence: 0.9
+    evidence: [imports_yaml, yaml_tags]
+    inspected_stage: 1
+  - path: internal/traceboot
+    role: observability
+    confidence: 0.9
+    evidence: [imports_otel]
+    inspected_stage: 1
+  - path: internal/cliexec
+    role: exec_runner
+    confidence: 0.9
+    evidence: [imports_os_exec]
+    inspected_stage: 1
+  - path: internal/agent
+    role: aggregator
+    confidence: 0.9
+    evidence: [exported_logic]
+    inspected_stage: 2
+  - path: internal/analyze
+    role: aggregator
+    confidence: 0.9
+    evidence: [exported_logic]
+    inspected_stage: 2
+  - path: internal/ledger
+    role: aggregator
+    confidence: 0.9
+    evidence: [exported_logic]
+    inspected_stage: 2
+edges:
+  - from: internal/agent
+    to: internal/ledger
+    kind: imports
+  - from: internal/analyze
+    to: internal/ledger
+    kind: imports
+  - from: cmd/demo
+    to: internal/server
+    kind: serves_server
+`
+	out := mechanicalPreCluster(mustParseRoles(roles))
+	for _, needle := range []string{
+		"Delivery surfaces",
+		"`cmd/demo`",
+		"`internal/server`",
+		"`internal/grpcserver`",
+		"Library candidates",
+		"`dto`: `internal/board`",
+		"`config`: `internal/config`",
+		"`observability`: `internal/traceboot`",
+		"`exec_runner`: `internal/cliexec`",
+		"entrypoint` and `server` are distinct delivery roles",
+	} {
+		if !strings.Contains(out, needle) {
+			t.Fatalf("mechanical seed missing %q:\n%s", needle, out)
+		}
+	}
+}
+
+func TestMechanicalPreClusterGroupsAggregators(t *testing.T) {
+	t.Parallel()
+	roles := `packages:
+  - path: internal/agent
+    role: aggregator
+    confidence: 0.9
+    evidence: [exported_logic]
+    inspected_stage: 2
+  - path: internal/analyze
+    role: aggregator
+    confidence: 0.9
+    evidence: [exported_logic]
+    inspected_stage: 2
+  - path: internal/ledger
+    role: aggregator
+    confidence: 0.9
+    evidence: [exported_logic]
+    inspected_stage: 2
+edges:
+  - from: internal/agent
+    to: internal/ledger
+    kind: imports
+  - from: internal/analyze
+    to: internal/ledger
+    kind: imports
+`
+	out := mechanicalPreCluster(mustParseRoles(roles))
+	if !strings.Contains(out, "Product slice seeds") {
+		t.Fatalf("expected product slice seed section:\n%s", out)
+	}
+	if !strings.Contains(out, "`internal/agent`") || !strings.Contains(out, "`internal/analyze`") || !strings.Contains(out, "`internal/ledger`") {
+		t.Fatalf("expected connected aggregators in seed:\n%s", out)
+	}
+}
+
 func TestScrubForbiddenHTTPEntrypointMerges(t *testing.T) {
 	roles := `packages:
   - path: cmd/demo

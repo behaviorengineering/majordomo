@@ -45,6 +45,7 @@ var digestEvalSpecs = map[string]digestEvalSpec{
 		focusAreas:        "consultant counsel; observed package_roles before any merge overlay",
 		feedbackSuffix: `Score generator_output cluster_proposal_md against the cluster counsel and delivery rubrics.
 Reject proposals that contradict package_roles.
+Reject ignoring the mechanical_grouping_md seed.
 Reject using folder names (dashboard, board, cli, server) as classification evidence.
 Reject merge inventories that do not argue why this grouping, what was rejected, and the lean.
 Reject "merge dto into aggregator as the UI" or "forge depends on UI" invented from parking board under dashboard.

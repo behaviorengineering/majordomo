@@ -14,6 +14,7 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 		foundContracts := false
 		foundReadme := false
 		foundRoles := false
+		foundMechanical := false
 		for _, in := range mod.GetSignature().Inputs {
 			switch in.Name {
 			case "package_contracts":
@@ -22,6 +23,8 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 				foundReadme = true
 			case "package_roles":
 				foundRoles = true
+			case "mechanical_grouping_md":
+				foundMechanical = true
 			}
 		}
 		if !foundContracts {
@@ -32,6 +35,9 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 		}
 		if !foundRoles {
 			t.Fatalf("module %s missing package_roles input", mod.GetDisplayName())
+		}
+		if mod.GetDisplayName() == "Typology Cluster" && !foundMechanical {
+			t.Fatalf("module %s missing mechanical_grouping_md input", mod.GetDisplayName())
 		}
 	}
 }
@@ -113,6 +119,7 @@ func TestTypologyClusterModuleLibrariesStance(t *testing.T) {
 	inst := strings.ToLower(jmodules.TypologyClusterModule().GetSignature().Instruction)
 	for _, needle := range []string{
 		"package_roles",
+		"mechanical_grouping_md",
 		"folder and path words",
 		"never evidence",
 		"fills_dto",
@@ -124,6 +131,7 @@ func TestTypologyClusterModuleLibrariesStance(t *testing.T) {
 		"lean",
 		"counsel",
 		"approve binding or refactor",
+		"authoritative for the seed groups",
 	} {
 		if !strings.Contains(inst, needle) {
 			t.Fatalf("cluster instruction missing %q: %s", needle, jmodules.TypologyClusterModule().GetSignature().Instruction)
