@@ -65,18 +65,21 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		gen = packageJudgeGenerator{}
 	}
+	rolesDoc := mustParseRoles(input.PackageRoles)
+	mechanicalGroupingMD := mechanicalPreCluster(rolesDoc)
 
 	clusterFields := map[string]interface{}{
-		"repo_id":             input.RepoID,
-		"module_scope":        input.ModuleScope,
-		"draft_catalog_yaml":  input.DraftCatalogYAML,
-		"graph_text":          input.GraphText,
-		"package_contracts":   input.PackageContracts,
-		"package_roles":       input.PackageRoles,
-		"architecture_draft":  input.ArchitectureDraft,
-		"repo_layout":         input.RepoLayout,
-		"readme_snapshot":     input.ReadmeSnapshot,
-		"validation_feedback": input.ValidationFeedback,
+		"repo_id":                input.RepoID,
+		"module_scope":           input.ModuleScope,
+		"draft_catalog_yaml":     input.DraftCatalogYAML,
+		"graph_text":             input.GraphText,
+		"package_contracts":      input.PackageContracts,
+		"package_roles":          input.PackageRoles,
+		"mechanical_grouping_md": mechanicalGroupingMD,
+		"architecture_draft":     input.ArchitectureDraft,
+		"repo_layout":            input.RepoLayout,
+		"readme_snapshot":        input.ReadmeSnapshot,
+		"validation_feedback":    input.ValidationFeedback,
 	}
 	var clusterMD string
 	clusterFeedback := input.ValidationFeedback

@@ -116,9 +116,9 @@ func Register(r *criteria.CriterionRegistry) {
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDClusterDelivery,
 		Name:        "Cluster starts from delivery facts",
-		Description: `Cluster classifies from package_roles (observed topology) plus contracts. Folder names are never evidence. Sole importer is wiring. dto is not owned by an aggregator; exec_runner is not CLI furniture; aggregator is not kind: ui.`,
-		Scoring: `2 points: Proposal honors package_roles and treats fills_dto / uses_runner as wiring, not false ownership smells.
-0 points: Merges dto into aggregator as UI domain, folds server into CLI for sole importer, or labels aggregator as the website from the path word dashboard.`,
+		Description: `Cluster classifies from package_roles (observed topology), the mechanical grouping seed, plus contracts. Folder names are never evidence. Sole importer is wiring. dto is not owned by an aggregator; exec_runner is not CLI furniture; aggregator is not kind: ui.`,
+		Scoring: `2 points: Proposal honors package_roles and the mechanical seed, and treats fills_dto / uses_runner as wiring, not false ownership smells.
+0 points: Merges dto into aggregator as UI domain, folds server into CLI for sole importer, ignores the mechanical seed, or labels aggregator as the website from the path word dashboard.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})

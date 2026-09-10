@@ -127,6 +127,7 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("graph_text", "typology show graph output"),
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges. Folder names are not evidence."),
+			in("mechanical_grouping_md", "Deterministic grouping seed derived from roles and graph."),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
 			in("readme_snapshot", "Served-repo README: product purpose and delivery commands"),
@@ -140,9 +141,10 @@ A discover draft is package-level inventory. package_roles is the factual observ
 
 Order of evidence (MUST):
 1. package_roles: each package already has role + confidence + evidence from code (entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown).
-2. package_contracts and readme_snapshot: supporting facts.
-3. graph_text: coupling and wiring only. Labeled edges in package_roles (fills_dto, uses_runner, serves_server, composes, reads_config) explain imports.
-4. Folder and path words (dashboard, board, cli, server) are NEVER evidence and MUST NOT relabel a node.
+2. mechanical_grouping_md: deterministic grouping seed. It is authoritative for the seed groups, and the LLM must not silently override it.
+3. package_contracts and readme_snapshot: supporting facts.
+4. graph_text: coupling and wiring only. Labeled edges in package_roles (fills_dto, uses_runner, serves_server, composes, reads_config) explain imports.
+5. Folder and path words (dashboard, board, cli, server) are NEVER evidence and MUST NOT relabel a node.
 
 Hard rules from observed roles:
 - entrypoint packages are CLI surfaces.
