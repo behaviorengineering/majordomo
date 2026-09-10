@@ -397,7 +397,10 @@ func finishDigestRun(p finishParams) (Result, error) {
 	}
 
 	title := fmt.Sprintf("context digest: %s", cfg.Repository.ID)
-	body := digestPRBody(len(p.commits), p.defaultHEAD, p.gateSidecar, loadPRPriorityMarkdown(p.ctxDir))
+	body, err := digestPRBody(len(p.commits), p.defaultHEAD, p.gateSidecar, loadPRPriorityMarkdown(p.ctxDir))
+	if err != nil {
+		return Result{}, err
+	}
 	pr, err := p.forge.OpenUpdatePR(p.baseBranch, p.updateBranch, title, body)
 	if err != nil {
 		return Result{}, err

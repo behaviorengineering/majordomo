@@ -20,6 +20,9 @@ func TypologyClusterModule() core.Module { return typologyClusterModule() }
 // TypologyRefineModule builds the unattended typology refine generator.
 func TypologyRefineModule() core.Module { return typologyRefineModule() }
 
+// TypologyInspectModule builds the low-confidence package role inspector.
+func TypologyInspectModule() core.Module { return typologyInspectModule() }
+
 // TypologyHumanInterventionModule builds the post-refine human-decision flagger.
 func TypologyHumanInterventionModule() core.Module { return typologyHumanInterventionModule() }
 

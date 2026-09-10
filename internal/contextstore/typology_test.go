@@ -22,6 +22,11 @@ func TestValidateTypologyManifestRequiresPackageContractsWhenPending(t *testing.
 		t.Fatalf("expected package_contracts_path error, got %v", err)
 	}
 	m.PackageContractsPath = "package_contracts.md"
+	err = ValidateTypologyManifest(m)
+	if err == nil || !strings.Contains(err.Error(), "package_roles_path") {
+		t.Fatalf("expected package_roles_path error, got %v", err)
+	}
+	m.PackageRolesPath = "package_roles.yaml"
 	if err := ValidateTypologyManifest(m); err != nil {
 		t.Fatal(err)
 	}
@@ -39,6 +44,7 @@ func TestValidateTypologyManifestRequiresHumanInterventionWhenComplete(t *testin
 		SnapshotPath:         "snapshot.yaml",
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
+		PackageRolesPath:     "package_roles.yaml",
 		ClusterProposalPath:  "cluster_proposal.md",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",

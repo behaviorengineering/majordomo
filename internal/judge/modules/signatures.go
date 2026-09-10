@@ -17,6 +17,24 @@ func newGenerator(sig core.Signature, name string) *dspymodules.DirectivesCoT {
 	return dspymodules.New(sig, dspymodules.Config{Name: name})
 }
 
+// consultantCounselContract is the shared voice for unattended Typology digest prose
+// (cluster proposal, refine journey, human-intervention / PR priority). Digest cannot wait
+// for a human pick, so the lean is the recommendation a human can override at merge.
+const consultantCounselContract = `
+Consultant counsel (MUST apply to every recommendation and open debt item):
+- The speaker is Majordomo (and its Typology digest processes), not a product team. Attribute proposals to Majordomo or Typology digest.
+- Catalog merges, libraries, and bindings on the context branch are architecture-grounding proposals awaiting human merge or reject. They are not consented reorganizations already landed in the product repository.
+- Evidenced slice-to-library SliceBindings complete a library classification in this proposal (natural when a consumer imports a library-owned package). They remain proposals until the context PR merges.
+- Lead with a recommendation in fluent prose.
+- When there is a real fork (different catalog or ownership outcome), name two shippable approaches in product terms, one cost each, then the lean.
+- Keep package and slice ids so coverage checks still match; gloss jargon in the same sentence.
+- MUST NOT invent decoy options or offer "do nothing" as the second approach.
+- MUST NOT defer the argument to another file (for example "see journey_md" or "please review the full list").
+- MUST NOT stop at hollow mitigations such as "Approve binding or refactor" with no smell, alternatives, or lean.
+- MUST NOT mansplain: no "Hello Operator," no inventory restatement without a lean.
+- MUST NOT use corporate "we" for shipped-sounding claims (for example "we successfully reorganized the repository", "we consolidated", "we are proceeding"). Prefer "Majordomo proposes", "Typology refine grouped", or "this context catalog proposes".
+- A recommended lean is guidance only. MUST NOT invent libraries membership solely to clear findings. MUST NOT invent slice-to-slice bindings without draft or graph evidence.`
+
 func fileReviewModule() *dspymodules.DirectivesCoT {
 	sig := core.NewSignature(
 		[]core.InputField{
@@ -107,37 +125,51 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("module_scope", "Typology module scope"),
 			in("draft_catalog_yaml", "Raw Typology discover draft YAML"),
 			in("graph_text", "typology show graph output"),
-			in("package_contracts", "Per-package public contracts: exports and hasMain from typology contracts"),
+			in("package_contracts", "Per-package public contracts from typology contracts"),
+			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges. Folder names are not evidence."),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
+			in("readme_snapshot", "Served-repo README: product purpose and delivery commands"),
 			in("validation_feedback", "Optional prior structure-validation feedback to fix"),
 		},
 		[]core.OutputField{
 			out("cluster_proposal_md", "Markdown proposal of merges, renames, anti-pattern findings, and boundary debt"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
-A discover draft is package-level inventory, not architecture. Propose how to consolidate it into bounded contexts.
-Use package_contracts as primary evidence for what each package is: hasMain or cmd delivery packages are CLI surfaces; libraries that only export helpers or exec runners are not CLI surfaces even if the path contains "cli".
+A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
 
-Apply these merge heuristics:
-1. Sole importer: package imported by only one caller -> merge into caller.
-2. Same job family: companion packages around one domain concern -> one family slice.
-3. Split companion packages that share a stem (sa + satools -> sa).
-4. Manifest/CLI companions used only for staging -> staging/domain owner.
-5. Forge side-effects next to publish -> publish or forge.
-6. Projection/visualizer packages that only render domain models -> surfaces of the entity domain, not peer slices.
+Order of evidence (MUST):
+1. package_roles: each package already has role + confidence + evidence from code (entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown).
+2. package_contracts and readme_snapshot: supporting facts.
+3. graph_text: coupling and wiring only. Labeled edges in package_roles (fills_dto, uses_runner, serves_server, composes, reads_config) explain imports.
+4. Folder and path words (dashboard, board, cli, server) are NEVER evidence and MUST NOT relabel a node.
 
-Enforce DDD anti-patterns:
-- Do not make temporal pipeline stages peer slices.
-- Do not promote capabilities (LLM gateway, eval) to domain pillars.
-- Do not create standalone cli or platform slices; put CLI under surfaces of the domain they invoke.
-- Do not create projection-as-slice peers.
-- Do not treat exec-adapter packages (for example cliexec with Run/Command exports and hasMain false) as CLI surfaces.
-- Every draft package path must remain claimed under owns[] or surfaces[] or libraries[].owns[]; demoting an exec adapter off kind: cli must keep it under owns[], never drop it.
+Hard rules from observed roles:
+- entrypoint packages are CLI surfaces.
+- server packages are HTTP, gRPC, or UI surfaces. MUST NOT share a slice with an entrypoint.
+- dto packages are shared data contracts; MUST NOT merge them into an aggregator or call them the product domain.
+- aggregator packages build page/domain data; MUST NOT label them kind: ui or "the website".
+- exec_runner packages are technical runners; MUST NOT put them under the entrypoint's domain just because the entrypoint also imports them.
+- observability packages boot tracing/metrics; they are not config.
+- fills_dto edges mean adapters fill JSON types; they are NOT "forge depends on the UI".
+- uses_runner edges mean a package shells out through a runner; they are NOT "depends on the CLI domain".
 
-Declare domain-free platform utility leaves (config, telemetry, auth, logger) under libraries[] with a technical purpose when the draft or graph shows them. Prefer libraries over inventing a platform slice or stuffing them into an arbitrary domain hub.
-Propose library placement and slice-to-library bindings as operator-facing debt when humans have not confirmed them; do not treat draft library rows as final approvals.
-Record boundary violations and open debt in a debt table.
+Grouping is optional and only when both sides are high-confidence and an evidenced import exists. Prefer recording wiring notes over inventing ownership.
+` + consultantCounselContract + `
+
+Apply these merge heuristics only after honoring package_roles:
+1. Same job family companions (for example two forge adapters) may share a slice when both are adapters.
+2. Split companion packages that share a stem (sa + satools -> sa).
+3. Sole importer: wiring note only; never merge-into-caller against observed roles.
+
+Enforce anti-patterns:
+- Do not promote capabilities to domain pillars.
+- Do not create standalone cli or platform slices.
+- Do not treat exec_runner as kind: cli.
+- Every draft package path must remain claimed under owns[], surfaces[], or libraries[].owns[].
+
+Declare domain-free utilities under libraries[] when the draft or graph shows them.
+Record boundary debt with smell, alternatives, and lean. MUST NOT use hollow mitigations such as "Approve binding or refactor".
 Output markdown only with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale.
 Do not emit catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)
@@ -150,9 +182,11 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			in("module_scope", "Typology module scope"),
 			in("draft_catalog_yaml", "Raw Typology discover draft YAML"),
 			in("cluster_proposal_md", "Approved cluster-pass proposal markdown"),
-			in("package_contracts", "Per-package public contracts: exports and hasMain from typology contracts"),
+			in("package_contracts", "Per-package public contracts from typology contracts"),
+			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges"),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
+			in("readme_snapshot", "Served-repo README: product purpose and delivery commands"),
 			in("validation_feedback", "Optional ValidateStructure or boundary-evaluator feedback to fix"),
 		},
 		[]core.OutputField{
@@ -161,33 +195,59 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 		},
 	).WithInstruction(`You are the unattended Typology refine step for Majordomo context digest.
 Apply the cluster proposal to the draft catalog and emit a complete refined typology.yaml.
-Use package_contracts when placing packages: hasMain or real cmd/ delivery packages belong under kind: cli surfaces; packages that only export library/exec helpers (hasMain false) belong under owns[], never kind: cli solely because the path contains "cli".
+package_roles is factual. MUST NOT contradict it. Folder names are never evidence.
+
+Placement from roles:
+- entrypoint -> kind: cli surfaces
+- server -> surfaces (api, grpc, or ui when evidence includes embeds_static); NEVER fold into the CLI slice for sole importer; NEVER share a slice with an entrypoint
+- dto -> owns[] (or a thin shared data slice); NEVER the product domain from graph position; NEVER owned by an aggregator just because that aggregator imports it
+- aggregator -> owns[] of a product slice; MUST NOT kind: ui
+- exec_runner -> owns[] or libraries[]; NEVER under the entrypoint domain solely because cmd imports it
+- observability -> owns[] or libraries[]; NEVER config
+- adapter / config -> owns[] or libraries[] as fits
+
+Catalog MAY group companion adapters when both are high-confidence. MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from false ownership.
+` + consultantCounselContract + `
 
 Catalog rules:
-- Every slice MUST have a non-empty business objective that states why the bounded context exists in one concrete sentence (for example who it serves and what outcome it owns).
+- Every slice MUST have a non-empty business objective that states why the bounded context exists in one concrete sentence.
 - MUST NOT use hollow template objectives such as "Provide X functionality", "Provide X capabilities", or "Provide X services".
 - Components are packages under owns, under surfaces, or under libraries[].owns.
-- Libraries are technical package groups with a purpose and owns[] only (no surfaces, programs, or docs). Use them for domain-free utilities (config, llm clients, exec helpers without product knowledge).
-- MUST NOT invent libraries[] membership or slice-to-library bindings to clear findings. Keep draft library rows only when the discover draft already listed them; otherwise propose library vs slice placement as journey debt for humans.
-- MUST NOT invent a platform or capability slice to claim those packages.
-- Surfaces are ui, cli, or api interaction artefacts for user-facing delivery.
-- Packages under cmd/, http/api, ui, dashboard, or server MUST sit under surfaces[], not domain-only owns[].
-- Process-exec adapters such as cliexec are infrastructure under owns[] or a library when they have no domain knowledge, NEVER kind: cli surfaces.
-- Every draft package path MUST appear under owns[], surfaces[], or libraries[].owns[] in the refined catalog. Demoting an exec adapter off kind: cli MUST keep that package claimed; MUST NOT drop it.
-- Blank programs are allowed for pure domain slices; do not invent subprograms or actuators without path evidence.
-- Do not emit docs or docs.pages; DocPages are for later human emit, not this proposal.
-- Do not invent history; this is a proposal for the context branch, not a confirmed served-repo catalog.
-- Preserve real package paths from the draft and graph verbatim in every component path: field (with or without ./ is fine).
-- MUST NOT invent or rewrite filesystem package folders (for example localgit -> git/local). Put desired folder renames in the journey debt table only.
-- Slice ids MAY rename or merge; package path: values MUST still match draft/graph paths.
-- Include sliceBindings/componentBindings only when evidenced by the draft or graph narrative in the proposal. SliceBinding from remains a slice; to may be a slice or library when humans already confirmed that coupling in the draft.
+- Libraries are technical package groups with a purpose and owns[] only.
+- MUST NOT invent libraries[] membership solely to clear findings.
+- When libraries[] claim packages, emit evidenced SliceBinding entries from consumer slices.
+- Surfaces are ui, cli, or api interaction artefacts for user-facing delivery based on observed roles, not path words.
+- Every draft package path MUST appear under owns[], surfaces[], or libraries[].owns[].
+- Preserve real package paths from the draft and graph verbatim.
+- MUST NOT invent filesystem package folders. Put desired renames in journey debt only.
 - Journey markdown MUST include Status, decisions taken, and a Technical debt and boundary violations table.
-- Journey debt rows describe remaining open work only. If Status says refinement is complete, do not keep "Merge into" as a pending action.
-- If the architecture draft still lists findings, the debt table MUST have at least one concrete row (not "None").
+- Each decision MUST say what was rejected and why.
+- Each open debt row MUST carry smell, alternatives, and lean.
 - When validation_feedback is present, fix those issues before emitting.
 
 Output refined_catalog_yaml as YAML only (no markdown fences). Output journey_md as markdown.`)
 	return newGenerator(sig, TaskTypologyRefine)
+}
+
+func typologyInspectModule() *dspymodules.DirectivesCoT {
+	sig := core.NewSignature(
+		[]core.InputField{
+			in("package_path", "Repository-relative package path being inspected"),
+			in("package_contracts", "Contract row for this package if available"),
+			in("package_source", "Go source files for this package only"),
+			in("candidate_role", "Optional mechanical candidate role"),
+			in("current_evidence", "Mechanical evidence ids already known"),
+		},
+		[]core.OutputField{
+			out("role", "One of: entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown"),
+			out("evidence", "Short symbol-based evidence quotes; never the directory name"),
+		},
+	).WithInstruction(`Classify one Go package into an observed role from its source and contracts only.
+Allowed roles: entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown.
+MUST NOT use the directory or folder name as evidence (ignore words like dashboard, board, cli, server in the path).
+	Cite exported symbols and import paths only (os/exec, net/http, google.golang.org/grpc, go.opentelemetry.io, gopkg.in/yaml.v3, go:embed, JSON/YAML tags, ServeHTTP, Register*Server).
+MUST NOT invent a role from English function names. If unsure, return role unknown.`)
+	return newGenerator(sig, TaskTypologyInspect)
 }
 
 func typologyHumanInterventionModule() *dspymodules.DirectivesCoT {
@@ -209,17 +269,20 @@ func typologyHumanInterventionModule() *dspymodules.DirectivesCoT {
 		},
 	).WithInstruction(`You are the Majordomo human-intervention flagger after Typology refine.
 Humans give direction and leadership. Your job is to surface architecture findings the unattended refine must NOT invent away.
+` + consultantCounselContract + `
 
 Rules:
 - findings_list is authoritative. Every finding MUST appear in journey debt, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
-- MUST NOT invent sliceBindings, libraries[] rows, rewrite package ownership, or invent catalog YAML to clear findings.
-- Frame each finding as a human decision: approve a binding (including slice-to-library), confirm a library vs slice placement, merge slices, or accept temporary debt.
-- Missing slice-to-library bindings are human decisions the same way missing slice-to-slice bindings are.
+- Output markdown only. MUST NOT invent sliceBindings, libraries[] rows, rewrite package ownership, or invent catalog YAML in these fields.
+- Majordomo completes evidenced slice-to-library SliceBindings in the proposal catalog when it classifies packages as libraries. MUST NOT ask humans to rubber-stamp those mechanical edges.
+- Frame remaining findings as normative human decisions: keep the library placement, fold packages into a domain slice, decouple the import, approve a slice-to-slice binding, merge slices, or accept temporary debt.
+- Missing slice-to-slice bindings still need counsel. Missing slice-to-library bindings after refine should be rare; if one remains, argue library placement vs decouple, not "approve this binding".
 - When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
 - Journey MUST include Status, decisions already taken, and a Technical debt and boundary violations table that names every finding.
-- human_intervention_md is a tutor briefing for operators: situation, why it matters, the decision, and evidence pointers into architecture/journey.
-- weaknesses_seed_md is markdown bullets suitable for weaknesses.md (same priorities).
-- pr_priority_md is the GitHub context-PR summary a cold reader sees first. Write it in a tutor voice. Assume the reader has never seen this repo. Lead with what is going on and why it matters, then the human choice. Gloss jargon in the same sentence (a SliceBinding is an approved allowed coupling from a bounded context to another slice or to a library; a library is a technical package group with no product objective). Name packages by role (UI, git adapters, CLI runner, shared config) as well as id so coverage checks still match. MUST NOT use only imperative task titles such as "Formalize Config Access". MUST NOT dump catalog ids without a gloss.
+- Journey rewrite MUST keep leans from refine counsel. MUST NOT flatten debt rows back to a table of verbs such as "Approve binding or refactor".
+- human_intervention_md is a tutor briefing for operators: situation, smell/risk, alternatives with a cost, recommended lean, and evidence pointers into architecture/journey. MUST NOT punt the argument to journey_md.
+- weaknesses_seed_md is markdown bullets suitable for weaknesses.md (same priorities and leans, shorter).
+- pr_priority_md is the GitHub context-PR summary a cold reader sees first. Write it in a tutor voice with consultant counsel. Assume the reader has never seen this repo. Lead with what Majordomo's Typology digest is proposing on this context branch and why it matters, then smell, alternatives, and the lean. Frame slice consolidations and library placements as proposed catalog models for grounding, not as work the product team already shipped. Gloss jargon in the same sentence (a SliceBinding is an approved allowed coupling from a bounded context to another slice or to a library; a library is a technical package group with no product objective). Name packages by role (UI, git adapters, CLI runner, shared config) as well as id so coverage checks still match. MUST NOT use only imperative task titles such as "Formalize Config Access". MUST NOT dump catalog ids without a gloss. MUST NOT say "see journey_md" or ask the reader to open another file for the real argument. MUST NOT imply humans already consented to a repo reorganization.
 - When findings_list is empty, say no open architecture findings and keep Status coherent with an empty/open debt note.
 - When validation_feedback is present, fix those issues before emitting.
 

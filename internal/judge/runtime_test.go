@@ -141,6 +141,7 @@ func TestNewRuntimeRegistersDigestEvaluationWorkflows(t *testing.T) {
 		JobConfigs: map[string]config.JobConfig{
 			config.JobContextDigest: {
 				Modules: map[string]config.ModuleTaskConfig{
+					jmodules.TaskTypologyInspect:           {Provider: "poly"},
 					jmodules.TaskTypologyCluster:           {Provider: "poly"},
 					jmodules.TaskTypologyRefine:            {Provider: "poly"},
 					jmodules.TaskTypologyHumanIntervention: {Provider: "poly"},

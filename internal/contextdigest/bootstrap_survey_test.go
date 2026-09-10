@@ -118,6 +118,16 @@ slices:
 	if manifest.PackageContractsPath != "package_contracts.md" {
 		t.Fatalf("package_contracts_path=%q", manifest.PackageContractsPath)
 	}
+	if manifest.PackageRolesPath != "package_roles.yaml" {
+		t.Fatalf("package_roles_path=%q", manifest.PackageRolesPath)
+	}
+	roles, err := os.ReadFile(filepath.Join(evidence, "package_roles.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(roles), "packages:") {
+		t.Fatalf("roles=%s", roles)
+	}
 	if _, err := os.Stat(filepath.Join(evidence, "draft_snapshot.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("draft snapshot must not be committed evidence: %v", err)
 	}
@@ -264,7 +274,7 @@ func TestPilotSanitizeRefinedSurfaces(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := validateRefinedCatalogYAML(string(raw), string(raw), "demo")
+	out, err := validateRefinedCatalogYAML(string(raw), string(raw), "demo", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +289,7 @@ func TestPilotSanitizeRefinedSurfaces(t *testing.T) {
 			t.Fatalf("expected surfaces after sanitize when interaction paths exist, got:\n%s", out)
 		}
 	}
-	ok, feedback := evaluateTypologyBoundaries(out, "# Journey\n\n## Technical debt & boundary violations\n\n| Violation | Severity | Notes |\n| --- | --- | --- |\n| sample | low | recorded |\n", "## Findings\n\n- sample finding\n")
+	ok, feedback := evaluateTypologyBoundaries(out, "# Journey\n\n## Technical debt & boundary violations\n\n| Violation | Severity | Notes |\n| --- | --- | --- |\n| sample | low | recorded |\n", "## Findings\n\n- sample finding\n", "")
 	if !ok {
 		t.Fatalf("boundary eval after sanitize: %s", feedback)
 	}
@@ -329,8 +339,19 @@ EOF
 ## ./internal/demo
 - package: demo
 - hasMain: false
+- role: unknown
+- confidence: 0.00
 - exportedDecls: (none)
 - exportedFuncs: Run
+EOF
+    mkdir -p "$repo/tmp/typology"
+    cat > "$repo/tmp/typology/package_roles.yaml" <<'EOF'
+packages:
+  - path: internal/demo
+    role: unknown
+    confidence: 0
+    inspected_stage: 2
+edges: []
 EOF
     ;;
   show)

@@ -97,6 +97,7 @@ func validateTypologyEvidence(dir string) error {
 		for _, rel := range []string{
 			manifest.GraphPath,
 			manifest.PackageContractsPath,
+			manifest.PackageRolesPath,
 			manifest.ClusterProposalPath,
 			manifest.RefinedSnapshotPath,
 			manifest.JourneyPath,
@@ -111,7 +112,7 @@ func validateTypologyEvidence(dir string) error {
 		}
 	}
 	if refine == TypologyRefinePending {
-		for _, rel := range []string{manifest.GraphPath, manifest.PackageContractsPath} {
+		for _, rel := range []string{manifest.GraphPath, manifest.PackageContractsPath, manifest.PackageRolesPath} {
 			if strings.TrimSpace(rel) == "" {
 				continue
 			}

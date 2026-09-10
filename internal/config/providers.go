@@ -49,7 +49,7 @@ var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 // JobForTask maps a generator task name to its job_configs key.
 func JobForTask(task string) string {
 	switch strings.TrimSpace(task) {
-	case "bootstrap_story", "digest_story", "typology_cluster", "typology_refine", "typology_human_intervention":
+	case "bootstrap_story", "digest_story", "typology_inspect", "typology_cluster", "typology_refine", "typology_human_intervention":
 		return JobContextDigest
 	case "filereview", "summary", "technical":
 		return JobPRReview

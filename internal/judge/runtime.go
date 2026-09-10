@@ -34,6 +34,7 @@ var errGatewayUnavailable = errors.New("embedded gateway unavailable")
 // DigestTasks are the generator modules used by context digest / bootstrap.
 func DigestTasks() []string {
 	return []string{
+		jmodules.TaskTypologyInspect,
 		jmodules.TaskTypologyCluster,
 		jmodules.TaskTypologyRefine,
 		jmodules.TaskTypologyHumanIntervention,
@@ -51,6 +52,7 @@ func ReviewTasks() []string {
 func AllGeneratorTasks() []string {
 	return []string{
 		jmodules.TaskFileReview,
+		jmodules.TaskTypologyInspect,
 		jmodules.TaskTypologyCluster,
 		jmodules.TaskTypologyRefine,
 		jmodules.TaskTypologyHumanIntervention,
@@ -141,6 +143,7 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 
 	ctors := map[string]func() core.Module{
 		jmodules.TaskFileReview:                jmodules.FileReviewModule,
+		jmodules.TaskTypologyInspect:           jmodules.TypologyInspectModule,
 		jmodules.TaskTypologyCluster:           jmodules.TypologyClusterModule,
 		jmodules.TaskTypologyRefine:            jmodules.TypologyRefineModule,
 		jmodules.TaskTypologyHumanIntervention: jmodules.TypologyHumanInterventionModule,

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/config"
@@ -415,33 +416,66 @@ func writeTempBody(content string) (path string, cleanup func(), err error) {
 	return path, cleanup, nil
 }
 
-func digestPRBody(commits int, headSHA string, gate contextgate.Sidecar, priorityMD string) string {
-	var b strings.Builder
-	b.WriteString(contextPRMarker)
-	b.WriteString("\n\n")
-	if p := strings.TrimSpace(priorityMD); p != "" {
-		if !strings.HasPrefix(strings.ToLower(p), "## priority") {
-			b.WriteString("## Priority: human decisions\n\n")
-		}
-		b.WriteString(p)
-		b.WriteString("\n\n")
+// digestPRBodyData is the view model for the context-PR summary envelope.
+type digestPRBodyData struct {
+	Marker             string
+	PriorityMD         string
+	PriorityHasHeading bool
+	Seed               bool
+	Commits            int
+	HeadSHA            string
+	GateDone           bool
+	GateRejected       bool
+	GateBlockedWhy     bool
+	RejectReason       string
+}
+
+const digestPRBodyTmpl = `{{.Marker}}
+
+This pull request updates the teaching context for this repository. That briefing is what Majordomo keeps so a reviewer who has never seen this codebase can still understand what the project is, how it is shaped, and what still needs a human call. Treat the files here as that briefing, not as a changelog of code the bot already fixed.
+{{if .PriorityMD}}
+{{if not .PriorityHasHeading}}## Priority: human decisions
+
+{{end}}{{.PriorityMD}}
+{{end}}
+## What this catch-up did
+
+{{if .Seed -}}
+Majordomo started the context cursor at ` + "`{{.HeadSHA}}`" + ` (today's default-branch HEAD). It did not replay older history.
+{{else -}}
+Majordomo walked {{.Commits}} default-branch commit(s) and parked the context cursor at ` + "`{{.HeadSHA}}`" + `.
+{{end}}
+If the story and the priorities look right, merge. If they do not, comment ` + "`@majordomo reject <reason>`" + ` and digest will regenerate. Comment ` + "`@majordomo done`" + ` when the conversation is finished.
+{{if .GateDone}}
+**Gate:** the conversation is complete. A human may merge.
+{{else if .GateRejected}}
+**Gate:** rejected. Regen is scheduled ({{.RejectReason}}).
+{{else if .GateBlockedWhy}}
+**Gate:** blocked. Supply ` + "`@majordomo why <reason>`" + ` before rewrite completes.
+{{end}}`
+
+var digestPRBodyTemplate = template.Must(template.New("digestPRBody").Parse(digestPRBodyTmpl))
+
+// digestPRBody renders the context update PR summary envelope.
+func digestPRBody(commits int, headSHA string, gate contextgate.Sidecar, priorityMD string) (string, error) {
+	priority := strings.TrimSpace(priorityMD)
+	data := &digestPRBodyData{
+		Marker:             contextPRMarker,
+		PriorityMD:         priority,
+		PriorityHasHeading: strings.HasPrefix(strings.ToLower(priority), "## priority"),
+		Seed:               commits <= 0,
+		Commits:            commits,
+		HeadSHA:            headSHA,
+		GateDone:           gate.Status == contextgate.StatusDone,
+		GateRejected:       gate.Status == contextgate.StatusRejected,
+		GateBlockedWhy:     gate.Status == contextgate.StatusBlockedWhy,
+		RejectReason:       gate.RejectReason,
 	}
-	b.WriteString("Context digest catch-up.\n\n")
-	if commits > 0 {
-		fmt.Fprintf(&b, "Advanced cursor through %d default-branch commit(s); tip `%s`.\n", commits, headSHA)
-	} else {
-		fmt.Fprintf(&b, "Bootstrapped context cursor at `%s`.\n", headSHA)
+	var b bytes.Buffer
+	if err := digestPRBodyTemplate.Execute(&b, data); err != nil {
+		return "", fmt.Errorf("render context PR body: %w", err)
 	}
-	b.WriteString("\nReview and merge when ready. Use `@majordomo done` or `@majordomo reject <reason>` on this PR.\n")
-	switch gate.Status {
-	case contextgate.StatusDone:
-		b.WriteString("\n**Gate:** conversation complete — human may merge.\n")
-	case contextgate.StatusRejected:
-		b.WriteString("\n**Gate:** rejected — regen scheduled (" + gate.RejectReason + ").\n")
-	case contextgate.StatusBlockedWhy:
-		b.WriteString("\n**Gate:** blocked — supply `@majordomo why <reason>` before rewrite completes.\n")
-	}
-	return b.String()
+	return b.String(), nil
 }
 
 // ListPRComments returns PR/MR comments oldest-first.

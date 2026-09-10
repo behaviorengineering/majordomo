@@ -14,12 +14,14 @@ import (
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/typology/catalog"
+	"gopkg.in/yaml.v3"
 )
 
 const (
 	analysisDraftCatalogRel   = "tmp/typology/typology.yaml"
 	analysisDraftArchRel      = "tmp/typology/architecture_draft.md"
 	maxTypologyRefineAttempts = 3
+	maxReadmeSnapshotRunes    = 12000
 )
 
 // TypologyRefineGenerator runs the unattended cluster + refine LLM loop.
@@ -34,8 +36,10 @@ type TypologyRefineInput struct {
 	DraftCatalogYAML   string
 	GraphText          string
 	PackageContracts   string
+	PackageRoles       string
 	ArchitectureDraft  string
 	RepoLayout         string
+	ReadmeSnapshot     string
 	ValidationFeedback string
 	ClusterProposalMD  string
 }
@@ -68,17 +72,50 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		"draft_catalog_yaml":  input.DraftCatalogYAML,
 		"graph_text":          input.GraphText,
 		"package_contracts":   input.PackageContracts,
+		"package_roles":       input.PackageRoles,
 		"architecture_draft":  input.ArchitectureDraft,
 		"repo_layout":         input.RepoLayout,
+		"readme_snapshot":     input.ReadmeSnapshot,
 		"validation_feedback": input.ValidationFeedback,
 	}
-	clusterOut, err := gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, 1)
-	if err != nil {
-		return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
-	}
-	clusterMD := strings.TrimSpace(stringField(clusterOut, "cluster_proposal_md"))
-	if clusterMD == "" {
-		return TypologyRefineOutput{}, fmt.Errorf("typology cluster: cluster_proposal_md is required")
+	var clusterMD string
+	clusterFeedback := input.ValidationFeedback
+	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
+		if attempt > 1 {
+			clusterFields["validation_feedback"] = clusterFeedback
+		}
+		clusterOut, err := gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, attempt)
+		if err != nil {
+			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
+		}
+		clusterMD = strings.TrimSpace(stringField(clusterOut, "cluster_proposal_md"))
+		if clusterMD == "" {
+			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: cluster_proposal_md is required")
+		}
+		if fixed, note := scrubForbiddenHTTPEntrypointMerges(clusterMD, input.PackageRoles); note != "" {
+			// Deterministic role gate: do not keep asking the LLM to unlearn sole-importer folds.
+			clusterMD = fixed
+			_ = note
+			break
+		}
+		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologyCluster, clusterFields, map[string]interface{}{
+			"cluster_proposal_md": clusterMD,
+		}, attempt)
+		if err != nil {
+			if attempt == maxTypologyRefineAttempts {
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster LLM evaluation: %w", err)
+			}
+			clusterFeedback = err.Error()
+			continue
+		}
+		if !judge.EvalPassed(agg) {
+			if attempt == maxTypologyRefineAttempts {
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster LLM evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, judge.EvalFeedback(agg))
+			}
+			clusterFeedback = judge.EvalFeedback(agg)
+			continue
+		}
+		break
 	}
 
 	var refined string
@@ -91,8 +128,10 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			"draft_catalog_yaml":  input.DraftCatalogYAML,
 			"cluster_proposal_md": clusterMD,
 			"package_contracts":   input.PackageContracts,
+			"package_roles":       input.PackageRoles,
 			"architecture_draft":  input.ArchitectureDraft,
 			"repo_layout":         input.RepoLayout,
+			"readme_snapshot":     input.ReadmeSnapshot,
 			"validation_feedback": feedback,
 		}
 		out, err := gen.Generate(ctx, jmodules.TaskTypologyRefine, refineFields, attempt)
@@ -107,7 +146,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		if journey == "" {
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine: journey_md is required")
 		}
-		sanitized, err := validateRefinedCatalogYAML(refined, input.DraftCatalogYAML, input.RepoID)
+		sanitized, err := validateRefinedCatalogYAML(refined, input.DraftCatalogYAML, input.RepoID, input.PackageRoles)
 		if err != nil {
 			if attempt == maxTypologyRefineAttempts {
 				return TypologyRefineOutput{}, err
@@ -116,7 +155,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			continue
 		}
 		refined = sanitized
-		if ok, evalFeedback := evaluateTypologyBoundaries(refined, journey, input.ArchitectureDraft); !ok {
+		if ok, evalFeedback := evaluateTypologyBoundaries(refined, journey, input.ArchitectureDraft, input.PackageRoles); !ok {
 			if attempt == maxTypologyRefineAttempts {
 				return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, evalFeedback)
 			}
@@ -153,7 +192,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 }
 
 // evaluateTypologyBoundaries applies deterministic typology hard-fails before LLM EvaluateWorkflow.
-func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft string) (bool, string) {
+func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, rolesYAML string) (bool, string) {
 	var issues []string
 
 	tmp, err := os.CreateTemp("", "majordomo-eval-*.yaml")
@@ -173,6 +212,7 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft string
 	if err != nil {
 		return false, fmt.Sprintf("%s: load catalog: %v", typologypack.CriterionIDObjectives, err)
 	}
+	roles := roleByPath(mustParseRoles(rolesYAML))
 
 	for _, s := range typo.Slices {
 		obj := strings.TrimSpace(s.Objective)
@@ -182,14 +222,14 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft string
 			issues = append(issues, fmt.Sprintf("%s: slice %q has hollow template objective %q", typologypack.CriterionIDObjectives, s.ID, obj))
 		}
 		for _, c := range s.Owns {
-			if looksLikeInteractionPath(c.Path) {
-				issues = append(issues, fmt.Sprintf("%s: package %q on slice %q looks like interaction and must sit under surfaces[]", typologypack.CriterionIDSurfaces, c.Path, s.ID))
+			if looksLikeInteractionPath(c.Path, roles) {
+				issues = append(issues, fmt.Sprintf("%s: package %q on slice %q has observed role %s and must sit under surfaces[]", typologypack.CriterionIDSurfaces, c.Path, s.ID, roles[normalizeRolePath(c.Path)].Role))
 			}
 		}
 		for _, surf := range s.Surfaces {
 			for _, c := range surf.Components {
-				if isExecAdapterPath(c.Path) && surf.Kind == catalog.InteractionCLI {
-					issues = append(issues, fmt.Sprintf("%s: package %q is an exec adapter and must not sit under kind: cli surface %q", typologypack.CriterionIDAdapterSurfaces, c.Path, surf.ID))
+				if isExecAdapterPath(c.Path, roles) && surf.Kind == catalog.InteractionCLI {
+					issues = append(issues, fmt.Sprintf("%s: package %q is an exec_runner and must not sit under kind: cli surface %q", typologypack.CriterionIDAdapterSurfaces, c.Path, surf.ID))
 				}
 			}
 		}
@@ -214,41 +254,32 @@ func isHollowObjective(objective string) bool {
 	return hollowObjectiveRe.MatchString(strings.TrimSpace(objective))
 }
 
-func isExecAdapterPath(path string) bool {
-	p := strings.ToLower(filepath.ToSlash(strings.TrimSpace(path)))
-	if p == "" {
-		return false
+func mustParseRoles(raw string) packageRolesDoc {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return packageRolesDoc{}
 	}
-	base := filepath.Base(p)
-	return base == "cliexec" || strings.Contains(p, "/cliexec") || strings.HasSuffix(p, "cliexec")
+	var doc packageRolesDoc
+	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
+		return packageRolesDoc{}
+	}
+	return doc
 }
 
-func looksLikeInteractionPath(path string) bool {
-	// Exec adapters must stay under owns[]; never treat them as delivery surfaces.
-	if isExecAdapterPath(path) {
+func isExecAdapterPath(path string, roles map[string]packageRoleNode) bool {
+	n, ok := roles[normalizeRolePath(path)]
+	if !ok {
 		return false
 	}
-	p := strings.ToLower(filepath.ToSlash(strings.TrimSpace(path)))
-	if p == "" {
+	return isExecRunnerRole(n.Role)
+}
+
+func looksLikeInteractionPath(path string, roles map[string]packageRoleNode) bool {
+	n, ok := roles[normalizeRolePath(path)]
+	if !ok {
 		return false
 	}
-	base := filepath.Base(p)
-	switch {
-	case strings.Contains(p, "/cmd/"), strings.HasPrefix(p, "cmd/"):
-		return true
-	case base == "cli" || strings.HasSuffix(p, "/cli") || strings.Contains(p, "/cli/"):
-		return true
-	case strings.Contains(p, "/http") || strings.Contains(p, "httpapi") || strings.Contains(p, "/api/"):
-		return true
-	case base == "ui" || strings.HasSuffix(p, "/ui") || strings.Contains(p, "/ui/"):
-		return true
-	case base == "dashboard" || strings.HasSuffix(p, "/dashboard") || strings.Contains(p, "/dashboard/"):
-		return true
-	case base == "server" || strings.HasSuffix(p, "/server") || strings.Contains(p, "/server/"):
-		return true
-	default:
-		return false
-	}
+	return isInteractionRole(n.Role)
 }
 
 func journeyStatusClaimsComplete(journey string) bool {
@@ -351,7 +382,7 @@ func journeyHasDebtTable(journey string) bool {
 	return false
 }
 
-func validateRefinedCatalogYAML(raw, draftYAML, repoID string) (string, error) {
+func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (string, error) {
 	tmp, err := os.CreateTemp("", "majordomo-refined-*.yaml")
 	if err != nil {
 		return "", fmt.Errorf("typology refine temp file: %w", err)
@@ -369,21 +400,22 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("typology refine load catalog: %w", err)
 	}
-	typo = sanitizeRefinedCatalog(typo)
+	draft, allowed, err := loadDraftCatalog(draftYAML)
+	if err != nil {
+		return "", err
+	}
+	roles := roleByPath(mustParseRoles(rolesYAML))
+	typo = sanitizeRefinedCatalog(typo, draft, roles)
 	if id := strings.TrimSpace(repoID); id != "" {
 		cur := strings.TrimSpace(typo.ID)
 		if cur == "" || strings.HasPrefix(cur, "majordomo-typology-") || strings.Contains(cur, "/") {
 			typo.ID = id
 		}
 	}
-	draft, allowed, err := loadDraftCatalog(draftYAML)
-	if err != nil {
-		return "", err
-	}
 	if len(allowed) > 0 {
 		typo = remapInventedCatalogPaths(typo, allowed)
 	}
-	typo = restoreMissingDraftPackages(typo, draft)
+	typo = restoreMissingDraftPackages(typo, draft, roles)
 	if err := catalog.SaveYAML(path, typo); err != nil {
 		return "", fmt.Errorf("typology refine save sanitized catalog: %w", err)
 	}
@@ -466,6 +498,16 @@ func remapInventedCatalogPaths(t catalog.Typology, allowed map[string]struct{}) 
 			}
 		}
 	}
+	for i := range t.Libraries {
+		lib := &t.Libraries[i]
+		for j := range lib.Owns {
+			if near := uniqueNearestDraftPath(lib.Owns[j].Path, allowedList); near != "" {
+				if normalizeCatalogPath(lib.Owns[j].Path) != near {
+					lib.Owns[j].Path = near
+				}
+			}
+		}
+	}
 	return t
 }
 
@@ -521,6 +563,13 @@ func collectCatalogPathList(t catalog.Typology) []string {
 				if n := normalizeCatalogPath(c.Path); n != "" {
 					paths = append(paths, n)
 				}
+			}
+		}
+	}
+	for _, lib := range t.Libraries {
+		for _, c := range lib.Owns {
+			if n := normalizeCatalogPath(c.Path); n != "" {
+				paths = append(paths, n)
 			}
 		}
 	}
@@ -595,35 +644,42 @@ func containsString(list []string, want string) bool {
 
 // restoreMissingDraftPackages reclaims draft package paths the refine LLM dropped.
 // Exec adapters always land under owns[]; interaction paths reattach to surfaces.
-func restoreMissingDraftPackages(refined, draft catalog.Typology) catalog.Typology {
-	if len(draft.Slices) == 0 || len(refined.Slices) == 0 {
+// Draft library packages reattach to the matching refined library when present.
+func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
+	if len(refined.Slices) == 0 {
 		return refined
 	}
 	claimed := collectCatalogPaths(refined)
 	type missingComp struct {
 		draftSliceID string
+		draftLibID   string
 		comp         catalog.Component
 	}
 	var missing []missingComp
-	for _, s := range draft.Slices {
-		add := func(c catalog.Component) {
-			n := normalizeCatalogPath(c.Path)
-			if n == "" {
-				return
-			}
-			if _, ok := claimed[n]; ok {
-				return
-			}
-			missing = append(missing, missingComp{draftSliceID: s.ID, comp: c})
-			claimed[n] = struct{}{}
+	add := func(draftSliceID, draftLibID string, c catalog.Component) {
+		n := normalizeCatalogPath(c.Path)
+		if n == "" {
+			return
 		}
+		if _, ok := claimed[n]; ok {
+			return
+		}
+		missing = append(missing, missingComp{draftSliceID: draftSliceID, draftLibID: draftLibID, comp: c})
+		claimed[n] = struct{}{}
+	}
+	for _, s := range draft.Slices {
 		for _, c := range s.Owns {
-			add(c)
+			add(s.ID, "", c)
 		}
 		for _, surf := range s.Surfaces {
 			for _, c := range surf.Components {
-				add(c)
+				add(s.ID, "", c)
 			}
+		}
+	}
+	for _, lib := range draft.Libraries {
+		for _, c := range lib.Owns {
+			add("", lib.ID, c)
 		}
 	}
 	if len(missing) == 0 {
@@ -636,23 +692,41 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology) catalog.Typolo
 			sliceIdx[id] = i
 		}
 	}
+	libIdx := make(map[string]int, len(refined.Libraries))
+	for i, lib := range refined.Libraries {
+		if id := strings.TrimSpace(lib.ID); id != "" {
+			libIdx[id] = i
+		}
+	}
 
 	for _, m := range missing {
-		idx := 0
-		if i, ok := sliceIdx[strings.TrimSpace(m.draftSliceID)]; ok {
-			idx = i
-		}
 		c := m.comp
 		if strings.TrimSpace(c.ID) == "" {
 			c.ID = filepath.Base(normalizeCatalogPath(c.Path))
 		}
-		if isExecAdapterPath(c.Path) || !looksLikeInteractionPath(c.Path) {
+		if libID := strings.TrimSpace(m.draftLibID); libID != "" {
+			if i, ok := libIdx[libID]; ok {
+				if c.Layer == catalog.LayerInteraction {
+					c.Layer = ""
+				}
+				if c.Layer != "" && c.Layer != catalog.LayerDomain {
+					c.Layer = catalog.LayerDomain
+				}
+				refined.Libraries[i].Owns = append(refined.Libraries[i].Owns, c)
+				continue
+			}
+		}
+		idx := 0
+		if i, ok := sliceIdx[strings.TrimSpace(m.draftSliceID)]; ok {
+			idx = i
+		}
+		if isExecAdapterPath(c.Path, roles) || !looksLikeInteractionPath(c.Path, roles) {
 			c.Layer = catalog.LayerDomain
 			c.Kind = ""
 			refined.Slices[idx].Owns = append(refined.Slices[idx].Owns, c)
 			continue
 		}
-		kind := inferInteractionKind(c.Path)
+		kind := inferInteractionKind(c.Path, roles)
 		placed := false
 		for j := range refined.Slices[idx].Surfaces {
 			if refined.Slices[idx].Surfaces[j].Kind == kind {
@@ -676,12 +750,17 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology) catalog.Typolo
 	return refined
 }
 
-func inferInteractionKind(path string) catalog.InteractionKind {
-	p := strings.ToLower(filepath.ToSlash(strings.TrimSpace(path)))
-	switch {
-	case strings.Contains(p, "ui") || strings.Contains(p, "dashboard"):
-		return catalog.InteractionUI
-	case strings.Contains(p, "http") || strings.Contains(p, "api"):
+func inferInteractionKind(path string, roles map[string]packageRoleNode) catalog.InteractionKind {
+	n := roles[normalizeRolePath(path)]
+	switch n.Role {
+	case roleEntrypoint:
+		return catalog.InteractionCLI
+	case roleHTTPSurface:
+		for _, e := range n.Evidence {
+			if e == "embeds_static" {
+				return catalog.InteractionUI
+			}
+		}
 		return catalog.InteractionAPI
 	default:
 		return catalog.InteractionCLI
@@ -704,7 +783,7 @@ func rejectMissingDraftPackages(refined catalog.Typology, allowed map[string]str
 	}
 	sort.Strings(missing)
 	var b strings.Builder
-	b.WriteString("unmapped draft packages (must remain under owns[] or surfaces[]; demote exec adapters into owns[], do not drop them):")
+	b.WriteString("unmapped draft packages (must remain under owns[], surfaces[], or libraries[].owns[]; demote exec adapters into owns[], do not drop them):")
 	for _, p := range missing {
 		fmt.Fprintf(&b, "\n- %s", p)
 	}
@@ -713,8 +792,9 @@ func rejectMissingDraftPackages(refined catalog.Typology, allowed map[string]str
 
 // sanitizeRefinedCatalog drops dangling bindings, moves likely interaction packages
 // onto surfaces, demotes exec adapters into owns[] (never drops them), strips invented
-// DocPages, and normalizes common LLM mistakes.
-func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
+// DocPages, keeps only draft-backed libraries with a purpose, prefers slice claims over
+// library duplicates, and normalizes common LLM mistakes.
+func sanitizeRefinedCatalog(t, draft catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
 	seenComp := make(map[string]string)
 	for i := range t.Slices {
 		s := &t.Slices[i]
@@ -727,7 +807,7 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 			if owner, ok := seenComp[c.ID]; ok && owner != s.ID {
 				continue
 			}
-			if looksLikeInteractionPath(c.Path) {
+			if looksLikeInteractionPath(c.Path, roles) {
 				moved = append(moved, catalog.Component{ID: c.ID, Path: c.Path})
 				seenComp[c.ID] = s.ID
 				continue
@@ -739,6 +819,30 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 		s.Owns = owns
 
 		seenKind := make(map[catalog.InteractionKind]struct{})
+		seenSurfaceID := make(map[string]struct{})
+		uniqueSurfaceID := func(id string, kind catalog.InteractionKind) string {
+			base := strings.TrimSpace(id)
+			if base == "" {
+				base = s.ID + "-" + string(kind)
+			}
+			candidate := base
+			if _, ok := seenSurfaceID[candidate]; !ok {
+				seenSurfaceID[candidate] = struct{}{}
+				return candidate
+			}
+			candidate = s.ID + "-" + string(kind)
+			if _, ok := seenSurfaceID[candidate]; !ok {
+				seenSurfaceID[candidate] = struct{}{}
+				return candidate
+			}
+			for n := 2; ; n++ {
+				candidate = fmt.Sprintf("%s-%s-%d", s.ID, kind, n)
+				if _, ok := seenSurfaceID[candidate]; !ok {
+					seenSurfaceID[candidate] = struct{}{}
+					return candidate
+				}
+			}
+		}
 		var surfaces []catalog.Surface
 		for _, surf := range s.Surfaces {
 			if _, ok := seenKind[surf.Kind]; ok {
@@ -754,7 +858,7 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 					continue
 				}
 				// Exec adapters are never CLI delivery surfaces; demote to owns[].
-				if surf.Kind == catalog.InteractionCLI && isExecAdapterPath(c.Path) {
+				if surf.Kind == catalog.InteractionCLI && isExecAdapterPath(c.Path, roles) {
 					c.Layer = catalog.LayerDomain
 					seenComp[c.ID] = s.ID
 					s.Owns = append(s.Owns, c)
@@ -769,22 +873,18 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 				delete(seenKind, surf.Kind)
 				continue
 			}
+			surf.ID = uniqueSurfaceID(surf.ID, surf.Kind)
 			surfaces = append(surfaces, surf)
 		}
 		if len(moved) > 0 {
 			kind := catalog.InteractionCLI
 			for _, c := range moved {
-				p := strings.ToLower(c.Path)
-				switch {
-				case strings.Contains(p, "ui") || strings.Contains(p, "dashboard"):
-					kind = catalog.InteractionUI
-				case strings.Contains(p, "http") || strings.Contains(p, "api"):
-					kind = catalog.InteractionAPI
-				}
+				kind = inferInteractionKind(c.Path, roles)
+				break
 			}
 			if _, ok := seenKind[kind]; !ok {
 				surfaces = append(surfaces, catalog.Surface{
-					ID:         s.ID + "-" + string(kind),
+					ID:         uniqueSurfaceID(s.ID+"-"+string(kind), kind),
 					Kind:       kind,
 					Components: moved,
 				})
@@ -803,6 +903,79 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 		s.Docs = catalog.DocCluster{}
 	}
 
+	draftLibs := make(map[string]catalog.Library, len(draft.Libraries))
+	for _, lib := range draft.Libraries {
+		id := strings.TrimSpace(lib.ID)
+		if id == "" {
+			continue
+		}
+		draftLibs[id] = lib
+	}
+	var libraries []catalog.Library
+	keptLib := make(map[string]struct{})
+	appendLibraryOwns := func(id string, candidates []catalog.Component) []catalog.Component {
+		var owns []catalog.Component
+		for _, c := range candidates {
+			if strings.TrimSpace(c.ID) == "" {
+				continue
+			}
+			if _, ok := seenComp[c.ID]; ok {
+				continue
+			}
+			if c.Layer == catalog.LayerInteraction {
+				continue
+			}
+			if c.Layer != "" && c.Layer != catalog.LayerDomain {
+				c.Layer = catalog.LayerDomain
+			}
+			seenComp[c.ID] = id
+			owns = append(owns, c)
+		}
+		return owns
+	}
+	for _, lib := range t.Libraries {
+		id := strings.TrimSpace(lib.ID)
+		if id == "" {
+			continue
+		}
+		draftLib, ok := draftLibs[id]
+		if !ok {
+			continue // drop invented libraries not present in the discover draft
+		}
+		purpose := strings.TrimSpace(lib.Purpose)
+		if purpose == "" {
+			purpose = strings.TrimSpace(draftLib.Purpose)
+		}
+		if purpose == "" {
+			continue
+		}
+		owns := appendLibraryOwns(id, lib.Owns)
+		if len(owns) == 0 {
+			owns = appendLibraryOwns(id, draftLib.Owns)
+		}
+		libraries = append(libraries, catalog.Library{ID: id, Purpose: purpose, Owns: owns})
+		keptLib[id] = struct{}{}
+	}
+	var missingDraftLibIDs []string
+	for id := range draftLibs {
+		if _, ok := keptLib[id]; ok {
+			continue
+		}
+		missingDraftLibIDs = append(missingDraftLibIDs, id)
+	}
+	sort.Strings(missingDraftLibIDs)
+	for _, id := range missingDraftLibIDs {
+		draftLib := draftLibs[id]
+		purpose := strings.TrimSpace(draftLib.Purpose)
+		if purpose == "" {
+			continue
+		}
+		owns := appendLibraryOwns(id, draftLib.Owns)
+		libraries = append(libraries, catalog.Library{ID: id, Purpose: purpose, Owns: owns})
+		keptLib[id] = struct{}{}
+	}
+	t.Libraries = libraries
+
 	slices := make(map[string]struct{}, len(t.Slices))
 	for _, s := range t.Slices {
 		if strings.TrimSpace(s.ID) != "" {
@@ -814,7 +987,9 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 		if _, ok := slices[b.From]; !ok {
 			continue
 		}
-		if _, ok := slices[b.To]; !ok {
+		_, toSlice := slices[b.To]
+		_, toLibrary := keptLib[b.To]
+		if !toSlice && !toLibrary {
 			continue
 		}
 		sliceBindings = append(sliceBindings, b)
@@ -822,15 +997,25 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 	t.SliceBindings = sliceBindings
 	var compBindings []catalog.ComponentBinding
 	for _, b := range t.ComponentBindings {
-		fromSlice, okFrom := seenComp[b.From]
-		toSlice, okTo := seenComp[b.To]
+		fromOwner, okFrom := seenComp[b.From]
+		toOwner, okTo := seenComp[b.To]
 		if !okFrom || !okTo {
 			continue
 		}
-		if fromSlice != toSlice {
+		if _, fromIsLib := keptLib[fromOwner]; fromIsLib {
+			// Libraries must not bind outward to slice packages or other libraries.
+			if _, toIsLib := keptLib[toOwner]; toIsLib {
+				if fromOwner != toOwner {
+					continue
+				}
+			} else if _, toIsSlice := slices[toOwner]; toIsSlice {
+				continue
+			}
+		}
+		if fromOwner != toOwner {
 			has := false
 			for _, sb := range t.SliceBindings {
-				if (sb.From == fromSlice && sb.To == toSlice) || (sb.From == toSlice && sb.To == fromSlice) {
+				if (sb.From == fromOwner && sb.To == toOwner) || (sb.From == toOwner && sb.To == fromOwner) {
 					has = true
 					break
 				}
@@ -842,6 +1027,112 @@ func sanitizeRefinedCatalog(t catalog.Typology) catalog.Typology {
 		compBindings = append(compBindings, b)
 	}
 	t.ComponentBindings = compBindings
+	return separateHTTPSurfacesFromEntrypoint(t, roles)
+}
+
+// separateHTTPSurfacesFromEntrypoint moves server packages off any slice that
+// also claims an entrypoint. Sole-importer wiring must not park delivery under the CLI drawer.
+func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
+	if len(roles) == 0 {
+		return t
+	}
+	usedSliceIDs := make(map[string]struct{}, len(t.Slices))
+	for _, s := range t.Slices {
+		if id := strings.TrimSpace(s.ID); id != "" {
+			usedSliceIDs[id] = struct{}{}
+		}
+	}
+	uniqueSliceID := func(base string) string {
+		base = strings.TrimSpace(base)
+		if base == "" {
+			base = "server"
+		}
+		if _, ok := usedSliceIDs[base]; !ok {
+			usedSliceIDs[base] = struct{}{}
+			return base
+		}
+		for n := 2; ; n++ {
+			candidate := fmt.Sprintf("%s-%d", base, n)
+			if _, ok := usedSliceIDs[candidate]; !ok {
+				usedSliceIDs[candidate] = struct{}{}
+				return candidate
+			}
+		}
+	}
+
+	var extra []catalog.Slice
+	for i := range t.Slices {
+		s := &t.Slices[i]
+		hasEntrypoint := false
+		pathRole := func(path string) string {
+			return roles[normalizeRolePath(path)].Role
+		}
+		for _, c := range s.Owns {
+			if pathRole(c.Path) == roleEntrypoint {
+				hasEntrypoint = true
+			}
+		}
+		for _, surf := range s.Surfaces {
+			for _, c := range surf.Components {
+				if pathRole(c.Path) == roleEntrypoint {
+					hasEntrypoint = true
+				}
+			}
+		}
+		if !hasEntrypoint {
+			continue
+		}
+
+		var httpOwns []catalog.Component
+		var keepOwns []catalog.Component
+		for _, c := range s.Owns {
+			if pathRole(c.Path) == roleHTTPSurface {
+				httpOwns = append(httpOwns, c)
+				continue
+			}
+			keepOwns = append(keepOwns, c)
+		}
+		s.Owns = keepOwns
+
+		var keepSurfaces []catalog.Surface
+		var httpSurfaceComps []catalog.Component
+		httpKind := catalog.InteractionAPI
+		for _, surf := range s.Surfaces {
+			var keepComps []catalog.Component
+			for _, c := range surf.Components {
+				if pathRole(c.Path) == roleHTTPSurface {
+					httpSurfaceComps = append(httpSurfaceComps, c)
+					httpKind = inferInteractionKind(c.Path, roles)
+					continue
+				}
+				keepComps = append(keepComps, c)
+			}
+			surf.Components = keepComps
+			if len(keepComps) == 0 {
+				continue
+			}
+			keepSurfaces = append(keepSurfaces, surf)
+		}
+		s.Surfaces = keepSurfaces
+
+		moved := append(httpOwns, httpSurfaceComps...)
+		if len(moved) == 0 {
+			continue
+		}
+		sid := uniqueSliceID(strings.TrimSpace(s.ID) + "-http")
+		extra = append(extra, catalog.Slice{
+			ID:        sid,
+			Objective: "Delivery surface separated from the CLI entrypoint.",
+			Surfaces: []catalog.Surface{{
+				ID:         sid + "-" + string(httpKind),
+				Kind:       httpKind,
+				Components: moved,
+			}},
+		})
+	}
+	if len(extra) > 0 {
+		t.Slices = append(t.Slices, extra...)
+	}
 	return t
 }
 
@@ -859,6 +1150,96 @@ func stripCodeFence(s string) string {
 		lines = lines[:len(lines)-1]
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+// scrubForbiddenHTTPEntrypointMerges rewrites cluster proposals that fold server
+// packages into an entrypoint slice. Returns a feedback note when a forbidden merge was found.
+func scrubForbiddenHTTPEntrypointMerges(proposalMD, rolesYAML string) (string, string) {
+	roles := roleByPath(mustParseRoles(rolesYAML))
+	if len(roles) == 0 {
+		return proposalMD, ""
+	}
+	var httpPaths, entryPaths []string
+	for path, n := range roles {
+		switch n.Role {
+		case roleHTTPSurface:
+			httpPaths = append(httpPaths, path)
+		case roleEntrypoint:
+			entryPaths = append(entryPaths, path)
+		}
+	}
+	if len(httpPaths) == 0 || len(entryPaths) == 0 {
+		return proposalMD, ""
+	}
+	sort.Strings(httpPaths)
+	sort.Strings(entryPaths)
+
+	lower := strings.ToLower(proposalMD)
+	found := false
+	for _, httpPath := range httpPaths {
+		hp := strings.ToLower(httpPath)
+		base := strings.ToLower(filepath.Base(httpPath))
+		if !strings.Contains(lower, hp) && !strings.Contains(lower, base) {
+			continue
+		}
+		for _, entryPath := range entryPaths {
+			ep := strings.ToLower(entryPath)
+			entryBase := strings.ToLower(filepath.Base(entryPath))
+			// Merge language tying the http package into the entrypoint.
+			mentionsEntry := strings.Contains(lower, ep) || strings.Contains(lower, entryBase) ||
+				strings.Contains(lower, "entrypoint") || strings.Contains(lower, "cmd/")
+			mergeCue := strings.Contains(lower, "merge") || strings.Contains(lower, "→") ||
+				strings.Contains(lower, "->") || strings.Contains(lower, "into")
+			if mentionsEntry && mergeCue {
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	if !found {
+		return proposalMD, ""
+	}
+
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(proposalMD))
+	b.WriteString("\n\n## Mechanical override (Majordomo)\n\n")
+	b.WriteString("Rejected folding server into entrypoint. Keep delivery on its own slice/surface.\n\n")
+	for _, httpPath := range httpPaths {
+		fmt.Fprintf(&b, "- MUST NOT merge `%s` (server) into an entrypoint package.\n", httpPath)
+	}
+	for _, entryPath := range entryPaths {
+		fmt.Fprintf(&b, "- Entrypoint `%s` may import HTTP packages as wiring only.\n", entryPath)
+	}
+	note := "MUST NOT merge server packages into an entrypoint. Keep them on a separate delivery slice/surface; sole importer is a wiring note only."
+	return b.String(), note
+}
+
+// completeEvidencedLibraryBindings loads the refined catalog and architecture brief,
+// appends missing slice→library SliceBindings, and writes the local catalog when changed.
+func completeEvidencedLibraryBindings(localCatalogPath, architecturePath string) (bool, error) {
+	archMD, err := os.ReadFile(architecturePath)
+	if err != nil {
+		return false, fmt.Errorf("typology library bindings read architecture: %w", err)
+	}
+	findings := extractArchitectureFindings(string(archMD))
+	if len(findings) == 0 {
+		return false, nil
+	}
+	typo, err := catalog.LoadYAML(localCatalogPath)
+	if err != nil {
+		return false, fmt.Errorf("typology library bindings load catalog: %w", err)
+	}
+	updated, changed := applyEvidencedLibraryBindings(typo, findings)
+	if !changed {
+		return false, nil
+	}
+	if err := catalog.SaveYAML(localCatalogPath, updated); err != nil {
+		return false, fmt.Errorf("typology library bindings save catalog: %w", err)
+	}
+	return true, nil
 }
 
 func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evidenceDir string, gen TypologyRefineGenerator, judgeGen judge.Generator) error {
@@ -892,6 +1273,15 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	if err != nil {
 		return fmt.Errorf("typology refine read package contracts: %w", err)
 	}
+	rolesRel := strings.TrimSpace(manifest.PackageRolesPath)
+	if rolesRel == "" {
+		rolesRel = "package_roles.yaml"
+	}
+	rolesPath := filepath.Join(evidenceDir, rolesRel)
+	rolesText, err := os.ReadFile(rolesPath)
+	if err != nil {
+		return fmt.Errorf("typology refine read package roles: %w", err)
+	}
 	archDraft, err := os.ReadFile(filepath.Join(analysisDir, analysisDraftArchRel))
 	if err != nil {
 		return fmt.Errorf("typology refine read architecture draft: %w", err)
@@ -900,14 +1290,24 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	if gen == nil {
 		gen = JudgeTypologyRefineGenerator{Gen: judgeGen}
 	}
+	rolesUpdated, err := inspectLowConfidencePackages(ctx, judgeGen, analysisDir, rolesPath, string(rolesText), string(contractsText))
+	if err != nil {
+		return err
+	}
+	if rolesUpdated != "" {
+		rolesText = []byte(rolesUpdated)
+	}
+
 	out, err := gen.Refine(ctx, TypologyRefineInput{
 		RepoID:            manifest.RepoID,
 		ModuleScope:       manifest.ModuleScope,
 		DraftCatalogYAML:  string(draftYAML),
 		GraphText:         string(graphText),
 		PackageContracts:  string(contractsText),
+		PackageRoles:      string(rolesText),
 		ArchitectureDraft: string(archDraft),
 		RepoLayout:        strings.Join(collectTopLevelEntries(analysisDir), "\n"),
+		ReadmeSnapshot:    capReadmeSnapshot(readText(filepath.Join(analysisDir, "README.md"))),
 	})
 	if err != nil {
 		return err
@@ -949,6 +1349,30 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		return err
 	}
 
+	if changed, err := completeEvidencedLibraryBindings(refinedLocal, archOut); err != nil {
+		return err
+	} else if changed {
+		if err := copyFile(refinedLocal, refinedPath); err != nil {
+			return fmt.Errorf("typology refine rewrite catalog after library bindings: %w", err)
+		}
+		if err := copyFile(refinedPath, snapshotPath); err != nil {
+			return fmt.Errorf("typology refine rewrite snapshot after library bindings: %w", err)
+		}
+		if err := runTypology(ctx, opts.TypologyBinary, analysisDir, "architecture", manifest.ModuleScope,
+			"--catalog", refinedLocal, "--out", archOut); err != nil {
+			return fmt.Errorf("typology refine architecture after library bindings: %w", err)
+		}
+		if _, err := os.Stat(archOut); err != nil {
+			fallbackArch := filepath.Join(analysisDir, "docs", "architecture", "typology.md")
+			if copyErr := copyFile(fallbackArch, archOut); copyErr != nil {
+				return fmt.Errorf("typology refine architecture missing after library bindings: %w", err)
+			}
+		}
+		if err := polishTypologyArchitectureBrief(archOut); err != nil {
+			return err
+		}
+	}
+
 	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen); err != nil {
 		return err
 	}
@@ -961,4 +1385,111 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	manifest.HumanInterventionPath = updated.HumanInterventionPath
 	manifest.RefineStatus = contextstore.TypologyRefineComplete
 	return writeTypologyManifest(evidenceDir, manifest)
+}
+
+func capReadmeSnapshot(text string) string {
+	runes := []rune(text)
+	if len(runes) <= maxReadmeSnapshotRunes {
+		return text
+	}
+	return string(runes[:maxReadmeSnapshotRunes]) + "\n[... README truncated for typology cluster/refine ...]\n"
+}
+
+// inspectLowConfidencePackages asks the LLM to classify thin packages from source only.
+// Folder names are forbidden as evidence. LLM confidence is capped below mechanical facts.
+func inspectLowConfidencePackages(ctx context.Context, gen judge.Generator, analysisDir, rolesPath, rolesYAML, contractsYAML string) (string, error) {
+	if gen == nil || !gen.Ready() {
+		return rolesYAML, nil
+	}
+	doc := mustParseRoles(rolesYAML)
+	need := packagesNeedingInspect(doc)
+	if len(need) == 0 {
+		return rolesYAML, nil
+	}
+	byPath := roleByPath(doc)
+	changed := false
+	for i, n := range need {
+		src := readPackageSources(analysisDir, n.Path)
+		if strings.TrimSpace(src) == "" {
+			continue
+		}
+		fields := map[string]interface{}{
+			"package_path":      n.Path,
+			"package_contracts": contractsSnippetFor(n.Path, contractsYAML),
+			"package_source":    src,
+			"candidate_role":    n.CandidateRole,
+			"current_evidence":  strings.Join(n.Evidence, ", "),
+		}
+		out, err := gen.Generate(ctx, jmodules.TaskTypologyInspect, fields, i+1)
+		if err != nil {
+			continue
+		}
+		role := strings.TrimSpace(stringField(out, "role"))
+		evidence := strings.TrimSpace(stringField(out, "evidence"))
+		if role == "" || role == roleUnknown {
+			continue
+		}
+		if rejectInspectRoleContradiction(role, src) {
+			continue
+		}
+		node := byPath[normalizeRolePath(n.Path)]
+		node.Role = role
+		node.Confidence = llmInspectConfidence
+		node.InspectedStage = 3
+		if evidence != "" {
+			node.Evidence = appendUnique(node.Evidence, "llm_inspect:"+evidence)
+		} else {
+			node.Evidence = appendUnique(node.Evidence, "llm_inspect")
+		}
+		node.CandidateRole = ""
+		byPath[normalizeRolePath(n.Path)] = node
+		changed = true
+	}
+	if !changed {
+		return rolesYAML, nil
+	}
+	var packages []packageRoleNode
+	for _, n := range doc.Packages {
+		if updated, ok := byPath[normalizeRolePath(n.Path)]; ok {
+			packages = append(packages, updated)
+			continue
+		}
+		packages = append(packages, n)
+	}
+	doc.Packages = packages
+	if err := writePackageRoles(rolesPath, doc); err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(rolesPath)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func contractsSnippetFor(pkgPath, contractsYAML string) string {
+	want := "## ./" + normalizeRolePath(pkgPath)
+	alt := "## " + normalizeRolePath(pkgPath)
+	idx := strings.Index(contractsYAML, want)
+	if idx < 0 {
+		idx = strings.Index(contractsYAML, alt)
+	}
+	if idx < 0 {
+		return ""
+	}
+	rest := contractsYAML[idx:]
+	next := strings.Index(rest[3:], "\n## ")
+	if next >= 0 {
+		return strings.TrimSpace(rest[:next+3])
+	}
+	return strings.TrimSpace(rest)
+}
+
+func appendUnique(list []string, item string) []string {
+	for _, v := range list {
+		if v == item {
+			return list
+		}
+	}
+	return append(list, item)
 }
