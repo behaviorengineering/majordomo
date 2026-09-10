@@ -36,20 +36,42 @@ type digestEvalSpec struct {
 }
 
 var digestEvalSpecs = map[string]digestEvalSpec{
+	jmodules.TaskTypologyCluster: {
+		evaluatorKey:      "typology_cluster_quality",
+		consolidatorKey:   "typology_cluster_quality_consolidator",
+		evaluatorLabel:    "Typology Cluster Evaluator",
+		consolidatorLabel: "Typology Cluster Consolidator",
+		criterionIDs:      typologypack.ClusterCriterionIDs,
+		focusAreas:        "consultant counsel; observed package_roles before any merge overlay",
+		feedbackSuffix: `Score generator_output cluster_proposal_md against the cluster counsel and delivery rubrics.
+Reject proposals that contradict package_roles.
+Reject using folder names (dashboard, board, cli, server) as classification evidence.
+Reject merge inventories that do not argue why this grouping, what was rejected, and the lean.
+Reject "merge dto into aggregator as the UI" or "forge depends on UI" invented from parking board under dashboard.
+Reject folding server into CLI for sole importer.
+Reject treating exec_runner as CLI domain furniture.
+Reject corporate "we reorganized the repository" framing.`,
+		scoreSuffix:        `Prefer low scores when the proposal invents ownership from names, contradicts package_roles, or sounds like consented product work.`,
+		consolidatorSuffix: "Merge cluster feedback. Prefer counsel that helps a human decide over polish.",
+	},
 	jmodules.TaskTypologyRefine: {
 		evaluatorKey:      "typology_quality",
 		consolidatorKey:   "typology_quality_consolidator",
 		evaluatorLabel:    "Typology Quality Evaluator",
 		consolidatorLabel: "Typology Quality Consolidator",
 		criterionIDs:      typologypack.CriterionIDs,
-		focusAreas:        "slice objectives, surface placement, adapter vs CLI, journey debt consistency",
+		focusAreas:        "slice objectives, surface placement, adapter vs CLI, journey debt consistency and counsel",
 		feedbackSuffix: `Score generator_output refined_catalog_yaml and journey_md against the typology rubrics.
 Reject hollow objectives like "Provide X functionality".
 Reject process-exec adapters (cliexec) marked kind: cli.
-Reject journeys that claim merges are done while debt rows still say Merge into.`,
+Reject folding server / goEmbed / NewMux packages into the CLI surface solely because cmd is the sole importer.
+Reject journeys that claim merges are done while debt rows still say Merge into.
+Reject journey decisions that omit what was rejected and why.
+Reject open debt rows that only say "Approve binding or refactor" without smell, alternatives, and a lean.
+Reject journey prose that claims the product team already reorganized the repo ("we successfully consolidated") instead of Majordomo/Typology proposals on the context branch.`,
 		scoreSuffix: `Prefer low scores when objectives are template language, surfaces misuse kind: cli for exec adapters,
-or journey debt contradicts Status.`,
-		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog and journey fixes over style notes.",
+HTTP/embed packages are CLI furniture, journey debt contradicts Status, journey counsel is hollow, or speaker attribution sounds like shipped product work.`,
+		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog fixes and argued journey debt over style notes.",
 	},
 	jmodules.TaskTypologyHumanIntervention: {
 		evaluatorKey:      "typology_intervention_quality",
@@ -57,15 +79,22 @@ or journey debt contradicts Status.`,
 		evaluatorLabel:    "Typology Intervention Evaluator",
 		consolidatorLabel: "Typology Intervention Consolidator",
 		criterionIDs:      typologypack.InterventionCriterionIDs,
-		focusAreas:        "human-decision coverage of architecture findings without inventing bindings; tutor-voice cold-read PR summary",
+		focusAreas:        "human-decision coverage without inventing bindings; tutor-voice cold-read PR summary with consultant counsel",
 		feedbackSuffix: `Score generator_output journey_md, human_intervention_md, weaknesses_seed_md, and pr_priority_md.
 Reject missing findings from findings_list.
 Reject Status complete while findings remain.
 Reject invented sliceBindings, libraries membership, or ownership rewrites that pretend findings are resolved.
+Reject asking humans to rubber-stamp mechanical slice-to-library bindings Majordomo should have written into the proposal catalog.
 Reject pr_priority_md that is only imperative task titles or catalog jargon with no gloss (for example "Formalize Config Access: Resolve missing bindings").
-Reject copy that assumes the reader already knows SliceBinding, package roles, or why the seed cannot invent approvals.`,
-		scoreSuffix:        `Prefer low scores when priorities omit findings, invent architecture decisions, or fail a cold read.`,
-		consolidatorSuffix: "Merge intervention feedback. Prefer complete human callouts and tutor-voice explanations over polish.",
+Reject copy that assumes the reader already knows SliceBinding, package roles, or why the seed cannot invent approvals.
+Reject import inventory without smell, alternatives, and a lean.
+Reject "approve or refactor" as the whole advice.
+Reject "see journey_md" or other deferral to another file for the real argument.
+Reject a gloss or explanation that has no recommended lean.
+Reject corporate "we" claims that sound like a consented product-repo reorganization (for example "we successfully reorganized", "we consolidated", "we are proceeding").
+Reject copy that treats Typology catalog merges as already-landed product work instead of Majordomo context-branch proposals.`,
+		scoreSuffix:        `Prefer low scores when priorities omit findings, invent architecture decisions, ask for mechanical library-binding stamps, fail a cold read, argue without a lean, or imply humans already shipped the reorganization.`,
+		consolidatorSuffix: "Merge intervention feedback. Prefer complete human callouts with counsel over polish.",
 	},
 	jmodules.TaskBootstrapStory: {
 		evaluatorKey:      "bootstrap_quality",

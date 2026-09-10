@@ -4,13 +4,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"github.com/behaviorengineering/typology/catalog"
 )
 
 const (
 	humanInterventionRel = "evidence/typology/human_intervention.md"
 	prPriorityRel        = "evidence/typology/pr_priority.md"
 )
+
+var missingSliceBindingRE = regexp.MustCompile(`(?i)SliceBinding\s+([A-Za-z0-9_./-]+)\s*->\s*([A-Za-z0-9_./-]+)\s+missing`)
 
 // isArchitectureFindingsHeading reports headings that list open architecture issues.
 func isArchitectureFindingsHeading(line string) bool {
@@ -68,6 +73,71 @@ func extractArchitectureFindings(architectureMD string) []string {
 		out = append(out, finding)
 	}
 	return out
+}
+
+// parseMissingSliceBinding extracts from/to ids from a missing-binding finding line.
+func parseMissingSliceBinding(finding string) (from, to string, ok bool) {
+	m := missingSliceBindingRE.FindStringSubmatch(finding)
+	if len(m) != 3 {
+		return "", "", false
+	}
+	from = strings.TrimSpace(m[1])
+	to = strings.TrimSpace(m[2])
+	if from == "" || to == "" {
+		return "", "", false
+	}
+	return from, to, true
+}
+
+// applyEvidencedLibraryBindings adds slice→library SliceBindings for missing-binding
+// architecture findings where to is an existing library id. Slice→slice edges are skipped.
+func applyEvidencedLibraryBindings(t catalog.Typology, findings []string) (catalog.Typology, bool) {
+	libs := make(map[string]struct{}, len(t.Libraries))
+	for _, lib := range t.Libraries {
+		if id := strings.TrimSpace(lib.ID); id != "" {
+			libs[id] = struct{}{}
+		}
+	}
+	if len(libs) == 0 {
+		return t, false
+	}
+	slices := make(map[string]struct{}, len(t.Slices))
+	for _, s := range t.Slices {
+		if id := strings.TrimSpace(s.ID); id != "" {
+			slices[id] = struct{}{}
+		}
+	}
+	hasBinding := func(from, to string) bool {
+		for _, b := range t.SliceBindings {
+			if b.From == from && b.To == to {
+				return true
+			}
+		}
+		return false
+	}
+	changed := false
+	for _, f := range findings {
+		from, to, ok := parseMissingSliceBinding(f)
+		if !ok {
+			continue
+		}
+		if _, isLib := libs[to]; !isLib {
+			continue
+		}
+		if _, isSlice := slices[from]; !isSlice {
+			continue
+		}
+		if hasBinding(from, to) {
+			continue
+		}
+		t.SliceBindings = append(t.SliceBindings, catalog.SliceBinding{
+			From: from,
+			To:   to,
+			Kind: catalog.SliceReads,
+		})
+		changed = true
+	}
+	return t, changed
 }
 
 // formatFindingsList renders findings as a plain numbered list for LLM input.

@@ -8,11 +8,16 @@ const (
 	CriterionIDObjectives        criteria.CriterionID = "majordomo_typology_objectives"
 	CriterionIDAdapterSurfaces   criteria.CriterionID = "majordomo_typology_adapter_surfaces"
 	CriterionIDJourneyConsistent criteria.CriterionID = "majordomo_typology_journey_consistent"
+	CriterionIDJourneyCounsel    criteria.CriterionID = "majordomo_typology_journey_counsel"
+
+	CriterionIDClusterCounsel  criteria.CriterionID = "majordomo_typology_cluster_counsel"
+	CriterionIDClusterDelivery criteria.CriterionID = "majordomo_typology_cluster_delivery"
 
 	CriterionIDInterventionCoverage   criteria.CriterionID = "majordomo_typology_intervention_coverage"
 	CriterionIDInterventionNoInvent   criteria.CriterionID = "majordomo_typology_intervention_no_invent"
 	CriterionIDInterventionStatus     criteria.CriterionID = "majordomo_typology_intervention_status"
 	CriterionIDInterventionTutorVoice criteria.CriterionID = "majordomo_typology_intervention_tutor_voice"
+	CriterionIDInterventionCounsel    criteria.CriterionID = "majordomo_typology_intervention_counsel"
 )
 
 // CriterionIDs is the typology refine boundary rubric pack.
@@ -22,6 +27,13 @@ var CriterionIDs = []criteria.CriterionID{
 	CriterionIDObjectives,
 	CriterionIDAdapterSurfaces,
 	CriterionIDJourneyConsistent,
+	CriterionIDJourneyCounsel,
+}
+
+// ClusterCriterionIDs is the typology cluster-pass counsel rubric pack.
+var ClusterCriterionIDs = []criteria.CriterionID{
+	CriterionIDClusterCounsel,
+	CriterionIDClusterDelivery,
 }
 
 // InterventionCriterionIDs is the human-intervention flagger rubric pack.
@@ -30,6 +42,7 @@ var InterventionCriterionIDs = []criteria.CriterionID{
 	CriterionIDInterventionNoInvent,
 	CriterionIDInterventionStatus,
 	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
 }
 
 // Register adds typology refine rubrics onto the shared strop criterion registry.
@@ -40,9 +53,9 @@ func Register(r *criteria.CriterionRegistry) {
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDSurfaces,
 		Name:        "Interaction packages on surfaces",
-		Description: `User-facing CLI (cmd/), UI, HTTP/API, and dashboard packages belong under surfaces[], not domain-only owns[]. Process-exec adapters such as cliexec are not interaction surfaces.`,
-		Scoring: `2 points: cmd/, http/api, ui, dashboard, and server delivery paths sit on surfaces when present.
-0 points: Those delivery paths remain only under owns[] with no matching surface.`,
+		Description: `User-facing entrypoint and server packages (from observed roles) belong under surfaces[]. Path words such as dashboard are not evidence. exec_runner packages are not interaction surfaces.`,
+		Scoring: `2 points: entrypoint and server packages sit on surfaces when present; exec_runner stays off kind: cli.
+0 points: Observed interaction roles remain only under owns[], or exec_runner is placed under kind: cli.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})
@@ -83,6 +96,33 @@ func Register(r *criteria.CriterionRegistry) {
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})
 	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDJourneyCounsel,
+		Name:        "Journey decisions and debt argue",
+		Description: `journey_md decisions say what was rejected and why. Open debt rows carry smell, alternatives with a cost, and a lean. Hollow mitigations such as "Approve binding or refactor" fail.`,
+		Scoring: `2 points: Decisions and open debt rows argue with alternatives and a lean.
+0 points: Inventory-only debt, generic approve-or-refactor mitigations, or decisions without a rejected alternative.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDClusterCounsel,
+		Name:        "Cluster proposal argues merges and debt",
+		Description: `cluster_proposal_md rationale and proposed merges explain why this grouping, what was rejected, cost of the alternative, and the lean. Boundary debt is not a generic mitigation column.`,
+		Scoring: `2 points: Merges and debt argue with alternatives and a lean.
+0 points: Merge inventory only, or debt that only says approve binding or refactor.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDClusterDelivery,
+		Name:        "Cluster starts from delivery facts",
+		Description: `Cluster classifies from package_roles (observed topology) plus contracts. Folder names are never evidence. Sole importer is wiring. dto is not owned by an aggregator; exec_runner is not CLI furniture; aggregator is not kind: ui.`,
+		Scoring: `2 points: Proposal honors package_roles and treats fills_dto / uses_runner as wiring, not false ownership smells.
+0 points: Merges dto into aggregator as UI domain, folds server into CLI for sole importer, or labels aggregator as the website from the path word dashboard.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDInterventionCoverage,
 		Name:        "Every architecture finding is flagged for humans",
 		Description: `Each open architecture finding appears in journey debt, human_intervention_md, and pr_priority_md.`,
@@ -94,9 +134,9 @@ func Register(r *criteria.CriterionRegistry) {
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDInterventionNoInvent,
 		Name:        "Do not invent architecture to clear findings",
-		Description: `The flagger must not invent sliceBindings, libraries membership, or rewrite package ownership to dismiss findings. It requests human decisions.`,
-		Scoring: `2 points: Outputs ask humans to approve bindings (including slice-to-library), library vs slice placement, merges, or temporary debt without inventing catalog fixes.
-0 points: Output invents bindings, libraries, or ownership changes as if findings were resolved.`,
+		Description: `The flagger outputs markdown only. It must not invent catalog YAML, libraries membership, or ownership rewrites. Evidenced slice-to-library bindings belong in the proposal catalog (refine/deterministic pass), not as rubber-stamp asks. Counsel focuses on whether library placement or remaining couplings are right.`,
+		Scoring: `2 points: Outputs argue normative forks (keep library, fold into slice, decouple, slice-to-slice binding, temporary debt) without inventing catalog fixes or asking humans to stamp mechanical slice-to-library edges.
+0 points: Output invents bindings/libraries/ownership as if findings were resolved, or reduces counsel to "approve this slice-to-library binding".`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})
@@ -112,9 +152,18 @@ func Register(r *criteria.CriterionRegistry) {
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDInterventionTutorVoice,
 		Name:        "PR priority is a cold-read tutor briefing",
-		Description: `pr_priority_md (and human_intervention_md) must teach a reader who has never seen this repo. Gloss jargon in the same sentence. Lead with situation and why, then the human decision. Keep package or slice ids so coverage still matches.`,
-		Scoring: `2 points: Each finding is explained in product terms with a gloss and a decision.
-0 points: Jargon-only bullets or imperative titles such as "Formalize Config Access" with no explanation.`,
+		Description: `pr_priority_md (and human_intervention_md) must teach a reader who has never seen this repo. Gloss jargon in the same sentence. Lead with what Majordomo's Typology digest proposes on the context branch and why, then smell, alternatives, and a lean. Keep package or slice ids so coverage still matches. A gloss without a lean fails.`,
+		Scoring: `2 points: Each finding is explained in product terms with a gloss and a lean, attributed as Majordomo/Typology context proposals.
+0 points: Jargon-only bullets, imperative titles such as "Formalize Config Access", explanation without a recommended lean, or copy that sounds like a consented product-repo reorganization ("we successfully reorganized").`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDInterventionCounsel,
+		Name:        "Intervention and PR priority argue",
+		Description: `Each finding in pr_priority_md, human_intervention_md, and journey debt has smell, alternatives with a cost, and a lean. Attribute the speaker to Majordomo/Typology digest. MUST NOT punt to journey_md, stop at approve-or-refactor, or claim the product team already reorganized the repo.`,
+		Scoring: `2 points: Counsel is self-contained with smell, alternatives, and lean, framed as context-branch proposals.
+0 points: Import inventory only, "approve or refactor" as the whole advice, "see journey_md", or corporate "we reorganized / we consolidated" shipped-sounding claims.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // polishTypologyArchitectureBrief rewrites known incomplete shapes from older
@@ -23,6 +25,73 @@ func polishTypologyArchitectureBrief(path string) error {
 		return fmt.Errorf("polish typology architecture: write %s: %w", path, err)
 	}
 	return nil
+}
+
+// prependObservedRolesBrief puts the factual role topology ahead of slice-based findings
+// so teaching briefs do not lead with ownership invented from folder names.
+func prependObservedRolesBrief(archPath, rolesPath string) error {
+	rolesRaw, err := os.ReadFile(rolesPath)
+	if err != nil {
+		return fmt.Errorf("observed roles brief: read roles: %w", err)
+	}
+	summary := formatRolesYAMLAsMarkdown(string(rolesRaw))
+	if strings.TrimSpace(summary) == "" {
+		return nil
+	}
+	archRaw, err := os.ReadFile(archPath)
+	if err != nil {
+		return fmt.Errorf("observed roles brief: read architecture: %w", err)
+	}
+	arch := string(archRaw)
+	if strings.Contains(arch, "# Observed package roles") {
+		return nil
+	}
+	combined := summary + "\n---\n\n" + strings.TrimSpace(arch) + "\n"
+	return os.WriteFile(archPath, []byte(combined), 0o644)
+}
+
+func formatRolesYAMLAsMarkdown(raw string) string {
+	var topo packageRolesDoc
+	if err := yaml.Unmarshal([]byte(raw), &topo); err != nil {
+		return "# Observed package roles\n\n_(roles YAML present but could not be parsed)_\n"
+	}
+	var b strings.Builder
+	b.WriteString("# Observed package roles\n\n")
+	b.WriteString("Roles come from AST, imports, and interfaces. Folder names are not evidence.\n\n")
+	for _, n := range topo.Packages {
+		fmt.Fprintf(&b, "- `%s`: **%s** (%.2f)", n.Path, n.Role, n.Confidence)
+		if len(n.Evidence) > 0 {
+			fmt.Fprintf(&b, " (%s)", strings.Join(n.Evidence, ", "))
+		}
+		b.WriteByte('\n')
+	}
+	if len(topo.Edges) > 0 {
+		b.WriteString("\n## Mappings\n\n")
+		for _, e := range topo.Edges {
+			fmt.Fprintf(&b, "- %s -> %s (%s)\n", e.From, e.To, e.Kind)
+		}
+	}
+	return b.String()
+}
+
+type packageRolesDoc struct {
+	Packages []packageRoleNode `yaml:"packages"`
+	Edges    []packageRoleEdge `yaml:"edges"`
+}
+
+type packageRoleNode struct {
+	Path           string   `yaml:"path"`
+	Role           string   `yaml:"role"`
+	Confidence     float64  `yaml:"confidence"`
+	Evidence       []string `yaml:"evidence"`
+	InspectedStage int      `yaml:"inspected_stage"`
+	CandidateRole  string   `yaml:"candidate_role"`
+}
+
+type packageRoleEdge struct {
+	From string `yaml:"from"`
+	To   string `yaml:"to"`
+	Kind string `yaml:"kind"`
 }
 
 func polishTypologyArchitectureBriefText(body, evidenceDir string) string {

@@ -42,7 +42,13 @@ slices:
 	if err := os.WriteFile(filepath.Join(evidence, "package_contracts.md"), []byte("# Package public contracts\n\n## ./internal/demo\n- hasMain: false\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(evidence, "package_roles.yaml"), []byte("packages:\n  - path: internal/demo\n    role: unknown\n    confidence: 0\n    inspected_stage: 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(draftDir, "architecture_draft.md"), []byte("# Draft\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(analysis, "README.md"), []byte("# Demo product\n\nRun `demo serve` to open the UI.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	manifest := contextstore.TypologyManifest{
@@ -56,6 +62,7 @@ slices:
 		RefineStatus:         contextstore.TypologyRefinePending,
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
+		PackageRolesPath:     "package_roles.yaml",
 		ClusterProposalPath:  "cluster_proposal.md",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",
@@ -71,6 +78,12 @@ slices:
 		}
 		if !strings.Contains(in.PackageContracts, "hasMain: false") {
 			t.Fatalf("package_contracts=%q", in.PackageContracts)
+		}
+		if !strings.Contains(in.PackageRoles, "internal/demo") {
+			t.Fatalf("package_roles=%q", in.PackageRoles)
+		}
+		if !strings.Contains(in.ReadmeSnapshot, "demo serve") {
+			t.Fatalf("readme_snapshot=%q", in.ReadmeSnapshot)
 		}
 		return TypologyRefineOutput{
 			ClusterProposalMD:  "# Cluster\n\nKeep demo.\n",
@@ -113,7 +126,7 @@ slices:
       - id: demo-core
         path: internal/demo
 `
-	if _, err := validateRefinedCatalogYAML(raw, "", "demo"); err == nil {
+	if _, err := validateRefinedCatalogYAML(raw, "", "demo", ""); err == nil {
 		t.Fatal("expected structure validation error")
 	}
 }
@@ -131,7 +144,7 @@ sliceBindings:
     to: missing
     kind: reads
 `
-	out, err := validateRefinedCatalogYAML(raw, raw, "demo")
+	out, err := validateRefinedCatalogYAML(raw, raw, "demo", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,18 +164,26 @@ slices:
       - id: demo-cli
         path: cmd/demo
 `
-	out, err := validateRefinedCatalogYAML(raw, raw, "demo")
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    evidence: [has_main]
+    inspected_stage: 1
+  - path: internal/demo
+    role: unknown
+    confidence: 0
+    inspected_stage: 2
+`
+	out, err := validateRefinedCatalogYAML(raw, raw, "demo", roles)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out, "path: cmd/demo") && !strings.Contains(out, "surfaces:") {
+	if !strings.Contains(out, "kind: cli") || !strings.Contains(out, "cmd/demo") {
 		t.Fatalf("expected cmd package under surfaces, got %s", out)
 	}
-	if !strings.Contains(out, "kind: cli") && !strings.Contains(out, "kind: \"cli\"") {
-		// YAML may omit quotes
-		if !strings.Contains(out, "cli") {
-			t.Fatalf("expected cli surface, got %s", out)
-		}
+	if strings.Contains(out, "path: cmd/demo") && !strings.Contains(out, "surfaces:") {
+		t.Fatalf("expected cmd package under surfaces, got %s", out)
 	}
 }
 
@@ -189,7 +210,7 @@ slices:
       - id: demo-core
         path: internal/demo
 `
-	out, err := validateRefinedCatalogYAML(raw, draft, "demo")
+	out, err := validateRefinedCatalogYAML(raw, draft, "demo", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +244,7 @@ slices:
           - id: app
             path: ./internal/gitboard
 `
-	out, err := validateRefinedCatalogYAML(refined, draft, "demo")
+	out, err := validateRefinedCatalogYAML(refined, draft, "demo", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +273,7 @@ slices:
       - id: widget
         path: ./internal/totally-invented-widget
 `
-	_, err := validateRefinedCatalogYAML(refined, draft, "demo")
+	_, err := validateRefinedCatalogYAML(refined, draft, "demo", "")
 	if err == nil {
 		t.Fatal("expected invented path error")
 	}
@@ -281,7 +302,7 @@ slices:
       - id: localgit
         path: ./internal/localgit
 `
-	if _, err := validateRefinedCatalogYAML(refined, draft, "demo"); err != nil {
+	if _, err := validateRefinedCatalogYAML(refined, draft, "demo", ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -296,7 +317,7 @@ slices:
         path: internal/demo
 `
 	arch := "## Findings\n\n- `internal/x` imports `internal/y` across slices\n"
-	ok, feedback := evaluateTypologyBoundaries(refined, "# Journey\n\nNo debt recorded.\n", arch)
+	ok, feedback := evaluateTypologyBoundaries(refined, "# Journey\n\nNo debt recorded.\n", arch, "")
 	if ok {
 		t.Fatal("expected evaluation failure for missing debt table")
 	}
@@ -304,7 +325,7 @@ slices:
 		t.Fatalf("feedback=%q", feedback)
 	}
 	journey := "# Journey\n\n## Technical debt & boundary violations\n\n| Violation | Severity | Notes |\n| --- | --- | --- |\n| cross-slice import | medium | record for human journey |\n"
-	ok, feedback = evaluateTypologyBoundaries(refined, journey, arch)
+	ok, feedback = evaluateTypologyBoundaries(refined, journey, arch, "")
 	if !ok {
 		t.Fatalf("expected pass, feedback=%q", feedback)
 	}
@@ -319,12 +340,40 @@ slices:
       - id: board-core
         path: internal/board
 `
-	ok, feedback := evaluateTypologyBoundaries(refined, "# Journey\n", "")
+	ok, feedback := evaluateTypologyBoundaries(refined, "# Journey\n", "", "")
 	if ok {
 		t.Fatal("expected hollow objective failure")
 	}
 	if !strings.Contains(feedback, "majordomo_typology_objectives") {
 		t.Fatalf("feedback=%q", feedback)
+	}
+}
+
+func TestScrubForbiddenHTTPEntrypointMerges(t *testing.T) {
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    inspected_stage: 1
+  - path: internal/server
+    role: server
+    confidence: 0.9
+    inspected_stage: 1
+`
+	in := "# Proposal\n\nMerge `internal/server` into `cmd/demo` because cmd is the sole importer.\n"
+	out, note := scrubForbiddenHTTPEntrypointMerges(in, roles)
+	if note == "" {
+		t.Fatal("expected scrub note")
+	}
+	if !strings.Contains(out, "Mechanical override") {
+		t.Fatalf("expected override block, got:\n%s", out)
+	}
+	if !strings.Contains(out, "MUST NOT merge `internal/server`") {
+		t.Fatalf("expected explicit server reject, got:\n%s", out)
+	}
+	clean, note2 := scrubForbiddenHTTPEntrypointMerges("# Proposal\n\nKeep server separate.\n", roles)
+	if note2 != "" {
+		t.Fatalf("unexpected note for clean proposal: %q md=%s", note2, clean)
 	}
 }
 
@@ -357,11 +406,27 @@ slices:
       - id: demo-cmd
         path: cmd/demo
 `
-	out, err := validateRefinedCatalogYAML(raw, draft, "demo")
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    evidence: [has_main]
+    inspected_stage: 1
+  - path: internal/cliexec
+    role: exec_runner
+    confidence: 0.8
+    evidence: [imports_os_exec, exports_run_surface]
+    inspected_stage: 2
+  - path: internal/demo
+    role: unknown
+    confidence: 0
+    inspected_stage: 2
+`
+	out, err := validateRefinedCatalogYAML(raw, draft, "demo", roles)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ok, feedback := evaluateTypologyBoundaries(out, "# Journey\n\n## Status\n\nOpen.\n\n## Technical debt & boundary violations\n\n| Violation | Severity | Notes |\n| --- | --- | --- |\n| sample | low | recorded |\n", "## Findings\n\n- sample\n")
+	ok, feedback := evaluateTypologyBoundaries(out, "# Journey\n\n## Status\n\nOpen.\n\n## Technical debt & boundary violations\n\n| Violation | Severity | Notes |\n| --- | --- | --- |\n| sample | low | recorded |\n", "## Findings\n\n- sample\n", roles)
 	if !ok {
 		t.Fatalf("expected sanitize to demote cliexec off kind: cli, feedback=%s\nout=%s", feedback, out)
 	}
@@ -409,6 +474,107 @@ slices:
 	}
 }
 
+func TestValidateRefinedCatalogYAMLSeparatesHTTPSurfaceFromEntrypoint(t *testing.T) {
+	raw := `id: demo
+slices:
+  - id: demo
+    objective: Demo CLI and HTTP folded together.
+    owns: []
+    surfaces:
+      - id: demo-cli
+        kind: cli
+        components:
+          - id: demo-cmd
+            path: cmd/demo
+      - id: demo-api
+        kind: api
+        components:
+          - id: demo-server
+            path: internal/server
+`
+	draft := `id: demo
+slices:
+  - id: demo
+    objective: Demo CLI and HTTP folded together.
+    owns:
+      - id: demo-cmd
+        path: cmd/demo
+      - id: demo-server
+        path: internal/server
+`
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    evidence: [has_main]
+    inspected_stage: 1
+  - path: internal/server
+    role: server
+    confidence: 0.9
+    evidence: [go_embed, embeds_static]
+    inspected_stage: 1
+`
+	out, err := validateRefinedCatalogYAML(raw, draft, "demo", roles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp, err := os.CreateTemp("", "majordomo-http-sep-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := tmp.Name()
+	defer os.Remove(path)
+	if _, err := tmp.WriteString(out); err != nil {
+		_ = tmp.Close()
+		t.Fatal(err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+	typo, err := catalog.LoadYAML(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range typo.Slices {
+		hasEntry, hasHTTP := false, false
+		check := func(path string) {
+			switch normalizeCatalogPath(path) {
+			case "cmd/demo":
+				hasEntry = true
+			case "internal/server":
+				hasHTTP = true
+			}
+		}
+		for _, c := range s.Owns {
+			check(c.Path)
+		}
+		for _, surf := range s.Surfaces {
+			for _, c := range surf.Components {
+				check(c.Path)
+			}
+		}
+		if hasEntry && hasHTTP {
+			t.Fatalf("server still shares slice %q with entrypoint:\n%s", s.ID, out)
+		}
+	}
+	foundHTTP := false
+	for _, s := range typo.Slices {
+		for _, surf := range s.Surfaces {
+			for _, c := range surf.Components {
+				if normalizeCatalogPath(c.Path) == "internal/server" {
+					foundHTTP = true
+					if surf.Kind != catalog.InteractionUI && surf.Kind != catalog.InteractionAPI {
+						t.Fatalf("expected http surface kind api/ui, got %s", surf.Kind)
+					}
+				}
+			}
+		}
+	}
+	if !foundHTTP {
+		t.Fatalf("expected internal/server retained on an HTTP surface, got:\n%s", out)
+	}
+}
+
 func TestValidateRefinedCatalogYAMLRestoresOmittedExecAdapter(t *testing.T) {
 	raw := `id: demo
 slices:
@@ -440,7 +606,19 @@ slices:
           - id: demo-cmd
             path: cmd/demo
 `
-	out, err := validateRefinedCatalogYAML(raw, draft, "demo")
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    evidence: [has_main]
+    inspected_stage: 1
+  - path: internal/cliexec
+    role: exec_runner
+    confidence: 0.8
+    evidence: [imports_os_exec, exports_run_surface]
+    inspected_stage: 2
+`
+	out, err := validateRefinedCatalogYAML(raw, draft, "demo", roles)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +678,14 @@ slices:
           - id: cliexec
             path: ./internal/cliexec
 `
-	ok, feedback := evaluateTypologyBoundaries(refined, "# Journey\n", "")
+	roles := `packages:
+  - path: internal/cliexec
+    role: exec_runner
+    confidence: 0.8
+    evidence: [imports_os_exec, exports_run_surface]
+    inspected_stage: 2
+`
+	ok, feedback := evaluateTypologyBoundaries(refined, "# Journey\n", "", roles)
 	if ok {
 		t.Fatal("expected exec-adapter CLI surface failure")
 	}
@@ -519,7 +704,7 @@ slices:
         path: internal/demo
 `
 	journey := "Status: Completed refinement of the Typology catalog.\n\n| Slice | Debt | Action |\n| --- | --- | --- |\n| git | companions | Merge into git |\n"
-	ok, feedback := evaluateTypologyBoundaries(refined, journey, "")
+	ok, feedback := evaluateTypologyBoundaries(refined, journey, "", "")
 	if ok {
 		t.Fatal("expected journey consistency failure")
 	}
@@ -537,7 +722,7 @@ slices:
       - id: demo-core
         path: internal/demo
 `
-	out, err := validateRefinedCatalogYAML(raw, raw, "gitboard")
+	out, err := validateRefinedCatalogYAML(raw, raw, "gitboard", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,5 +731,137 @@ slices:
 	}
 	if strings.Contains(out, "majordomo-typology-") {
 		t.Fatalf("temp id remained: %s", out)
+	}
+}
+
+func TestValidateRefinedCatalogYAMLDropsInventedPurposeLessLibraryAndDuplicateOwns(t *testing.T) {
+	draft := `id: gitboard
+slices:
+  - id: gitboard
+    objective: Deliver the gitboard CLI and UI.
+    owns:
+      - id: internal-config
+        path: ./internal/config
+`
+	refined := `id: gitboard
+slices:
+  - id: gitboard
+    objective: Deliver the gitboard CLI and UI.
+    owns:
+      - id: internal-config
+        path: ./internal/config
+libraries:
+  - id: technical-core
+    owns:
+      - id: internal-config
+        path: ./internal/config
+`
+	out, err := validateRefinedCatalogYAML(refined, draft, "gitboard", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "technical-core") {
+		t.Fatalf("expected invented purpose-less library dropped, got %s", out)
+	}
+	if !strings.Contains(out, "internal-config") {
+		t.Fatalf("expected slice to keep internal-config, got %s", out)
+	}
+}
+
+func TestValidateRefinedCatalogYAMLKeepsDraftLibraryPurposeAndSliceBinding(t *testing.T) {
+	draft := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+libraries:
+  - id: platform-config
+    purpose: Shared configuration helpers with no product knowledge.
+    owns:
+      - id: internal-config
+        path: internal/config
+`
+	refined := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+libraries:
+  - id: platform-config
+    owns:
+      - id: internal-config
+        path: internal/config
+sliceBindings:
+  - from: demo
+    to: platform-config
+    kind: reads
+`
+	out, err := validateRefinedCatalogYAML(refined, draft, "demo", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "platform-config") {
+		t.Fatalf("expected draft library kept, got %s", out)
+	}
+	if !strings.Contains(out, "Shared configuration helpers") {
+		t.Fatalf("expected purpose filled from draft, got %s", out)
+	}
+	if !strings.Contains(out, "to: platform-config") {
+		t.Fatalf("expected slice-to-library binding kept, got %s", out)
+	}
+}
+
+func TestValidateRefinedCatalogYAMLUniquifiesDuplicateSurfaceIDs(t *testing.T) {
+	raw := `id: demo
+slices:
+  - id: dashboard
+    objective: Aggregate adapters into the product job map.
+    owns:
+      - id: dashboard-core
+        path: internal/dashboard
+    surfaces:
+      - id: dashboard-ui
+        kind: ui
+        components:
+          - id: dashboard-web
+            path: internal/dashboard/web
+      - id: dashboard-ui
+        kind: api
+        components:
+          - id: dashboard-server
+            path: internal/server
+`
+	out, err := validateRefinedCatalogYAML(raw, raw, "demo", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "refined.yaml")
+	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	typo, err := catalog.LoadYAML(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]int{}
+	for _, s := range typo.Slices {
+		if s.ID != "dashboard" {
+			continue
+		}
+		for _, surf := range s.Surfaces {
+			ids[surf.ID]++
+		}
+	}
+	for id, n := range ids {
+		if n != 1 {
+			t.Fatalf("surface id %q appears %d times in %s", id, n, out)
+		}
+	}
+	if len(ids) < 2 {
+		t.Fatalf("expected both ui and api surfaces kept with distinct ids, got %s", out)
 	}
 }

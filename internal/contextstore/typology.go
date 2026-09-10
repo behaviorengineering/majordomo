@@ -40,6 +40,7 @@ type TypologyManifest struct {
 	RefineStatus          string `yaml:"refine_status,omitempty"`
 	GraphPath             string `yaml:"graph_path,omitempty"`
 	PackageContractsPath  string `yaml:"package_contracts_path,omitempty"`
+	PackageRolesPath      string `yaml:"package_roles_path,omitempty"`
 	ClusterProposalPath   string `yaml:"cluster_proposal_path,omitempty"`
 	RefinedSnapshotPath   string `yaml:"refined_snapshot_path,omitempty"`
 	JourneyPath           string `yaml:"journey_path,omitempty"`
@@ -103,6 +104,9 @@ func ValidateTypologyManifest(m TypologyManifest) error {
 		if err := validateRelativeEvidencePath(m.PackageContractsPath, "package_contracts_path"); err != nil {
 			return err
 		}
+		if err := validateRelativeEvidencePath(m.PackageRolesPath, "package_roles_path"); err != nil {
+			return err
+		}
 	case TypologyRefineComplete:
 		if strings.TrimSpace(m.SnapshotPath) == "" {
 			return fmt.Errorf("typology manifest snapshot_path is required for mode %q", m.Mode)
@@ -112,6 +116,7 @@ func ValidateTypologyManifest(m TypologyManifest) error {
 		}{
 			{m.GraphPath, "graph_path"},
 			{m.PackageContractsPath, "package_contracts_path"},
+			{m.PackageRolesPath, "package_roles_path"},
 			{m.ClusterProposalPath, "cluster_proposal_path"},
 			{m.RefinedSnapshotPath, "refined_snapshot_path"},
 			{m.JourneyPath, "journey_path"},

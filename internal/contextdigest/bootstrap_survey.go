@@ -117,6 +117,19 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		return fmt.Errorf("bootstrap survey: copy package contracts: %w", err)
 	}
 
+	rolesLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", "package_roles.yaml")
+	if _, err := os.Stat(rolesLocal); err != nil {
+		// contracts writes roles beside the default path under tmp/typology.
+		rolesLocal = filepath.Join(input.AnalysisDir, "tmp", "typology", "package_roles.yaml")
+		if _, err := os.Stat(rolesLocal); err != nil {
+			return fmt.Errorf("bootstrap survey: package roles missing after contracts: %w", err)
+		}
+	}
+	rolesPath := filepath.Join(input.EvidenceDir, "package_roles.yaml")
+	if err := copyFile(rolesLocal, rolesPath); err != nil {
+		return fmt.Errorf("bootstrap survey: copy package roles: %w", err)
+	}
+
 	// Draft architecture stays under the analysis worktree only (Typology draft moral).
 	archDraft := filepath.Join(input.AnalysisDir, "tmp", "typology", "architecture_draft.md")
 	if err := runTypology(ctx, input.TypologyBinary, input.AnalysisDir, "architecture", moduleScope,
@@ -132,6 +145,9 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 	if err := polishTypologyArchitectureBrief(archDraft); err != nil {
 		return err
 	}
+	if err := prependObservedRolesBrief(archDraft, rolesPath); err != nil {
+		return err
+	}
 
 	manifest := contextstore.TypologyManifest{
 		RepoID:               input.RepoID,
@@ -145,6 +161,7 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		RefineStatus:         contextstore.TypologyRefinePending,
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
+		PackageRolesPath:     "package_roles.yaml",
 		ClusterProposalPath:  "cluster_proposal.md",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",
