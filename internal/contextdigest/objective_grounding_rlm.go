@@ -147,21 +147,21 @@ func buildSliceObjectiveLedger(
 		id    string
 		paths []string
 	}
-	var targets []target
+	var allTargets []target
 	for _, s := range req.DraftTypo.Slices {
 		id := strings.TrimSpace(s.ID)
 		paths := slicePackagePaths(s)
 		if id == "" || len(paths) == 0 {
 			continue
 		}
-		targets = append(targets, target{id: id, paths: paths})
+		allTargets = append(allTargets, target{id: id, paths: paths})
 	}
-	sort.Slice(targets, func(i, j int) bool { return targets[i].id < targets[j].id })
-	if len(targets) == 0 {
+	sort.Slice(allTargets, func(i, j int) bool { return allTargets[i].id < allTargets[j].id })
+	if len(allTargets) == 0 {
 		return sliceObjectiveLedgerDoc{}, nil, nil
 	}
-	if len(targets) > maxLedgerSlices {
-		targets = targets[:maxLedgerSlices]
+	if len(allTargets) > maxLedgerSlices {
+		allTargets = allTargets[:maxLedgerSlices]
 	}
 
 	rolesDoc, err := loadPackageRolesFromEvidenceDir(req.EvidenceDir)
@@ -175,107 +175,132 @@ func buildSliceObjectiveLedger(
 		return sliceObjectiveLedgerDoc{}, nil, fmt.Errorf("%s: read package_rlm_context.md: %w", typologypack.CriterionIDRoleGrounding, readErr)
 	}
 
-	type result struct {
-		entry sliceObjectiveLedgerEntry
-		issue string
-		err   error
-	}
-	results := make([]result, len(targets))
-	sem := make(chan struct{}, ledgerRLMWorkers)
-	var wg sync.WaitGroup
-	for i, t := range targets {
-		wg.Add(1)
-		go func(i int, t target) {
-			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
+	kept := map[string]sliceObjectiveLedgerEntry{}
+	var lastIssues []string
+	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
+		var pending []target
+		for _, t := range allTargets {
+			if _, ok := kept[t.id]; ok {
+				continue
+			}
+			pending = append(pending, t)
+		}
+		if len(pending) == 0 {
+			break
+		}
 
-			var parts []string
-			for _, p := range t.paths {
-				ctxMD := packageRLMContextSnippet(string(wholeContext), p)
-				if strings.TrimSpace(ctxMD) == "" {
-					built, err := typroles.FormatPackageRLMContextForPath(req.AnalysisDir, p, nil)
-					if err == nil {
-						ctxMD = built
+		type result struct {
+			entry sliceObjectiveLedgerEntry
+			issue string
+			err   error
+		}
+		results := make([]result, len(pending))
+		sem := make(chan struct{}, ledgerRLMWorkers)
+		var wg sync.WaitGroup
+		for i, t := range pending {
+			wg.Add(1)
+			go func(i int, t target) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				var parts []string
+				for _, p := range t.paths {
+					ctxMD := packageRLMContextSnippet(string(wholeContext), p)
+					if strings.TrimSpace(ctxMD) == "" {
+						built, err := typroles.FormatPackageRLMContextForPath(req.AnalysisDir, p, nil)
+						if err == nil {
+							ctxMD = built
+						}
+					}
+					if strings.TrimSpace(ctxMD) != "" {
+						parts = append(parts, ctxMD)
 					}
 				}
-				if strings.TrimSpace(ctxMD) != "" {
-					parts = append(parts, ctxMD)
+				if len(parts) == 0 {
+					results[i] = result{issue: fmt.Sprintf(
+						"%s: slice %q owned packages have empty RLM context; cannot ground objective",
+						typologypack.CriterionIDRoleGrounding, t.id,
+					)}
+					return
 				}
-			}
-			if len(parts) == 0 {
-				results[i] = result{issue: fmt.Sprintf(
-					"%s: slice %q owned packages have empty RLM context; cannot ground objective",
-					typologypack.CriterionIDRoleGrounding, t.id,
-				)}
-				return
-			}
-			constraintBlock := formatConstraintRowsForPaths(t.paths, byPath)
-			query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterMD)
-			answer, _, err := caller.Complete(ctx, strings.Join(parts, "\n\n"), query)
-			if err != nil {
-				results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
-					typologypack.CriterionIDRoleGrounding, t.id, err)}
-				return
-			}
-			evidence, claims, objective, verdict, err := parseSliceObjectiveLedgerAnswer(answer)
-			if err != nil {
-				results[i] = result{issue: fmt.Sprintf(
-					"%s: slice %q objective ledger parse failed: %v",
-					typologypack.CriterionIDRoleGrounding, t.id, err,
-				)}
-				return
-			}
-			if verdict == ledgerVerdictOverclaim {
-				results[i] = result{issue: fmt.Sprintf(
-					"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
-					typologypack.CriterionIDRoleGrounding, t.id,
-				)}
-				return
-			}
-			entry := sliceObjectiveLedgerEntry{
-				ID:         t.id,
-				OwnedPaths: append([]string(nil), t.paths...),
-				Evidence:   evidence,
-				Claims:     claims,
-				Objective:  objective,
-				Verdict:    verdict,
-				Source:     "slice_objective_rlm",
-			}
-			if hit := intersectStrings(claims, sliceMustNotUnion(t.paths, byPath)); len(hit) > 0 {
-				results[i] = result{issue: fmt.Sprintf(
-					"%s: slice %q ledger claims %v intersect must_not %v",
-					typologypack.CriterionIDRoleGrounding, t.id, claims, hit,
-				)}
-				return
-			}
-			if entailIssues := rejectUnentailedClaims(t.id, claims, t.paths, req.Constraints, rolesDoc); len(entailIssues) > 0 {
-				results[i] = result{issue: strings.Join(entailIssues, "\n")}
-				return
-			}
-			results[i] = result{entry: entry}
-		}(i, t)
-	}
-	wg.Wait()
+				constraintBlock := formatConstraintRowsForPaths(t.paths, byPath)
+				sliceFeedback := filterIssuesForSlice(lastIssues, t.id)
+				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterMD, sliceFeedback)
+				answer, _, err := caller.Complete(ctx, strings.Join(parts, "\n\n"), query)
+				if err != nil {
+					results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
+						typologypack.CriterionIDRoleGrounding, t.id, err)}
+					return
+				}
+				evidence, claims, objective, verdict, err := parseSliceObjectiveLedgerAnswer(answer)
+				if err != nil {
+					results[i] = result{issue: fmt.Sprintf(
+						"%s: slice %q objective ledger parse failed: %v",
+						typologypack.CriterionIDRoleGrounding, t.id, err,
+					)}
+					return
+				}
+				if verdict == ledgerVerdictOverclaim {
+					results[i] = result{issue: fmt.Sprintf(
+						"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
+						typologypack.CriterionIDRoleGrounding, t.id,
+					)}
+					return
+				}
+				entry := sliceObjectiveLedgerEntry{
+					ID:         t.id,
+					OwnedPaths: append([]string(nil), t.paths...),
+					Evidence:   evidence,
+					Claims:     claims,
+					Objective:  objective,
+					Verdict:    verdict,
+					Source:     "slice_objective_rlm",
+				}
+				if hit := intersectStrings(claims, sliceMustNotUnion(t.paths, byPath)); len(hit) > 0 {
+					results[i] = result{issue: fmt.Sprintf(
+						"%s: slice %q ledger claims %v intersect must_not %v",
+						typologypack.CriterionIDRoleGrounding, t.id, claims, hit,
+					)}
+					return
+				}
+				if entailIssues := rejectUnentailedClaims(t.id, claims, t.paths, req.Constraints, rolesDoc); len(entailIssues) > 0 {
+					results[i] = result{issue: strings.Join(entailIssues, "\n")}
+					return
+				}
+				results[i] = result{entry: entry}
+			}(i, t)
+		}
+		wg.Wait()
 
-	var issues []string
-	var slices []sliceObjectiveLedgerEntry
-	for _, r := range results {
-		if r.err != nil {
-			return sliceObjectiveLedgerDoc{}, nil, r.err
+		var issues []string
+		for _, r := range results {
+			if r.err != nil {
+				return sliceObjectiveLedgerDoc{}, nil, r.err
+			}
+			if strings.TrimSpace(r.issue) != "" {
+				issues = append(issues, r.issue)
+				continue
+			}
+			if id := strings.TrimSpace(r.entry.ID); id != "" {
+				kept[id] = r.entry
+			}
 		}
-		if strings.TrimSpace(r.issue) != "" {
-			issues = append(issues, r.issue)
-			continue
+		if len(issues) == 0 {
+			break
 		}
-		if strings.TrimSpace(r.entry.ID) != "" {
-			slices = append(slices, r.entry)
+		lastIssues = issues
+		if attempt == maxTypologyRefineAttempts {
+			return sliceObjectiveLedgerDoc{}, lastIssues, nil
 		}
 	}
-	if len(issues) > 0 {
-		return sliceObjectiveLedgerDoc{}, issues, nil
+
+	slices := make([]sliceObjectiveLedgerEntry, 0, len(kept))
+	for _, t := range allTargets {
+		if e, ok := kept[t.id]; ok {
+			slices = append(slices, e)
+		}
 	}
-	sort.Slice(slices, func(i, j int) bool { return slices[i].ID < slices[j].ID })
 	doc := sliceObjectiveLedgerDoc{Slices: slices}
 	if err := validateObjectiveLedgerDoc(doc); err != nil {
 		return sliceObjectiveLedgerDoc{}, nil, err
@@ -286,10 +311,34 @@ func buildSliceObjectiveLedger(
 	return doc, nil, nil
 }
 
-func formatSliceObjectiveLedgerQuery(sliceID string, paths []string, constraintBlock, clusterMD string) string {
+// filterIssuesForSlice returns prior-attempt issues that mention this slice id.
+func filterIssuesForSlice(issues []string, sliceID string) string {
+	sliceID = strings.TrimSpace(sliceID)
+	if sliceID == "" || len(issues) == 0 {
+		return ""
+	}
+	needle := fmt.Sprintf("slice %q", sliceID)
+	var out []string
+	for _, issue := range issues {
+		if strings.Contains(issue, needle) {
+			out = append(out, strings.TrimSpace(issue))
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+func formatSliceObjectiveLedgerQuery(sliceID string, paths []string, constraintBlock, clusterMD, validationFeedback string) string {
 	clusterNote := strings.TrimSpace(clusterMD)
 	if len(clusterNote) > 4000 {
 		clusterNote = clusterNote[:4000] + "\n[... cluster proposal truncated ...]\n"
+	}
+	feedbackBlock := ""
+	if fb := strings.TrimSpace(validationFeedback); fb != "" {
+		feedbackBlock = fmt.Sprintf(`
+validation_feedback (from a prior failed attempt; MUST fix before emitting):
+%s
+
+`, fb)
 	}
 	return fmt.Sprintf(`You write the grounded meaning for one Typology teaching slice.
 Cite evidence BEFORE claims BEFORE the objective. Path basenames are never evidence.
@@ -298,7 +347,7 @@ Slice id: %s
 Owned package paths: %s
 
 %s
-
+%s
 Cluster proposal (membership hint only; MUST NOT invent prestige meaning from it):
 %s
 
@@ -311,6 +360,7 @@ objective: <one plain sentence matching the evidence; no prestige overclaim>
 verdict: grounded|overclaim
 
 If you cannot support a runtime claim with symbols, either drop that claim or set verdict: overclaim.
-Claims MUST NOT intersect owned must_not codes in the constraint rows.`,
-		sliceID, strings.Join(paths, ", "), constraintBlock, clusterNote)
+Claims MUST NOT intersect owned must_not codes in the constraint rows.
+When validation_feedback is present, drop or replace every claim it rejects; do not repeat the same overclaim.`,
+		sliceID, strings.Join(paths, ", "), constraintBlock, feedbackBlock, clusterNote)
 }

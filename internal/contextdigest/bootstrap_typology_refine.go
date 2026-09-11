@@ -183,45 +183,29 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 
 	var ledgerDoc sliceObjectiveLedgerDoc
 	if needsLedger {
-		var ledgerFeedback string
-		builtOK := false
-		for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
-			built, issues, buildErr := input.LedgerBuilder.BuildSliceLedger(ctx, sliceLedgerBuildRequest{
-				AnalysisDir: input.AnalysisDir,
-				EvidenceDir: input.EvidenceDir,
-				DraftTypo:   draftTypo,
-				Constraints: constraintsDoc,
-				ClusterMD:   clusterMD,
-			})
-			if buildErr != nil {
-				ledgerFeedback = buildErr.Error()
-				if attempt == maxTypologyRefineAttempts {
-					return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts: %w", maxTypologyRefineAttempts, buildErr)
-				}
-				continue
-			}
-			if len(issues) > 0 {
-				ledgerFeedback = strings.Join(issues, "\n")
-				if attempt == maxTypologyRefineAttempts {
-					return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s", maxTypologyRefineAttempts, ledgerFeedback)
-				}
-				continue
-			}
-			ledgerDoc = built
-			var err error
-			ledgerYAML, err = marshalLedger(ledgerDoc)
-			if err != nil {
-				return TypologyRefineOutput{}, err
-			}
-			claimsYAML, err = marshalClaims(claimsDocFromLedger(ledgerDoc))
-			if err != nil {
-				return TypologyRefineOutput{}, err
-			}
-			builtOK = true
-			break
+		built, issues, buildErr := input.LedgerBuilder.BuildSliceLedger(ctx, sliceLedgerBuildRequest{
+			AnalysisDir: input.AnalysisDir,
+			EvidenceDir: input.EvidenceDir,
+			DraftTypo:   draftTypo,
+			Constraints: constraintsDoc,
+			ClusterMD:   clusterMD,
+		})
+		if buildErr != nil {
+			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed: %w", buildErr)
 		}
-		if !builtOK {
-			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s", maxTypologyRefineAttempts, ledgerFeedback)
+		if len(issues) > 0 {
+			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s",
+				maxTypologyRefineAttempts, strings.Join(issues, "\n"))
+		}
+		ledgerDoc = built
+		var err error
+		ledgerYAML, err = marshalLedger(ledgerDoc)
+		if err != nil {
+			return TypologyRefineOutput{}, err
+		}
+		claimsYAML, err = marshalClaims(claimsDocFromLedger(ledgerDoc))
+		if err != nil {
+			return TypologyRefineOutput{}, err
 		}
 	}
 
