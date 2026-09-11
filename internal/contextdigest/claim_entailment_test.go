@@ -13,6 +13,7 @@ func TestClaimEntailedBoardLikeCases(t *testing.T) {
 			{Path: "internal/board", Role: roleDTO, Evidence: []string{"json_tags"}},
 			{Path: "internal/adapter", Role: roleAdapter, Evidence: []string{"exported_funcs"}},
 			{Path: "internal/domain", Role: roleUnknown, Evidence: []string{"exported_funcs"}},
+			{Path: "internal/kitchen", Role: roleAggregator, Evidence: []string{"orchestration_export"}},
 			{Path: "internal/httpapi", Role: roleHTTPSurface, Evidence: []string{"delivery:http"}},
 			{Path: "internal/cli", Role: roleEntrypoint, Evidence: []string{"has_main"}},
 		},
@@ -51,7 +52,11 @@ func TestClaimEntailedBoardLikeCases(t *testing.T) {
 			claims: []string{capOwnDomainRules}, wantIssues: true, wantSubstr: "own_domain_rules",
 		},
 		{
-			name: "unknown_methods_own_domain_ok", sliceID: "domain", paths: []string{"internal/domain"},
+			name: "unknown_triage_own_domain_fail", sliceID: "triage", paths: []string{"internal/domain"},
+			claims: []string{capOwnDomainRules}, wantIssues: true, wantSubstr: "own_domain_rules",
+		},
+		{
+			name: "aggregator_own_domain_ok", sliceID: "kitchen", paths: []string{"internal/kitchen"},
 			claims: []string{capOwnDomainRules}, wantIssues: false,
 		},
 		{

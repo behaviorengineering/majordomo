@@ -85,6 +85,7 @@ type packageRoleNode struct {
 	Confidence     float64  `yaml:"confidence"`
 	Evidence       []string `yaml:"evidence"`
 	InspectedStage int      `yaml:"inspected_stage"`
+	Language       string   `yaml:"language,omitempty"`
 	CandidateRole  string   `yaml:"candidate_role"`
 	MechanicalRole string   `yaml:"mechanical_role,omitempty"`
 	LLMRole        string   `yaml:"llm_role,omitempty"`

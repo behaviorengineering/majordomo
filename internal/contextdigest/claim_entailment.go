@@ -106,16 +106,11 @@ func claimEntailed(
 		for _, p := range ownedPaths {
 			n, ok := rolesByPath[normalizeRolePath(p)]
 			if !ok {
-				n = packageRoleNode{Path: p, Role: roleUnknown}
+				continue
 			}
 			role := strings.TrimSpace(n.Role)
-			if role != "" && role != roleUnknown {
-				continue
-			}
-			if isDTOShapedEvidence(n.Evidence) {
-				continue
-			}
-			if hasDomainWorkEvidence(n.Evidence) {
+			switch role {
+			case roleEntrypoint, roleHTTPSurface, roleAggregator:
 				return true
 			}
 		}
@@ -219,26 +214,6 @@ func evidenceHasAny(evidence []string, flags ...string) bool {
 	}
 	for _, e := range evidence {
 		if _, ok := want[strings.TrimSpace(e)]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func isDTOShapedEvidence(evidence []string) bool {
-	return evidenceHasAny(evidence, "json_tags") && !hasDomainWorkEvidence(evidence)
-}
-
-func hasDomainWorkEvidence(evidence []string) bool {
-	for _, raw := range evidence {
-		e := strings.TrimSpace(raw)
-		switch e {
-		case "has_main", "go_embed", "embeds_static",
-			"imports_os_exec", "imports_otel", "imports_prometheus",
-			"exported_funcs", "exported_methods":
-			return true
-		}
-		if strings.HasPrefix(e, "delivery:") || strings.HasPrefix(e, "imports_") {
 			return true
 		}
 	}

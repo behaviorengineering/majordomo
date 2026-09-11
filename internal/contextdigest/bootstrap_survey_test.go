@@ -399,3 +399,49 @@ esac
 	}
 	return path
 }
+
+func TestDiscoverSurveyRoots(t *testing.T) {
+	t.Parallel()
+
+	t.Run("neither", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		roots, err := discoverSurveyRoots(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if roots.HasGo || roots.HasPython {
+			t.Fatalf("roots=%+v want neither", roots)
+		}
+	})
+
+	t.Run("go_only", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/x\n\ngo 1.22\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		roots, err := discoverSurveyRoots(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !roots.HasGo || roots.HasPython {
+			t.Fatalf("roots=%+v want go only", roots)
+		}
+	})
+
+	t.Run("python_only", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "pyproject.toml"), []byte("[project]\nname=\"x\"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		roots, err := discoverSurveyRoots(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if roots.HasGo || !roots.HasPython {
+			t.Fatalf("roots=%+v want python only", roots)
+		}
+	})
+}
