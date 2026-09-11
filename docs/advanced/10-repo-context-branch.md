@@ -39,7 +39,7 @@ Update PRs (later digest job):
 On `majordomo-context/<repo-id>`:
 
 ```text
-README.md           how to read; never-merge-to-default; humans talk on the PR, do not edit
+README.md           how to read (Reading order TOC + Prev/Next entry); never-merge-to-default; humans talk on the PR, do not edit
 meta.yaml           schema_version, repo_id, last_merged_sha, last_digest_at
 mission.md          why the project exists
 architecture.md     teaching story (layers, entrypoints, ownership)
@@ -47,12 +47,20 @@ conventions.md      how this repo is built and reviewed
 weaknesses.md       known risks; cite chronology headings when claiming history
 chronology.md       important evidenced decisions, newest first; compactable
 evidence/typology/  Typology seed proposal for this digest (not confirmed catalog)
+  README.md              reading index for the briefing path (required when evidence exists)
   architecture_brief.md  Typology architecture brief (not the teaching story)
+  cluster_proposal.md    optional grouping overlay
+  journey.md             refine decisions and debt
+  human_intervention.md  operator priorities
+  pr_priority.md         optional cold-reader PR counsel
+  finding_comment_bodies.json  counsel for per-finding PR comments
+  finding_comments.json  forge comment id map for upsert
 agenting/           grounding packs for review (not review SKILL.md)
   index.yaml        pack id → globs + modes
   <area>/GROUNDING.md
 ```
 
+Guided markdown under the root and `evidence/typology/` carries a **Reading path** Prev/Next banner. Machine appendix files (`package_roles.yaml`, `package_contracts.md`, `graph.txt`, snapshots, `manifest.yaml`) are listed in the typology README only.
 Do not put application source on this branch. When `agenting/index.yaml` is present, `majordomo context validate` checks the index and each pack's `GROUNDING.md`. Bootstrap seeds `agenting/overview`.
 
 Validate a worktree with:
@@ -65,7 +73,7 @@ majordomo context validate --dir <worktree>
 
 Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + Typology survey/refine proposal when available), not a reconstruction of the whole tape.
 
-For Go served repos, seed survey runs Typology `discover` / `show graph` / draft `architecture` under the analysis worktree only, then an unattended LLM **cluster + refine** loop with structure sanitize and boundary rubrics (surfaces, debt when findings, objectives). After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then a dedicated **human-intervention** step flags remaining architecture findings as normative operator decisions (keep library vs fold into a slice vs decouple, slice-to-slice couplings, merges, or temporary debt). It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. It rewrites journey Status/debt so open findings cannot hide under "complete", seeds `weaknesses.md` with the same priorities, and writes `evidence/typology/human_intervention.md` plus optional `pr_priority.md`. Durable context evidence is refined catalog, journey/cluster notes, post-refine `architecture_brief.md`, human-intervention notes, graph, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. Discovery journey notes (`cluster_proposal.md`, refine `journey.md`) and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution is Majordomo/Typology digest proposing architecture grounding on the context branch, not a product team that already reorganized the default tree. When priorities exist, the PR body leads with that counsel in a tutor voice for a cold reader.
+For Go served repos, seed survey runs Typology `discover` / `show graph` / draft `architecture` under the analysis worktree only, then an unattended LLM **cluster + refine** loop with structure sanitize and boundary rubrics (surfaces, debt when findings, objectives). After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then focused **human-intervention** generators rewrite journey debt, write `human_intervention.md`, seed `weaknesses.md`, and produce `pr_priority.md` for the context PR body. Each open architecture finding also gets a dedicated tutor CoT comment body; after the context update PR opens, Majordomo upserts one ordinary PR/MR comment per finding (stable `<!-- majordomo-finding:<fingerprint> -->` marker) so operators can discuss in-thread. Free-form replies are conversation only; `@majordomo done` / `reject` / `why` still drive the gate. When a finding disappears on a later digest, the same comment is updated to a cleared note (not deleted), keeping the trace. It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. Durable context evidence is refined catalog, journey/cluster notes, post-refine `architecture_brief.md`, human-intervention notes, finding comment sidecars, graph, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. Discovery journey notes (`cluster_proposal.md`, refine `journey.md`) and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution is Majordomo/Typology digest proposing architecture grounding on the context branch, not a product team that already reorganized the default tree. When priorities exist, the PR body leads with that counsel in a tutor voice for a cold reader.
 
 ## Digest trigger (v1)
 
@@ -288,6 +296,7 @@ Checkout the **merged** context tip only. Open context update PRs are not ground
 
 ## Related
 
+- [Typology cluster: mechanical walk vs RLM](10.1-typology-cluster-decision.md)
 - [PLAN: Control Tower](../PLAN-control-tower-github-go.md) (Decision 5)
 - `internal/contextstore` (schema)
 - `internal/contextdigest` (catch-up job)

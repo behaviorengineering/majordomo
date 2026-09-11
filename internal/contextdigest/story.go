@@ -175,5 +175,5 @@ func ReshapeStory(ctxDir, newHead, why string) error {
 	if err := os.WriteFile(filepath.Join(ctxDir, "architecture.md"), []byte(ensureStoryArchitectureBanner(note)), 0o644); err != nil {
 		return err
 	}
-	return nil
+	return contextstore.ApplyReadingPath(ctxDir)
 }

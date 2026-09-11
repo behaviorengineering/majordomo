@@ -182,6 +182,10 @@ func TestBootstrapContextBranchWritesLLMStory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(ctxDir, "evidence", "typology", "manifest.yaml")); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(filepath.Join(ctxDir, "evidence", "typology", "README.md")); err != nil {
+		t.Fatal(err)
+	}
+	assertFileContains(t, filepath.Join(ctxDir, "README.md"), "## Reading order")
 	assertFileContains(t, filepath.Join(ctxDir, "mission.md"), "Seeded.")
 	assertFileContains(t, filepath.Join(ctxDir, "agenting", "overview", "GROUNDING.md"), "Seeded.")
 }
@@ -352,6 +356,12 @@ packages:
     confidence: 0
     inspected_stage: 2
 edges: []
+EOF
+    cat > "$repo/tmp/typology/package_rlm_context.md" <<'EOF'
+# Package RLM context index
+
+## ./internal/demo
+- mechanicalRole: unknown
 EOF
     ;;
   show)

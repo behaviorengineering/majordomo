@@ -154,32 +154,43 @@ func formatFindingsList(findings []string) string {
 
 // validateHumanInterventionOutputs fails closed when open findings are under-reported.
 func validateHumanInterventionOutputs(findings []string, journeyMD, humanInterventionMD, prPriorityMD string) error {
+	if err := validateJourneyFindings(findings, journeyMD); err != nil {
+		return err
+	}
+	if err := validateNamedFindingCoverage(findings, "human_intervention_md", humanInterventionMD); err != nil {
+		return err
+	}
+	return validateNamedFindingCoverage(findings, "pr_priority_md", prPriorityMD)
+}
+
+func validateJourneyFindings(findings []string, journeyMD string) error {
 	if len(findings) == 0 {
 		return nil
 	}
 	if journeyStatusClaimsComplete(journeyMD) {
 		return fmt.Errorf("human intervention: journey Status must not claim complete while architecture findings remain")
 	}
-	targets := []struct {
-		name, body string
-	}{
-		{"journey debt", journeyMD},
-		{"human_intervention_md", humanInterventionMD},
-		{"pr_priority_md", prPriorityMD},
+	if err := validateNamedFindingCoverage(findings, "journey debt", journeyMD); err != nil {
+		return err
+	}
+	if !journeyHasDebtTable(journeyMD) {
+		return fmt.Errorf("human intervention: journey must include a technical debt table when findings remain")
+	}
+	return nil
+}
+
+func validateNamedFindingCoverage(findings []string, name, body string) error {
+	if len(findings) == 0 {
+		return nil
 	}
 	for _, f := range findings {
 		needle := findingMatchNeedle(f)
 		if needle == "" {
 			continue
 		}
-		for _, t := range targets {
-			if !strings.Contains(strings.ToLower(t.body), strings.ToLower(needle)) {
-				return fmt.Errorf("human intervention: finding %q missing from %s", f, t.name)
-			}
+		if !strings.Contains(strings.ToLower(body), strings.ToLower(needle)) {
+			return fmt.Errorf("human intervention: finding %q missing from %s", f, name)
 		}
-	}
-	if !journeyHasDebtTable(journeyMD) {
-		return fmt.Errorf("human intervention: journey must include a technical debt table when findings remain")
 	}
 	return nil
 }

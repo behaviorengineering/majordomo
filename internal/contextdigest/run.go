@@ -315,6 +315,10 @@ func Run(opts Options) (Result, error) {
 			}
 		}
 
+		if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+			return Result{}, err
+		}
+
 		needs, err := NeedsMetaUpdate(ctxDir, cursorAfter)
 		if err != nil {
 			return Result{}, err
@@ -404,6 +408,11 @@ func finishDigestRun(p finishParams) (Result, error) {
 	pr, err := p.forge.OpenUpdatePR(p.baseBranch, p.updateBranch, title, body)
 	if err != nil {
 		return Result{}, err
+	}
+	if pr != "" {
+		if err := SyncFindingPRComments(p.forge, pr, p.ctxDir); err != nil {
+			logf("WARN", "sync finding PR comments: %v", err)
+		}
 	}
 	if cfg.Context.AutoMergeEnabled() && p.gateSidecar.ReadyToMerge() && pr != "" {
 		if err := p.forge.MergeUpdatePR(pr); err != nil {

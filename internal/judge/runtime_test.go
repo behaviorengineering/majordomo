@@ -141,12 +141,16 @@ func TestNewRuntimeRegistersDigestEvaluationWorkflows(t *testing.T) {
 		JobConfigs: map[string]config.JobConfig{
 			config.JobContextDigest: {
 				Modules: map[string]config.ModuleTaskConfig{
-					jmodules.TaskTypologyInspect:           {Provider: "poly"},
-					jmodules.TaskTypologyCluster:           {Provider: "poly"},
-					jmodules.TaskTypologyRefine:            {Provider: "poly"},
-					jmodules.TaskTypologyHumanIntervention: {Provider: "poly"},
-					jmodules.TaskBootstrapStory:            {Provider: "poly"},
-					jmodules.TaskDigestStory:               {Provider: "poly"},
+					jmodules.TaskTypologyInspect:                {Provider: "poly"},
+					jmodules.TaskTypologyCluster:                {Provider: "poly"},
+					jmodules.TaskTypologyRefine:                 {Provider: "poly"},
+					jmodules.TaskTypologyInterventionJourney:    {Provider: "poly"},
+					jmodules.TaskTypologyInterventionBrief:      {Provider: "poly"},
+					jmodules.TaskTypologyInterventionWeaknesses: {Provider: "poly"},
+					jmodules.TaskTypologyInterventionPRPriority: {Provider: "poly"},
+					jmodules.TaskTypologyFindingComment:         {Provider: "poly"},
+					jmodules.TaskBootstrapStory:                 {Provider: "poly"},
+					jmodules.TaskDigestStory:                    {Provider: "poly"},
 				},
 			},
 		},
@@ -159,7 +163,13 @@ func TestNewRuntimeRegistersDigestEvaluationWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, task := range []string{jmodules.TaskTypologyRefine, jmodules.TaskTypologyHumanIntervention, jmodules.TaskBootstrapStory, jmodules.TaskDigestStory} {
+	for _, task := range []string{
+		jmodules.TaskTypologyRefine,
+		jmodules.TaskTypologyInterventionBrief,
+		jmodules.TaskTypologyFindingComment,
+		jmodules.TaskBootstrapStory,
+		jmodules.TaskDigestStory,
+	} {
 		if rt.TaskModel(task) == "" {
 			t.Fatalf("%s generator not registered", task)
 		}

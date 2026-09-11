@@ -130,6 +130,14 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		return fmt.Errorf("bootstrap survey: copy package roles: %w", err)
 	}
 
+	rlmLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", "package_rlm_context.md")
+	rlmPath := filepath.Join(input.EvidenceDir, "package_rlm_context.md")
+	if _, err := os.Stat(rlmLocal); err == nil {
+		if err := copyFile(rlmLocal, rlmPath); err != nil {
+			return fmt.Errorf("bootstrap survey: copy package RLM context: %w", err)
+		}
+	}
+
 	// Draft architecture stays under the analysis worktree only (Typology draft moral).
 	archDraft := filepath.Join(input.AnalysisDir, "tmp", "typology", "architecture_draft.md")
 	if err := runTypology(ctx, input.TypologyBinary, input.AnalysisDir, "architecture", moduleScope,
@@ -162,6 +170,7 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
 		PackageRolesPath:     "package_roles.yaml",
+		PackageRLMContextPath: "package_rlm_context.md",
 		ClusterProposalPath:  "cluster_proposal.md",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",

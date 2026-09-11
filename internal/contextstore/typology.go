@@ -41,6 +41,7 @@ type TypologyManifest struct {
 	GraphPath             string `yaml:"graph_path,omitempty"`
 	PackageContractsPath  string `yaml:"package_contracts_path,omitempty"`
 	PackageRolesPath      string `yaml:"package_roles_path,omitempty"`
+	PackageRLMContextPath string `yaml:"package_rlm_context_path,omitempty"`
 	ClusterProposalPath   string `yaml:"cluster_proposal_path,omitempty"`
 	RefinedSnapshotPath   string `yaml:"refined_snapshot_path,omitempty"`
 	JourneyPath           string `yaml:"journey_path,omitempty"`

@@ -247,7 +247,7 @@ func persistBootstrapStory(ctxDir string, out BootstrapStoryOutput) error {
 	if err := writeText(filepath.Join(ctxDir, "agenting", "overview", "GROUNDING.md"), out.GroundingMD); err != nil {
 		return err
 	}
-	return nil
+	return contextstore.ApplyReadingPath(ctxDir)
 }
 
 func validateBootstrapStoryOutput(out BootstrapStoryOutput) error {

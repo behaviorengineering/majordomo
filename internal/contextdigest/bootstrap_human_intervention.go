@@ -25,12 +25,20 @@ type HumanInterventionInput struct {
 	ValidationFeedback string
 }
 
-// HumanInterventionOutput is operator-facing debt and priority callouts.
+// FindingCommentBody is tutor counsel for one architecture finding on the context PR.
+type FindingCommentBody struct {
+	Finding     string `json:"finding"`
+	Fingerprint string `json:"fingerprint"`
+	Body        string `json:"body"`
+}
+
+// HumanInterventionOutput is operator-facing debt, priority callouts, and PR comment bodies.
 type HumanInterventionOutput struct {
 	JourneyMD           string
 	HumanInterventionMD string
 	WeaknessesSeedMD    string
 	PRPriorityMD        string
+	FindingComments     []FindingCommentBody
 }
 
 // HumanInterventionGenerator flags architecture findings for human leadership.
@@ -38,7 +46,7 @@ type HumanInterventionGenerator interface {
 	Generate(ctx context.Context, input HumanInterventionInput) (HumanInterventionOutput, error)
 }
 
-// JudgeHumanInterventionGenerator uses typology_human_intervention with evaluate/retry.
+// JudgeHumanInterventionGenerator runs focused intervention CoT tasks with evaluate/retry.
 type JudgeHumanInterventionGenerator struct {
 	Gen judge.Generator
 }
@@ -64,46 +72,125 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	if strings.TrimSpace(input.FindingsList) == "" {
 		input.FindingsList = formatFindingsList(findings)
 	}
-	feedback := strings.TrimSpace(input.ValidationFeedback)
-	var lastErr error
-	for attempt := 1; attempt <= maxHumanInterventionAttempts; attempt++ {
-		fields := map[string]interface{}{
+
+	baseFields := map[string]interface{}{
+		"repo_id":              input.RepoID,
+		"architecture_md":      input.ArchitectureMD,
+		"refined_catalog_yaml": input.RefinedCatalogYAML,
+		"journey_md":           input.JourneyMD,
+		"cluster_proposal_md":  input.ClusterProposalMD,
+		"findings_list":        input.FindingsList,
+	}
+
+	journey, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionJourney, baseFields, "journey_md",
+		func(out map[string]interface{}) error {
+			return validateJourneyFindings(findings, stringField(out, "journey_md"))
+		})
+	if err != nil {
+		return HumanInterventionOutput{}, err
+	}
+	baseFields["journey_md"] = journey
+
+	brief, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionBrief, baseFields, "human_intervention_md",
+		func(out map[string]interface{}) error {
+			return validateNamedFindingCoverage(findings, "human_intervention_md", stringField(out, "human_intervention_md"))
+		})
+	if err != nil {
+		return HumanInterventionOutput{}, err
+	}
+	baseFields["human_intervention_md"] = brief
+
+	weakFields := copyStringMap(baseFields)
+	weaknesses, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionWeaknesses, weakFields, "weaknesses_seed_md",
+		func(out map[string]interface{}) error {
+			return validateNamedFindingCoverage(findings, "weaknesses_seed_md", stringField(out, "weaknesses_seed_md"))
+		})
+	if err != nil {
+		return HumanInterventionOutput{}, err
+	}
+
+	prFields := copyStringMap(baseFields)
+	prPriority, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionPRPriority, prFields, "pr_priority_md",
+		func(out map[string]interface{}) error {
+			return validateNamedFindingCoverage(findings, "pr_priority_md", stringField(out, "pr_priority_md"))
+		})
+	if err != nil {
+		return HumanInterventionOutput{}, err
+	}
+
+	comments := make([]FindingCommentBody, 0, len(findings))
+	for _, finding := range findings {
+		commentFields := map[string]interface{}{
 			"repo_id":              input.RepoID,
 			"architecture_md":      input.ArchitectureMD,
 			"refined_catalog_yaml": input.RefinedCatalogYAML,
-			"journey_md":           input.JourneyMD,
-			"cluster_proposal_md":  input.ClusterProposalMD,
-			"findings_list":        input.FindingsList,
-			"validation_feedback":  feedback,
+			"journey_md":           journey,
+			"human_intervention_md": brief,
+			"finding":              finding,
 		}
-		out, err := gen.Generate(ctx, jmodules.TaskTypologyHumanIntervention, fields, attempt)
+		body, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyFindingComment, commentFields, "comment_md",
+			func(out map[string]interface{}) error {
+				return validateNamedFindingCoverage([]string{finding}, "comment_md", stringField(out, "comment_md"))
+			})
 		if err != nil {
-			return HumanInterventionOutput{}, err
+			return HumanInterventionOutput{}, fmt.Errorf("finding comment %q: %w", findingMatchNeedle(finding), err)
 		}
-		res := HumanInterventionOutput{
-			JourneyMD:           stringField(out, "journey_md"),
-			HumanInterventionMD: stringField(out, "human_intervention_md"),
-			WeaknessesSeedMD:    stringField(out, "weaknesses_seed_md"),
-			PRPriorityMD:        stringField(out, "pr_priority_md"),
+		comments = append(comments, FindingCommentBody{
+			Finding:     finding,
+			Fingerprint: findingFingerprint(finding),
+			Body:        body,
+		})
+	}
+
+	return HumanInterventionOutput{
+		JourneyMD:           journey,
+		HumanInterventionMD: brief,
+		WeaknessesSeedMD:    weaknesses,
+		PRPriorityMD:        prPriority,
+		FindingComments:     comments,
+	}, nil
+}
+
+func generateInterventionStep(
+	ctx context.Context,
+	gen judge.Generator,
+	task string,
+	fields map[string]interface{},
+	outKey string,
+	validate func(map[string]interface{}) error,
+) (string, error) {
+	feedback := ""
+	if v, ok := fields["validation_feedback"].(string); ok {
+		feedback = strings.TrimSpace(v)
+	}
+	var lastErr error
+	for attempt := 1; attempt <= maxHumanInterventionAttempts; attempt++ {
+		stepFields := copyStringMap(fields)
+		stepFields["validation_feedback"] = feedback
+		out, err := gen.Generate(ctx, task, stepFields, attempt)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", task, err)
 		}
-		if err := validateHumanInterventionOutputs(findings, res.JourneyMD, res.HumanInterventionMD, res.PRPriorityMD); err != nil {
-			lastErr = err
-			if attempt == maxHumanInterventionAttempts {
-				return HumanInterventionOutput{}, err
-			}
-			feedback = err.Error()
+		if strings.TrimSpace(stringField(out, outKey)) == "" {
+			lastErr = fmt.Errorf("%s: %s is required", task, outKey)
+			feedback = lastErr.Error()
 			continue
 		}
-		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologyHumanIntervention, fields, map[string]interface{}{
-			"journey_md":            res.JourneyMD,
-			"human_intervention_md": res.HumanInterventionMD,
-			"weaknesses_seed_md":    res.WeaknessesSeedMD,
-			"pr_priority_md":        res.PRPriorityMD,
-		}, attempt)
+		if validate != nil {
+			if err := validate(out); err != nil {
+				lastErr = err
+				if attempt == maxHumanInterventionAttempts {
+					return "", err
+				}
+				feedback = err.Error()
+				continue
+			}
+		}
+		agg, err := gen.Evaluate(ctx, task, stepFields, out, attempt)
 		if err != nil {
 			lastErr = err
 			if attempt == maxHumanInterventionAttempts {
-				return HumanInterventionOutput{}, fmt.Errorf("human intervention LLM evaluation: %w", err)
+				return "", fmt.Errorf("%s LLM evaluation: %w", task, err)
 			}
 			feedback = err.Error()
 			continue
@@ -111,17 +198,25 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 		if !judge.EvalPassed(agg) {
 			lastErr = fmt.Errorf("%s", judge.EvalFeedback(agg))
 			if attempt == maxHumanInterventionAttempts {
-				return HumanInterventionOutput{}, fmt.Errorf("human intervention LLM evaluation failed after %d attempts:\n%s", maxHumanInterventionAttempts, judge.EvalFeedback(agg))
+				return "", fmt.Errorf("%s LLM evaluation failed after %d attempts:\n%s", task, maxHumanInterventionAttempts, judge.EvalFeedback(agg))
 			}
 			feedback = judge.EvalFeedback(agg)
 			continue
 		}
-		return res, nil
+		return strings.TrimSpace(stringField(out, outKey)), nil
 	}
 	if lastErr != nil {
-		return HumanInterventionOutput{}, lastErr
+		return "", lastErr
 	}
-	return HumanInterventionOutput{}, fmt.Errorf("human intervention exhausted retries")
+	return "", fmt.Errorf("%s exhausted retries", task)
+}
+
+func copyStringMap(in map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(in)+1)
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func openJourneyNoFindings(journey string) string {
@@ -195,13 +290,15 @@ func flagHumanIntervention(ctx context.Context, evidenceDir string, gen HumanInt
 	} else if err := os.Remove(priorityPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("human intervention clear pr_priority: %w", err)
 	}
-	// Seed weaknesses before bootstrap_story so the story starts from the same priorities.
 	weak := strings.TrimSpace(out.WeaknessesSeedMD)
 	if weak != "" {
 		ctxDir := filepath.Dir(filepath.Dir(evidenceDir)) // evidence/typology -> context root
 		if err := writeText(filepath.Join(ctxDir, "weaknesses.md"), weak); err != nil {
 			return err
 		}
+	}
+	if err := saveFindingCommentBodies(evidenceDir, out.FindingComments); err != nil {
+		return err
 	}
 	manifest.HumanInterventionPath = interventionRel
 	return writeTypologyManifest(evidenceDir, manifest)

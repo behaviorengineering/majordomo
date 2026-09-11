@@ -73,6 +73,11 @@ func validateTypologyEvidence(dir string) error {
 		return fmt.Errorf("typology evidence %s is not a directory", evidenceDir)
 	}
 
+	readmePath := filepath.Join(evidenceDir, TypologyReadingIndexPath)
+	if st, err := os.Stat(readmePath); err != nil || st.IsDir() {
+		return fmt.Errorf("typology evidence missing %s reading index", TypologyReadingIndexPath)
+	}
+
 	manifestPath := filepath.Join(evidenceDir, "manifest.yaml")
 	manifest, err := ParseTypologyManifest(manifestPath)
 	if err != nil {
@@ -112,7 +117,7 @@ func validateTypologyEvidence(dir string) error {
 		}
 	}
 	if refine == TypologyRefinePending {
-		for _, rel := range []string{manifest.GraphPath, manifest.PackageContractsPath, manifest.PackageRolesPath} {
+		for _, rel := range []string{manifest.GraphPath, manifest.PackageContractsPath, manifest.PackageRolesPath, manifest.PackageRLMContextPath} {
 			if strings.TrimSpace(rel) == "" {
 				continue
 			}

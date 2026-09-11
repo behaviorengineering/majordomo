@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
@@ -1293,13 +1294,19 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	if gen == nil {
 		gen = JudgeTypologyRefineGenerator{Gen: judgeGen}
 	}
-	rolesUpdated, err := inspectLowConfidencePackages(ctx, judgeGen, analysisDir, rolesPath, string(rolesText), string(contractsText))
-	if err != nil {
-		return err
+	rolesUpdated := string(rolesText)
+	if validator, err := newRLMValidatorFromOpts(ctx, opts); err != nil {
+		logf("WARN", "typology RLM validator unavailable: %v", err)
+	} else if validator != nil {
+		updated, err := validatePackageRolesRLM(ctx, validator, analysisDir, evidenceDir, rolesPath, string(rolesText))
+		if err != nil {
+			return err
+		}
+		if updated != "" {
+			rolesUpdated = updated
+		}
 	}
-	if rolesUpdated != "" {
-		rolesText = []byte(rolesUpdated)
-	}
+	rolesText = []byte(rolesUpdated)
 
 	out, err := gen.Refine(ctx, TypologyRefineInput{
 		RepoID:            manifest.RepoID,
@@ -1468,6 +1475,21 @@ func inspectLowConfidencePackages(ctx context.Context, gen judge.Generator, anal
 		return "", err
 	}
 	return string(data), nil
+}
+
+func newRLMValidatorFromOpts(ctx context.Context, opts Options) (packageRoleRLMValidator, error) {
+	if opts.ConfigDir == "" || opts.RepoID == "" {
+		return nil, fmt.Errorf("config-dir and repo-id required for RLM validate")
+	}
+	defaults, err := config.LoadDefaults(opts.ConfigDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := config.LoadRepoFile(opts.ConfigDir, opts.RepoID, defaults)
+	if err != nil {
+		return nil, err
+	}
+	return newStropPackageRoleRLM(ctx, cfg)
 }
 
 func contractsSnippetFor(pkgPath, contractsYAML string) string {

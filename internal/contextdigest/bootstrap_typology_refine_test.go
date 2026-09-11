@@ -411,6 +411,7 @@ edges:
 	out := mechanicalPreCluster(mustParseRoles(roles))
 	for _, needle := range []string{
 		"Delivery surfaces",
+		"Door walks",
 		"`cmd/demo`",
 		"`internal/server`",
 		"`internal/grpcserver`",
@@ -418,7 +419,9 @@ edges:
 		"`dto`: `internal/board`",
 		"`config`: `internal/config`",
 		"`exec_runner`: `internal/cliexec`",
-		"entrypoint` and `server` are distinct delivery roles",
+		"Unreached",
+		"`internal/agent`",
+		"entrypoint` and `server` are distinct delivery doors",
 	} {
 		if !strings.Contains(out, needle) {
 			t.Fatalf("mechanical seed missing %q:\n%s", needle, out)
@@ -426,7 +429,95 @@ edges:
 	}
 }
 
-func TestMechanicalPreClusterGroupsAggregators(t *testing.T) {
+func TestMechanicalPreClusterDoorWalkGitboardStyle(t *testing.T) {
+	t.Parallel()
+	roles := `packages:
+  - path: cmd/gitboard
+    role: entrypoint
+    confidence: 0.9
+    inspected_stage: 1
+  - path: internal/server
+    role: server
+    confidence: 0.9
+    inspected_stage: 1
+  - path: internal/board
+    role: dto
+    confidence: 0.9
+    inspected_stage: 1
+  - path: internal/config
+    role: config
+    confidence: 0.9
+    inspected_stage: 1
+  - path: internal/cliexec
+    role: exec_runner
+    confidence: 0.9
+    inspected_stage: 1
+  - path: internal/dashboard
+    role: aggregator
+    confidence: 0.9
+    inspected_stage: 2
+  - path: internal/llm
+    role: adapter
+    confidence: 0.9
+    inspected_stage: 2
+  - path: internal/observability
+    role: observability
+    confidence: 0.9
+    inspected_stage: 1
+edges:
+  - from: cmd/gitboard
+    to: internal/server
+    kind: serves_server
+  - from: cmd/gitboard
+    to: internal/config
+    kind: reads_config
+  - from: cmd/gitboard
+    to: internal/board
+    kind: imports
+  - from: cmd/gitboard
+    to: internal/cliexec
+    kind: uses_runner
+  - from: internal/server
+    to: internal/dashboard
+    kind: imports
+  - from: internal/server
+    to: internal/board
+    kind: imports
+  - from: internal/server
+    to: internal/config
+    kind: reads_config
+  - from: internal/server
+    to: internal/observability
+    kind: imports
+  - from: internal/dashboard
+    to: internal/llm
+    kind: imports
+`
+	out := mechanicalPreCluster(mustParseRoles(roles))
+	for _, needle := range []string{
+		"Door-private packages",
+		"Shared across doors",
+		"`internal/board`",
+		"`internal/config`",
+		"`internal/cliexec`",
+		"`internal/dashboard`",
+		"`internal/llm`",
+		"Product slice seeds",
+	} {
+		if !strings.Contains(out, needle) {
+			t.Fatalf("mechanical seed missing %q:\n%s", needle, out)
+		}
+	}
+	// CLI must not claim dashboard via serves_server flood.
+	for _, line := range strings.Split(out, "\n") {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "- `cmd/gitboard`:") && strings.Contains(trim, "internal/dashboard") {
+			t.Fatalf("CLI door must not claim dashboard private:\n%s", out)
+		}
+	}
+}
+
+func TestMechanicalPreClusterUnreachedWithoutDoors(t *testing.T) {
 	t.Parallel()
 	roles := `packages:
   - path: internal/agent
@@ -453,11 +544,14 @@ edges:
     kind: imports
 `
 	out := mechanicalPreCluster(mustParseRoles(roles))
-	if !strings.Contains(out, "Product slice seeds") {
-		t.Fatalf("expected product slice seed section:\n%s", out)
+	if !strings.Contains(out, "Unreached") {
+		t.Fatalf("expected unreached section:\n%s", out)
 	}
 	if !strings.Contains(out, "`internal/agent`") || !strings.Contains(out, "`internal/analyze`") || !strings.Contains(out, "`internal/ledger`") {
-		t.Fatalf("expected connected aggregators in seed:\n%s", out)
+		t.Fatalf("expected aggregators listed as unreached:\n%s", out)
+	}
+	if strings.Contains(out, "seed 1:") {
+		t.Fatalf("expected no door-private product seeds without doors:\n%s", out)
 	}
 }
 

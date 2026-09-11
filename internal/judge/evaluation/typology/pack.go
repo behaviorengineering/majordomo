@@ -36,11 +36,40 @@ var ClusterCriterionIDs = []criteria.CriterionID{
 	CriterionIDClusterDelivery,
 }
 
-// InterventionCriterionIDs is the human-intervention flagger rubric pack.
+// InterventionCriterionIDs is the human-intervention flagger rubric pack (legacy combined).
 var InterventionCriterionIDs = []criteria.CriterionID{
 	CriterionIDInterventionCoverage,
 	CriterionIDInterventionNoInvent,
 	CriterionIDInterventionStatus,
+	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
+}
+
+// InterventionJourneyCriterionIDs scores journey rewrite after findings.
+var InterventionJourneyCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionStatus,
+	CriterionIDInterventionCounsel,
+}
+
+// InterventionBriefCriterionIDs scores the operator briefing.
+var InterventionBriefCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionNoInvent,
+	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
+}
+
+// InterventionPRPriorityCriterionIDs scores the cold-reader PR summary.
+var InterventionPRPriorityCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionCoverage,
+	CriterionIDInterventionTutorVoice,
+	CriterionIDInterventionCounsel,
+}
+
+// FindingCommentCriterionIDs scores one PR comment for a single finding.
+var FindingCommentCriterionIDs = []criteria.CriterionID{
+	CriterionIDInterventionNoInvent,
 	CriterionIDInterventionTutorVoice,
 	CriterionIDInterventionCounsel,
 }
@@ -116,9 +145,9 @@ func Register(r *criteria.CriterionRegistry) {
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDClusterDelivery,
 		Name:        "Cluster starts from delivery facts",
-		Description: `Cluster classifies from package_roles (observed topology), the mechanical grouping seed, plus contracts. Folder names are never evidence. Sole importer is wiring. dto is not owned by an aggregator; exec_runner is not CLI furniture; aggregator is not kind: ui.`,
-		Scoring: `2 points: Proposal honors package_roles and the mechanical seed, and treats fills_dto / uses_runner as wiring, not false ownership smells.
-0 points: Merges dto into aggregator as UI domain, folds server into CLI for sole importer, ignores the mechanical seed, or labels aggregator as the website from the path word dashboard.`,
+		Description: `Cluster classifies from package_roles (observed topology), the door-walk mechanical seed (door-private / shared / unreached), plus contracts. Folder names are never evidence. Sole importer is wiring. dto is not owned by an aggregator; exec_runner is not CLI furniture; aggregator is not kind: ui.`,
+		Scoring: `2 points: Proposal honors package_roles and the door-walk seed (private vs shared), and treats fills_dto / uses_runner as wiring, not false ownership smells.
+0 points: Merges dto into aggregator as UI domain, folds server into CLI for sole importer, ignores door-private/shared facts, ignores RLM agreement metadata when present, or labels aggregator as the website from the path word dashboard.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})
