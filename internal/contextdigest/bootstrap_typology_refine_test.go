@@ -82,13 +82,28 @@ slices:
 		if !strings.Contains(in.PackageRoles, "internal/demo") {
 			t.Fatalf("package_roles=%q", in.PackageRoles)
 		}
+		if !strings.Contains(in.CapabilityConstraints, "internal/demo") {
+			t.Fatalf("capability_constraints=%q", in.CapabilityConstraints)
+		}
 		if !strings.Contains(in.ReadmeSnapshot, "demo serve") {
 			t.Fatalf("readme_snapshot=%q", in.ReadmeSnapshot)
 		}
 		return TypologyRefineOutput{
-			ClusterProposalMD:  "# Cluster\n\nKeep demo.\n",
+			ClusterProposalMD:  "# Cluster\n\nKeep demo.\n\n## Capability constraints (is / is-not)\n\n- `internal/demo` role=unknown is=[] must_not=[]\n",
 			RefinedCatalogYAML: refined,
 			JourneyMD:          "# Journey\n\n## Technical debt & boundary violations\n\nNone.\n",
+			ObjectiveLedgerYAML: `slices:
+  - id: demo
+    owned_paths: [internal/demo]
+    evidence: [DemoType]
+    claims: [data_shape]
+    objective: Demo bounded context for refine tests.
+    verdict: grounded
+`,
+			ObjectiveClaimsYAML: `slices:
+  - id: demo
+    claims: [data_shape]
+`,
 		}, nil
 	})
 	binary := writeTypologyStub(t)
@@ -105,7 +120,16 @@ slices:
 	if updated.HumanInterventionPath != "human_intervention.md" {
 		t.Fatalf("human_intervention_path=%q", updated.HumanInterventionPath)
 	}
-	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md"} {
+	if updated.PackageCapabilityConstraintsPath != "package_capability_constraints.yaml" {
+		t.Fatalf("constraints_path=%q", updated.PackageCapabilityConstraintsPath)
+	}
+	if updated.SliceObjectiveClaimsPath != "slice_objective_claims.yaml" {
+		t.Fatalf("claims_path=%q", updated.SliceObjectiveClaimsPath)
+	}
+	if updated.SliceObjectiveLedgerPath != "slice_objective_ledger.yaml" {
+		t.Fatalf("ledger_path=%q", updated.SliceObjectiveLedgerPath)
+	}
+	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md", "package_capability_constraints.yaml", "slice_objective_claims.yaml", "slice_objective_ledger.yaml"} {
 		if _, err := os.Stat(filepath.Join(evidence, name)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

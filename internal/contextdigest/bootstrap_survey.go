@@ -32,7 +32,7 @@ type BootstrapSurveyRunner interface {
 	Survey(ctx context.Context, input BootstrapSurveyInput) error
 }
 
-// LocalBootstrapSurveyRunner uses the Typology CLI when Go modules are present.
+// LocalBootstrapSurveyRunner uses the Typology CLI when Go or Python roots are present.
 type LocalBootstrapSurveyRunner struct{}
 
 func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSurveyInput) error {
@@ -52,14 +52,21 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		return err
 	}
 
-	modules, err := discoverGoModules(input.AnalysisDir)
+	roots, err := discoverSurveyRoots(input.AnalysisDir)
 	if err != nil {
 		return err
 	}
-	if len(modules) == 0 {
+	if !roots.HasGo && !roots.HasPython {
 		return writeFallbackSurvey(input)
 	}
+	if strings.TrimSpace(input.TypologyBinary) == "" {
+		return fmt.Errorf("bootstrap survey: Typology binary is required for Go or Python repositories")
+	}
+	if !roots.HasGo {
+		return surveyWithTypologyPythonOnly(ctx, input)
+	}
 
+	modules := roots.GoModules
 	moduleScope := strings.TrimSpace(input.ModuleScope)
 	if moduleScope == "" {
 		if len(modules) != 1 {
@@ -69,10 +76,6 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 	}
 	if !moduleScopeExists(moduleScope, modules) {
 		return fmt.Errorf("bootstrap survey: module scope %q is not present in discovered modules %v", moduleScope, modules)
-	}
-
-	if strings.TrimSpace(input.TypologyBinary) == "" {
-		return fmt.Errorf("bootstrap survey: Typology binary is required for Go repositories")
 	}
 
 	version, err := typologyVersion(ctx, input.TypologyBinary, input.AnalysisDir)
@@ -117,15 +120,15 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		return fmt.Errorf("bootstrap survey: copy package contracts: %w", err)
 	}
 
-	rolesLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", "package_roles.yaml")
+	rolesLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", packageRolesRel)
 	if _, err := os.Stat(rolesLocal); err != nil {
 		// contracts writes roles beside the default path under tmp/typology.
-		rolesLocal = filepath.Join(input.AnalysisDir, "tmp", "typology", "package_roles.yaml")
+		rolesLocal = filepath.Join(input.AnalysisDir, "tmp", "typology", packageRolesRel)
 		if _, err := os.Stat(rolesLocal); err != nil {
 			return fmt.Errorf("bootstrap survey: package roles missing after contracts: %w", err)
 		}
 	}
-	rolesPath := filepath.Join(input.EvidenceDir, "package_roles.yaml")
+	rolesPath := filepath.Join(input.EvidenceDir, packageRolesRel)
 	if err := copyFile(rolesLocal, rolesPath); err != nil {
 		return fmt.Errorf("bootstrap survey: copy package roles: %w", err)
 	}
@@ -158,24 +161,162 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 	}
 
 	manifest := contextstore.TypologyManifest{
-		RepoID:               input.RepoID,
-		SourceSHA:            input.SourceSHA,
-		GeneratedAt:          input.GeneratedAt.UTC().Format(time.RFC3339),
-		TypologyVersion:      strings.TrimSpace(version),
-		Mode:                 mode,
-		ModuleScope:          moduleScope,
-		SnapshotPath:         "snapshot.yaml",
-		ArchitecturePath:     contextstore.TypologyArchitectureBriefPath,
-		RefineStatus:         contextstore.TypologyRefinePending,
-		GraphPath:            "graph.txt",
-		PackageContractsPath: "package_contracts.md",
-		PackageRolesPath:     "package_roles.yaml",
+		RepoID:                input.RepoID,
+		SourceSHA:             input.SourceSHA,
+		GeneratedAt:           input.GeneratedAt.UTC().Format(time.RFC3339),
+		TypologyVersion:       strings.TrimSpace(version),
+		Mode:                  mode,
+		ModuleScope:           moduleScope,
+		SnapshotPath:          "snapshot.yaml",
+		ArchitecturePath:      contextstore.TypologyArchitectureBriefPath,
+		RefineStatus:          contextstore.TypologyRefinePending,
+		GraphPath:             "graph.txt",
+		PackageContractsPath:  "package_contracts.md",
+		PackageRolesPath:      packageRolesRel,
 		PackageRLMContextPath: "package_rlm_context.md",
-		ClusterProposalPath:  "cluster_proposal.md",
-		RefinedSnapshotPath:  "refined_snapshot.yaml",
-		JourneyPath:          "journey.md",
+		ClusterProposalPath:   "cluster_proposal.md",
+		RefinedSnapshotPath:   refinedSnapshotRel,
+		JourneyPath:           "journey.md",
 	}
 	return writeTypologyManifest(input.EvidenceDir, manifest)
+}
+
+func surveyWithTypologyPythonOnly(ctx context.Context, input BootstrapSurveyInput) error {
+	version, err := typologyVersion(ctx, input.TypologyBinary, input.AnalysisDir)
+	if err != nil {
+		return err
+	}
+
+	contractsLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", "package_contracts.md")
+	if err := os.MkdirAll(filepath.Dir(contractsLocal), 0o755); err != nil {
+		return err
+	}
+	// Empty module scope: typology Harvest detects Python roots without go.mod.
+	if err := runTypology(ctx, input.TypologyBinary, input.AnalysisDir, "contracts", "",
+		"--out", contractsLocal); err != nil {
+		return err
+	}
+
+	contractsPath := filepath.Join(input.EvidenceDir, "package_contracts.md")
+	if err := copyFile(contractsLocal, contractsPath); err != nil {
+		return fmt.Errorf("bootstrap survey: copy package contracts: %w", err)
+	}
+	rolesLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", packageRolesRel)
+	if _, err := os.Stat(rolesLocal); err != nil {
+		return fmt.Errorf("bootstrap survey: package roles missing after contracts: %w", err)
+	}
+	rolesPath := filepath.Join(input.EvidenceDir, packageRolesRel)
+	if err := copyFile(rolesLocal, rolesPath); err != nil {
+		return fmt.Errorf("bootstrap survey: copy package roles: %w", err)
+	}
+	if err := ensureRolesNonEmpty(rolesPath); err != nil {
+		return fmt.Errorf("bootstrap survey: python harvest: %w", err)
+	}
+	rlmLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", "package_rlm_context.md")
+	rlmPath := filepath.Join(input.EvidenceDir, "package_rlm_context.md")
+	if _, err := os.Stat(rlmLocal); err == nil {
+		if err := copyFile(rlmLocal, rlmPath); err != nil {
+			return fmt.Errorf("bootstrap survey: copy package RLM context: %w", err)
+		}
+	}
+
+	archDraft := filepath.Join(input.AnalysisDir, "tmp", "typology", "architecture_draft.md")
+	if err := os.MkdirAll(filepath.Dir(archDraft), 0o755); err != nil {
+		return err
+	}
+	brief := "# Architecture\n\nPresent-tense snapshot seeded from Typology Python package harvest.\n\n"
+	if err := os.WriteFile(archDraft, []byte(brief), 0o644); err != nil {
+		return err
+	}
+	if err := polishTypologyArchitectureBrief(archDraft); err != nil {
+		return err
+	}
+	if err := prependObservedRolesBrief(archDraft, rolesPath); err != nil {
+		return err
+	}
+	if err := copyFile(archDraft, filepath.Join(input.EvidenceDir, contextstore.TypologyArchitectureBriefPath)); err != nil {
+		return fmt.Errorf("bootstrap survey: copy architecture brief: %w", err)
+	}
+
+	manifest := contextstore.TypologyManifest{
+		RepoID:                input.RepoID,
+		SourceSHA:             input.SourceSHA,
+		GeneratedAt:           input.GeneratedAt.UTC().Format(time.RFC3339),
+		TypologyVersion:       strings.TrimSpace(version),
+		Mode:                  contextstore.TypologyModeDiscover,
+		SnapshotPath:          "snapshot.yaml",
+		ArchitecturePath:      contextstore.TypologyArchitectureBriefPath,
+		RefineStatus:          contextstore.TypologyRefinePending,
+		PackageContractsPath:  "package_contracts.md",
+		PackageRolesPath:      packageRolesRel,
+		PackageRLMContextPath: "package_rlm_context.md",
+		ClusterProposalPath:   "cluster_proposal.md",
+		RefinedSnapshotPath:   refinedSnapshotRel,
+		JourneyPath:           "journey.md",
+	}
+	return writeTypologyManifest(input.EvidenceDir, manifest)
+}
+
+func ensureRolesNonEmpty(rolesPath string) error {
+	doc, err := loadPackageRoles(rolesPath)
+	if err != nil {
+		return err
+	}
+	if len(doc.Packages) == 0 {
+		return fmt.Errorf("%s has no packages", packageRolesRel)
+	}
+	return nil
+}
+
+// surveyRoots are supported language project roots under the analysis tree.
+type surveyRoots struct {
+	GoModules []string
+	HasGo     bool
+	HasPython bool
+}
+
+func discoverSurveyRoots(dir string) (surveyRoots, error) {
+	modules, err := discoverGoModules(dir)
+	if err != nil {
+		return surveyRoots{}, err
+	}
+	hasPy, err := discoverPythonRoot(dir)
+	if err != nil {
+		return surveyRoots{}, err
+	}
+	return surveyRoots{
+		GoModules: modules,
+		HasGo:     len(modules) > 0,
+		HasPython: hasPy,
+	}, nil
+}
+
+func discoverPythonRoot(dir string) (bool, error) {
+	found := false
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", ".cursor", ".typology", "vendor", "node_modules", ".venv", "venv", "__pycache__":
+				if path != dir {
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+		switch d.Name() {
+		case "pyproject.toml", "setup.cfg", "setup.py":
+			found = true
+			return fs.SkipAll
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return found, nil
 }
 
 func writeFallbackSurvey(input BootstrapSurveyInput) error {

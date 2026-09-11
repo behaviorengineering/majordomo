@@ -14,6 +14,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/filereview"
 	"github.com/behaviorengineering/majordomo/internal/judge"
+	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/report"
 	"github.com/behaviorengineering/majordomo/internal/staging"
 )
@@ -54,6 +55,23 @@ type Options struct {
 
 // Run executes the full review orchestration (prep optional → waves → finalize → synthesis).
 func Run(opts Options) error {
+	var owned *llmusage.Collector
+	if llmusage.Active() == nil {
+		owned = llmusage.New()
+		llmusage.Push(owned)
+		defer func() {
+			snap := owned.Snapshot()
+			agent.Logf("INFO", "pr=%s LLM usage summary", opts.PRNumber)
+			for _, line := range strings.Split(llmusage.Format(snap), "\n") {
+				if strings.TrimSpace(line) == "" {
+					continue
+				}
+				agent.Logf("INFO", "%s", line)
+			}
+			llmusage.Pop()
+		}()
+	}
+
 	if opts.PRNumber == "" || opts.StagingDir == "" || opts.OutputDir == "" {
 		return fmt.Errorf("orchestrate requires --pr, --staging-dir, and --output-dir")
 	}

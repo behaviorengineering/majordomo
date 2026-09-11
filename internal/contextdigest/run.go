@@ -10,19 +10,21 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/contextgate"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
+	"github.com/behaviorengineering/majordomo/internal/llmusage"
 )
 
 // Result describes one digest run outcome.
 type Result struct {
-	Action        string `json:"action"` // noop | skipped | seed | catchup | rewrite | rewrite_blocked | gate_regen
-	DefaultBranch string `json:"default_branch,omitempty"`
-	DefaultHEAD   string `json:"default_head,omitempty"`
-	CursorBefore  string `json:"cursor_before,omitempty"`
-	CursorAfter   string `json:"cursor_after,omitempty"`
-	CommitsWalked int    `json:"commits_walked,omitempty"`
-	ContextPR     string `json:"context_pr,omitempty"`
-	GateStatus    string `json:"gate_status,omitempty"`
-	Message       string `json:"message,omitempty"`
+	Action        string            `json:"action"` // noop | skipped | seed | catchup | rewrite | rewrite_blocked | gate_regen
+	DefaultBranch string            `json:"default_branch,omitempty"`
+	DefaultHEAD   string            `json:"default_head,omitempty"`
+	CursorBefore  string            `json:"cursor_before,omitempty"`
+	CursorAfter   string            `json:"cursor_after,omitempty"`
+	CommitsWalked int               `json:"commits_walked,omitempty"`
+	ContextPR     string            `json:"context_pr,omitempty"`
+	GateStatus    string            `json:"gate_status,omitempty"`
+	Message       string            `json:"message,omitempty"`
+	LLMUsage      *llmusage.Summary `json:"llm_usage,omitempty"`
 }
 
 // Options configures majordomo context digest.
@@ -51,7 +53,22 @@ func logf(level, format string, args ...any) {
 }
 
 // Run executes the context digest catch-up job for one served repo.
-func Run(opts Options) (Result, error) {
+func Run(opts Options) (res Result, err error) {
+	usage := llmusage.New()
+	llmusage.Push(usage)
+	defer func() {
+		snap := usage.Snapshot()
+		res.LLMUsage = &snap
+		logf("INFO", "repo=%s LLM usage summary", opts.RepoID)
+		for _, line := range strings.Split(llmusage.Format(snap), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			logf("INFO", "%s", line)
+		}
+		llmusage.Pop()
+	}()
+
 	if opts.ConfigDir == "" || opts.RepoID == "" {
 		return Result{}, fmt.Errorf("--config-dir and --repo-id required")
 	}
@@ -123,7 +140,7 @@ func Run(opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	defer os.RemoveAll(ctxDir)
+	defer func() { _ = os.RemoveAll(ctxDir) }()
 
 	baseExists, err := RemoteBranchExists(servedGit, baseBranch)
 	if err != nil {
@@ -237,7 +254,7 @@ func Run(opts Options) (Result, error) {
 
 		if caughtUp && !gateSidecar.RegenRequested() {
 			logf("INFO", "context cursor caught up at %s", cursorBefore)
-			res := Result{
+			res = Result{
 				Action: "noop", DefaultBranch: defaultBranch, DefaultHEAD: defaultHEAD,
 				CursorBefore: cursorBefore, CursorAfter: cursorBefore,
 				GateStatus: string(gateSidecar.Status), Message: "cursor caught up",
@@ -310,12 +327,13 @@ func Run(opts Options) (Result, error) {
 		}
 
 		if !opts.SkipStory {
+			if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+				return Result{}, err
+			}
 			if err := MaterializeAgenting(ctxDir, CollectChangedFiles(commitCtxs)); err != nil {
 				return Result{}, err
 			}
-		}
-
-		if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+		} else if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
 			return Result{}, err
 		}
 
@@ -338,7 +356,7 @@ func Run(opts Options) (Result, error) {
 				msg = fmt.Sprintf("context digest: history rewrite to %s", shortSHA(defaultHEAD))
 			}
 			if gateSidecar.RegenRequested() {
-				msg = fmt.Sprintf("context digest: regen after gate reject")
+				msg = "context digest: regen after gate reject"
 			}
 			committed, err := CommitAll(ctxGit, msg)
 			if err != nil {

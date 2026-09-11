@@ -9,6 +9,8 @@ const (
 	CriterionIDAdapterSurfaces   criteria.CriterionID = "majordomo_typology_adapter_surfaces"
 	CriterionIDJourneyConsistent criteria.CriterionID = "majordomo_typology_journey_consistent"
 	CriterionIDJourneyCounsel    criteria.CriterionID = "majordomo_typology_journey_counsel"
+	CriterionIDRoleGrounding     criteria.CriterionID = "majordomo_typology_role_grounding"
+	CriterionIDSliceOwnership    criteria.CriterionID = "majordomo_typology_slice_ownership"
 
 	CriterionIDClusterCounsel  criteria.CriterionID = "majordomo_typology_cluster_counsel"
 	CriterionIDClusterDelivery criteria.CriterionID = "majordomo_typology_cluster_delivery"
@@ -28,6 +30,8 @@ var CriterionIDs = []criteria.CriterionID{
 	CriterionIDAdapterSurfaces,
 	CriterionIDJourneyConsistent,
 	CriterionIDJourneyCounsel,
+	CriterionIDRoleGrounding,
+	CriterionIDSliceOwnership,
 }
 
 // ClusterCriterionIDs is the typology cluster-pass counsel rubric pack.
@@ -130,6 +134,24 @@ func Register(r *criteria.CriterionRegistry) {
 		Description: `journey_md decisions say what was rejected and why. Open debt rows carry smell, alternatives with a cost, and a lean. Hollow mitigations such as "Approve binding or refactor" fail.`,
 		Scoring: `2 points: Decisions and open debt rows argue with alternatives and a lean.
 0 points: Inventory-only debt, generic approve-or-refactor mitigations, or decisions without a rejected alternative.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDRoleGrounding,
+		Name:        "Objectives respect capability constraints",
+		Description: `Slice objectives must match the evidence-first slice_objective_ledger, and derived objective_claims must not intersect the must_not union of owned packages from package_capability_constraints (roles + fills_dto edges). dto/data_shape packages must not claim synchronize_state or merge_adapters.`,
+		Scoring: `2 points: Ledger objectives match the catalog and claims stay within allowed capabilities.
+0 points: Catalog drifts from ledger, claims intersect must_not, claims are missing for constrained packages, or unknown claim codes.`,
+		MaxPoints: 2.0,
+		Category:  criteria.CriterionCategoryOutputQuality,
+	})
+	r.Register(criteria.CriterionDescription{
+		ID:          CriterionIDSliceOwnership,
+		Name:        "One package, one owning slice",
+		Description: `Each package path has one owner. Hollow slices that own no packages must not keep SliceBindings after an HTTP/entrypoint split; remount edges onto the slice that owns the packages.`,
+		Scoring: `2 points: No duplicate package owners; no package-less binding holders.
+0 points: Empty slice still in SliceBindings, or the same path claimed by two slices.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})

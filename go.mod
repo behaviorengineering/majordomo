@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/XiaoConstantine/dspy-go v0.86.1
 	github.com/behaviorengineering/strop v0.3.0
-	github.com/behaviorengineering/typology v0.0.19
+	github.com/behaviorengineering/typology v0.0.21
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13
@@ -82,6 +82,7 @@ require (
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/tamnd/gopapy/v2 v2.0.0 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect

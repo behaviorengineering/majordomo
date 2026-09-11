@@ -60,7 +60,7 @@ agenting/           grounding packs for review (not review SKILL.md)
   <area>/GROUNDING.md
 ```
 
-Guided markdown under the root and `evidence/typology/` carries a **Reading path** Prev/Next banner. Machine appendix files (`package_roles.yaml`, `package_contracts.md`, `graph.txt`, snapshots, `manifest.yaml`) are listed in the typology README only.
+Guided markdown under the root and `evidence/typology/` carries a **Reading path** Prev/Next banner. Machine appendix files (`package_roles.yaml`, `package_capability_constraints.yaml`, `slice_objective_ledger.yaml`, `slice_objective_claims.yaml`, `package_contracts.md`, `graph.txt`, snapshots, `manifest.yaml`) are listed in the typology README only.
 Do not put application source on this branch. When `agenting/index.yaml` is present, `majordomo context validate` checks the index and each pack's `GROUNDING.md`. Bootstrap seeds `agenting/overview`.
 
 Validate a worktree with:
@@ -69,15 +69,80 @@ Validate a worktree with:
 majordomo context validate --dir <worktree>
 ```
 
+## Bootstrap typology path
+
+Imagine you open a context PR on a repo you have never touched. You need a short teaching story: which packages matter together, what each group is for, and what debt to care about. You should not have to trust a model that sounds confident.
+
+That is what this path is for. It builds that story in four steps. Machines settle facts and meaning first; a human-facing writer only packages the argument afterward. If meaning is wrong, every later teaching page repeats the lie.
+
+A real failure this design targets: roles correctly said a package was only data shapes, adapters fill it, and it must not claim synchronization. The human-facing writer still wrote “central synchronization layer.” Cold readers believed the story. The fix is to make meaning show its homework before the writer is allowed to speak.
+
+```mermaid
+flowchart TB
+  subgraph facts ["1. Facts — look at the code, label each package"]
+    survey["Walk the tree and collect symbols, exports, delivery flags"]
+    roleRLM["Ask an evidence explorer: what kind of package is this?"]
+    constraints["Write durable rules: this package may do X, must not claim Y"]
+    survey --> roleRLM --> constraints
+  end
+
+  subgraph grouping ["2. Grouping — propose who belongs together"]
+    cluster["Infer slices: which packages should be taught as one unit"]
+  end
+
+  subgraph meaning ["3. Meaning — prove what each group is for"]
+    ledgerRLM["For each proposed group, open the owned packages"]
+    evidenceFirst["Quote real evidence first types, flags, fillers"]
+    claimsNext["Only then name portable claim codes"]
+    objectiveLast["Only then write one plain-language objective"]
+    ledger["Save that as the meaning ledger"]
+    ledgerRLM --> evidenceFirst --> claimsNext --> objectiveLast --> ledger
+  end
+
+  subgraph writer ["4. Human writer — teach without inventing prestige"]
+    refine["Write the catalog and journey for a cold reader"]
+    gates["Check: teaching sentence still matches the ledger"]
+    publish["Publish brief, story, PR counsel, later catch-up"]
+    refine --> gates --> publish
+  end
+
+  constraints --> cluster
+  cluster --> ledgerRLM
+  constraints --> ledgerRLM
+  survey --> ledgerRLM
+  cluster --> refine
+  ledger --> refine
+  ledger --> gates
+  gates -.->|"if teaching drifted, retry meaning"| ledgerRLM
+```
+
+**1. Facts.** Before anyone groups or teaches, we look at each package. An explorer that can read symbols decides whether it is data, HTTP surface, CLI entry, adapter, and so on. Folder names do not count. From that label we write durable rules in portable codes (`package_capability_constraints.yaml`): what this package *is*, and what story it *must not* tell. If adapters fill a dto package, that package also records who fills it.
+
+*Cold-reader takeaway:* “We already know what each folder actually is, in machine terms.”
+
+**2. Grouping.** Next we infer teaching units: which packages belong in the same slice so a newcomer is not drowned in one-package-per-page noise. This step is allowed to be wrong about membership and get corrected later. It is not allowed to invent a glamorous purpose for the group.
+
+*Cold-reader takeaway:* “Here is a proposed map of neighborhoods, not the speech about what each neighborhood means.”
+
+**3. Meaning.** For each proposed group, a second explorer must open the owned packages and quote evidence before it is allowed to speak. Only after quotes may it emit claim codes and one plain objective. That ledger (`slice_objective_ledger.yaml`) is the source of truth for “what this group is for.” Claims (`slice_objective_claims.yaml`) are copied from the ledger by code, not graded by the writer that benefits from sounding important. After the explorer answers, Go also fail-closes **claim entailment**: each claim must be justified by owned package `is` rows, `fills_dto` edges, or mechanical role evidence flags (for example `delivery:http`, `has_main`, `exported_funcs`). English evidence quotes are not proof. Unknown stretch codes such as `synchronize_state` / `merge_adapters` never pass without an `is` prior; `fill_dto` needs adapter `is` or an outbound `fills_dto` edge.
+
+*Cold-reader takeaway:* “If the objective cannot point at symbols or constraint rows, it does not ship.” Example: dto + fillers → “shared payload shapes,” never “central synchronization.” A dto slice that quotes a real type but claims `fill_dto` still fails.
+
+**4. Human writer + publish.** Refine is the tutor voice. It shapes the catalog, journey, rejected alternatives, and debt so a cold reader can follow the argument. It must copy ledger objectives; it may arrange and lean, not escalate prestige. Gates fail the attempt if the teaching sentence no longer matches the ledger. Everything after that (architecture brief, root story, PR counsel, catch-up) only amplifies the grounded seed.
+
+*Cold-reader takeaway:* “The nice prose is a packaging of settled meaning, not a second chance to redefine it.”
+
 ## Bootstrap
 
 Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + Typology survey/refine proposal when available), not a reconstruction of the whole tape.
 
-For Go served repos, seed survey runs Typology `discover` / `show graph` / draft `architecture` under the analysis worktree only, then an unattended LLM **cluster + refine** loop with structure sanitize and boundary rubrics (surfaces, debt when findings, objectives). After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then focused **human-intervention** generators rewrite journey debt, write `human_intervention.md`, seed `weaknesses.md`, and produce `pr_priority.md` for the context PR body. Each open architecture finding also gets a dedicated tutor CoT comment body; after the context update PR opens, Majordomo upserts one ordinary PR/MR comment per finding (stable `<!-- majordomo-finding:<fingerprint> -->` marker) so operators can discuss in-thread. Free-form replies are conversation only; `@majordomo done` / `reject` / `why` still drive the gate. When a finding disappears on a later digest, the same comment is updated to a cleared note (not deleted), keeping the trace. It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. Durable context evidence is refined catalog, journey/cluster notes, post-refine `architecture_brief.md`, human-intervention notes, finding comment sidecars, graph, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. Discovery journey notes (`cluster_proposal.md`, refine `journey.md`) and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution is Majordomo/Typology digest proposing architecture grounding on the context branch, not a product team that already reorganized the default tree. When priorities exist, the PR body leads with that counsel in a tutor voice for a cold reader.
+For Go or Python served repos (Go: `go.mod` / `go.work`; Python: `pyproject.toml` / `setup.cfg` / `setup.py`), seed survey runs Typology under the analysis worktree. Typology harvest is language-specific but emits one language-neutral evidence contract (`package_roles.yaml`, contracts, RLM context; see typology `docs/evidence-contract.md`). Go roots still run `discover` / `show graph` / draft `architecture`; Python-only roots run `contracts` harvest and a roles-backed architecture stub. Then the typology path above: role RLM and `package_capability_constraints.yaml`, cluster CoT for membership, per-slice evidence-first RLM into `slice_objective_ledger.yaml` with Go claim∩`must_not` plus mechanical claim-entailment gates, refine CoT as human writer that copies ledger objectives, and Go-derived `slice_objective_claims.yaml` gated against owned `must_not` plus catalog-equals-ledger checks. After HTTP/entrypoint sanitize, hollow package-less slices that only hold bindings are collapsed onto the slice that owns the matching package base. After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then focused **human-intervention** generators rewrite journey debt, write `human_intervention.md`, seed `weaknesses.md`, and produce `pr_priority.md` for the context PR body. Each open architecture finding also gets a dedicated tutor CoT comment body; after the context update PR opens, Majordomo upserts one ordinary PR/MR comment per finding (stable `<!-- majordomo-finding:<fingerprint> -->` marker) so operators can discuss in-thread. Free-form replies are conversation only; `@majordomo done` / `reject` / `why` still drive the gate. When a finding disappears on a later digest, the same comment is updated to a cleared note (not deleted), keeping the trace. It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. Durable context evidence is refined catalog, journey/cluster notes, post-refine `architecture_brief.md`, human-intervention notes, finding comment sidecars, graph, capability constraints, objective ledger/claims, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. Discovery journey notes (`cluster_proposal.md`, refine `journey.md`) and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution is Majordomo/Typology digest proposing architecture grounding on the context branch, not a product team that already reorganized the default tree. When priorities exist, the PR body leads with that counsel in a tutor voice for a cold reader.
 
 ## Digest trigger (v1)
 
 Tower cron (same interval family as poll, e.g. every 5m). The digest job runs for a repo only when the context cursor is **behind** default `HEAD`. If caught up, exit no-op unless an open update PR has a pending `@majordomo reject` (gate regen). Story updates, agenting materialization, and compaction run during catch-up. LLM provider keys (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) are required on the digest cron job when story generation is enabled.
+
+At the end of every digest (and review / standalone orchestrate) run, Majordomo logs an **itemized LLM usage summary** plus a grand total (prompt / completion / total tokens and call counts per task such as `typology_refine` and `typology_objective_grounding`). Counts come from provider-reported usage on the dspy-go call path, not from local tiktoken estimates. Digest `--out` JSON also includes `llm_usage`.
 
 ## First orphan (v1)
 

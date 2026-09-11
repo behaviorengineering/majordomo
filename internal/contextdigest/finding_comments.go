@@ -9,13 +9,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"text/template"
 )
 
 const (
-	findingCommentsRel     = "evidence/typology/finding_comments.json"
+	findingCommentsRel      = "evidence/typology/finding_comments.json"
 	findingCommentBodiesRel = "evidence/typology/finding_comment_bodies.json"
-	findingMarkerPrefix    = "<!-- majordomo-finding:"
-	findingMarkerSuffix    = " -->"
+	findingMarkerPrefix     = "<!-- majordomo-finding:"
+	findingMarkerSuffix     = " -->"
 )
 
 var findingMarkerRE = regexp.MustCompile(`<!--\s*majordomo-finding:([a-f0-9]+)\s*-->`)
@@ -40,21 +41,33 @@ func findingCommentMarker(fingerprint string) string {
 	return findingMarkerPrefix + fingerprint + findingMarkerSuffix
 }
 
+var findingCommentBodyTmpl = template.Must(template.New("findingCommentBody").Funcs(template.FuncMap{
+	"code": func(s string) string { return "`" + s + "`" },
+}).Parse(`{{.Marker}}
+
+{{if .Cleared}}{{.Counsel}}
+{{else}}## Open architecture finding
+
+{{.Counsel}}
+
+_Reply on this comment to discuss. Gate the context PR with {{code "@majordomo done"}} or {{code "@majordomo reject <reason>"}} when ready._
+{{end}}
+`))
+
 func formatFindingCommentBody(fingerprint, counsel string) string {
 	counsel = strings.TrimSpace(counsel)
-	cleared := strings.HasPrefix(strings.ToLower(counsel), "cleared")
 	var b strings.Builder
-	b.WriteString(findingCommentMarker(fingerprint))
-	b.WriteString("\n\n")
-	if cleared {
-		b.WriteString(counsel)
-		b.WriteByte('\n')
-		return b.String()
+	if err := findingCommentBodyTmpl.Execute(&b, struct {
+		Marker  string
+		Counsel string
+		Cleared bool
+	}{
+		Marker:  findingCommentMarker(fingerprint),
+		Counsel: counsel,
+		Cleared: strings.HasPrefix(strings.ToLower(counsel), "cleared"),
+	}); err != nil {
+		panic(fmt.Sprintf("finding comment template: %v", err))
 	}
-	b.WriteString("## Open architecture finding\n\n")
-	b.WriteString(counsel)
-	b.WriteString("\n\n")
-	b.WriteString("_Reply on this comment to discuss. Gate the context PR with `@majordomo done` or `@majordomo reject <reason>` when ready._\n")
 	return b.String()
 }
 

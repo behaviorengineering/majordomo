@@ -129,6 +129,7 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("graph_text", "typology show graph output"),
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges. Folder names are not evidence."),
+			in("package_capability_constraints", "Durable is/must_not capability codes per package (and filled_by from fills_dto edges). Factual; MUST NOT contradict."),
 			in("mechanical_grouping_md", "Deterministic door-walk seed: door-private vs shared vs unreached, libraries, product clumps."),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
@@ -136,17 +137,19 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("validation_feedback", "Optional prior structure-validation feedback to fix"),
 		},
 		[]core.OutputField{
-			out("cluster_proposal_md", "Markdown proposal of merges, renames, anti-pattern findings, and boundary debt"),
+			out("cluster_proposal_md", "Markdown proposal of merges, renames, anti-pattern findings, boundary debt, and capability constraints"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
 A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
+package_capability_constraints is factual is/is-not prior. MUST NOT contradict it.
 
 Order of evidence (MUST):
 1. package_roles: each package already has role + confidence + evidence from code (entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown).
-2. mechanical_grouping_md: deterministic door-walk seed. It is authoritative for door-private vs shared vs unreached facts; the LLM must not silently override those sections.
-3. package_contracts and readme_snapshot: supporting facts.
-4. graph_text: coupling and wiring only. Labeled edges in package_roles (fills_dto, uses_runner, serves_server, composes, reads_config) explain imports.
-5. Folder and path words (dashboard, board, cli, server) are NEVER evidence and MUST NOT relabel a node.
+2. package_capability_constraints: portable is / must_not codes and filled_by from fills_dto edges.
+3. mechanical_grouping_md: deterministic door-walk seed. It is authoritative for door-private vs shared vs unreached facts; the LLM must not silently override those sections.
+4. package_contracts and readme_snapshot: supporting facts.
+5. graph_text: coupling and wiring only. Labeled edges in package_roles (fills_dto, uses_runner, serves_server, composes, reads_config) explain imports.
+6. Folder and path words (dashboard, board, cli, server) are NEVER evidence and MUST NOT relabel a node.
 
 Hard rules from observed roles and the door-walk seed:
 - entrypoint and server are distinct doors. MUST NOT merge them. Cross-door wiring is a note, not ownership.
@@ -176,7 +179,8 @@ Enforce anti-patterns:
 
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
 Record boundary debt with smell, alternatives, and lean. MUST NOT use hollow mitigations such as "Approve binding or refactor".
-Output markdown only with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale.
+Output markdown only with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale, Capability constraints (is / is-not).
+The Capability constraints (is / is-not) section MUST quote package paths from package_capability_constraints with their is and must_not codes.
 Do not emit catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)
 }
@@ -190,6 +194,8 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			in("cluster_proposal_md", "Approved cluster-pass proposal markdown"),
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges"),
+			in("package_capability_constraints", "Durable is/must_not capability codes per package; factual; MUST NOT contradict"),
+			in("slice_objective_ledger_yaml", "Authoritative evidence-first ledger: slice id, evidence quotes, claims, objective; copy objectives verbatim"),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
 			in("readme_snapshot", "Served-repo README: product purpose and delivery commands"),
@@ -199,9 +205,16 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			out("refined_catalog_yaml", "Full refined Typology catalog YAML proposal"),
 			out("journey_md", "Compressed journey notes including decisions and boundary debt table"),
 		},
-	).WithInstruction(`You are the unattended Typology refine step for Majordomo context digest.
+	).WithInstruction(`You are the unattended Typology refine human-writer for Majordomo context digest.
 Apply the cluster proposal to the draft catalog and emit a complete refined typology.yaml.
-package_roles is factual. MUST NOT contradict it. Folder names are never evidence.
+package_roles, package_capability_constraints, and slice_objective_ledger_yaml are factual. MUST NOT contradict them.
+Folder names are never evidence.
+
+slice_objective_ledger_yaml already settled each owned slice's meaning (evidence, claims, objective).
+For every ledger slice id that still owns packages, copy the ledger objective into the catalog verbatim.
+When you merge draft neighborhoods into one refined slice, copy ONE contributing ledger objective verbatim (do not invent a prestige blend).
+MUST NOT invent prestige objectives beyond the ledger. MUST NOT escalate data_shape slices into synchronize_state or merge_adapters stories.
+Claims are produced by the ledger stage in Go; do not invent a competing claims sidecar.
 
 Placement from roles:
 - entrypoint -> kind: cli surfaces
@@ -229,6 +242,7 @@ Catalog rules:
 - Journey markdown MUST include Status, decisions taken, and a Technical debt and boundary violations table.
 - Each decision MUST say what was rejected and why.
 - Each open debt row MUST carry smell, alternatives, and lean.
+- Journey MUST NOT assign synchronize_state / merge_adapters capabilities to dto-only slices.
 - When validation_feedback is present, fix those issues before emitting.
 
 Output refined_catalog_yaml as YAML only (no markdown fences). Output journey_md as markdown.`)
