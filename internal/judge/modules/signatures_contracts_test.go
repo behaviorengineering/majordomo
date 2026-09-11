@@ -15,6 +15,9 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 		foundReadme := false
 		foundRoles := false
 		foundMechanical := false
+		foundConstraints := false
+		foundLedger := false
+		foundClaimsOut := false
 		for _, in := range mod.GetSignature().Inputs {
 			switch in.Name {
 			case "package_contracts":
@@ -25,6 +28,15 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 				foundRoles = true
 			case "mechanical_grouping_md":
 				foundMechanical = true
+			case "package_capability_constraints":
+				foundConstraints = true
+			case "slice_objective_ledger_yaml":
+				foundLedger = true
+			}
+		}
+		for _, out := range mod.GetSignature().Outputs {
+			if out.Name == "objective_claims_yaml" {
+				foundClaimsOut = true
 			}
 		}
 		if !foundContracts {
@@ -36,8 +48,17 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 		if !foundRoles {
 			t.Fatalf("module %s missing package_roles input", mod.GetDisplayName())
 		}
+		if !foundConstraints {
+			t.Fatalf("module %s missing package_capability_constraints input", mod.GetDisplayName())
+		}
 		if mod.GetDisplayName() == "Typology Cluster" && !foundMechanical {
 			t.Fatalf("module %s missing mechanical_grouping_md input", mod.GetDisplayName())
+		}
+		if mod.GetDisplayName() == "Typology Refine" && !foundLedger {
+			t.Fatalf("module %s missing slice_objective_ledger_yaml input", mod.GetDisplayName())
+		}
+		if mod.GetDisplayName() == "Typology Refine" && foundClaimsOut {
+			t.Fatalf("module %s must not emit objective_claims_yaml; claims come from the ledger in Go", mod.GetDisplayName())
 		}
 	}
 }
@@ -124,6 +145,8 @@ func TestTypologyRefineModuleLibrariesStance(t *testing.T) {
 		"aggregator",
 		"lean",
 		"counsel",
+		"slice_objective_ledger",
+		"copy the ledger objective",
 	} {
 		if !strings.Contains(inst, needle) {
 			t.Fatalf("refine instruction missing %q: %s", needle, jmodules.TypologyRefineModule().GetSignature().Instruction)

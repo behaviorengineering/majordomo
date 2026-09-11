@@ -117,15 +117,15 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		return fmt.Errorf("bootstrap survey: copy package contracts: %w", err)
 	}
 
-	rolesLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", "package_roles.yaml")
+	rolesLocal := filepath.Join(input.AnalysisDir, "tmp", "typology", packageRolesRel)
 	if _, err := os.Stat(rolesLocal); err != nil {
 		// contracts writes roles beside the default path under tmp/typology.
-		rolesLocal = filepath.Join(input.AnalysisDir, "tmp", "typology", "package_roles.yaml")
+		rolesLocal = filepath.Join(input.AnalysisDir, "tmp", "typology", packageRolesRel)
 		if _, err := os.Stat(rolesLocal); err != nil {
 			return fmt.Errorf("bootstrap survey: package roles missing after contracts: %w", err)
 		}
 	}
-	rolesPath := filepath.Join(input.EvidenceDir, "package_roles.yaml")
+	rolesPath := filepath.Join(input.EvidenceDir, packageRolesRel)
 	if err := copyFile(rolesLocal, rolesPath); err != nil {
 		return fmt.Errorf("bootstrap survey: copy package roles: %w", err)
 	}
@@ -158,22 +158,22 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 	}
 
 	manifest := contextstore.TypologyManifest{
-		RepoID:               input.RepoID,
-		SourceSHA:            input.SourceSHA,
-		GeneratedAt:          input.GeneratedAt.UTC().Format(time.RFC3339),
-		TypologyVersion:      strings.TrimSpace(version),
-		Mode:                 mode,
-		ModuleScope:          moduleScope,
-		SnapshotPath:         "snapshot.yaml",
-		ArchitecturePath:     contextstore.TypologyArchitectureBriefPath,
-		RefineStatus:         contextstore.TypologyRefinePending,
-		GraphPath:            "graph.txt",
-		PackageContractsPath: "package_contracts.md",
-		PackageRolesPath:     "package_roles.yaml",
+		RepoID:                input.RepoID,
+		SourceSHA:             input.SourceSHA,
+		GeneratedAt:           input.GeneratedAt.UTC().Format(time.RFC3339),
+		TypologyVersion:       strings.TrimSpace(version),
+		Mode:                  mode,
+		ModuleScope:           moduleScope,
+		SnapshotPath:          "snapshot.yaml",
+		ArchitecturePath:      contextstore.TypologyArchitectureBriefPath,
+		RefineStatus:          contextstore.TypologyRefinePending,
+		GraphPath:             "graph.txt",
+		PackageContractsPath:  "package_contracts.md",
+		PackageRolesPath:      packageRolesRel,
 		PackageRLMContextPath: "package_rlm_context.md",
-		ClusterProposalPath:  "cluster_proposal.md",
-		RefinedSnapshotPath:  "refined_snapshot.yaml",
-		JourneyPath:          "journey.md",
+		ClusterProposalPath:   "cluster_proposal.md",
+		RefinedSnapshotPath:   refinedSnapshotRel,
+		JourneyPath:           "journey.md",
 	}
 	return writeTypologyManifest(input.EvidenceDir, manifest)
 }

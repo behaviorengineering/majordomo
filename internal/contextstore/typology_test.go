@@ -35,19 +35,22 @@ func TestValidateTypologyManifestRequiresPackageContractsWhenPending(t *testing.
 func TestValidateTypologyManifestRequiresHumanInterventionWhenComplete(t *testing.T) {
 	t.Parallel()
 	m := TypologyManifest{
-		RepoID:               "demo",
-		SourceSHA:            "abc",
-		GeneratedAt:          time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
-		Mode:                 TypologyModeDiscover,
-		ArchitecturePath:     TypologyArchitectureBriefPath,
-		RefineStatus:         TypologyRefineComplete,
-		SnapshotPath:         "snapshot.yaml",
-		GraphPath:            "graph.txt",
-		PackageContractsPath: "package_contracts.md",
-		PackageRolesPath:     "package_roles.yaml",
-		ClusterProposalPath:  "cluster_proposal.md",
-		RefinedSnapshotPath:  "refined_snapshot.yaml",
-		JourneyPath:          "journey.md",
+		RepoID:                           "demo",
+		SourceSHA:                        "abc",
+		GeneratedAt:                      time.Date(2026, 9, 6, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+		Mode:                             TypologyModeDiscover,
+		ArchitecturePath:                 TypologyArchitectureBriefPath,
+		RefineStatus:                     TypologyRefineComplete,
+		SnapshotPath:                     "snapshot.yaml",
+		GraphPath:                        "graph.txt",
+		PackageContractsPath:             "package_contracts.md",
+		PackageRolesPath:                 "package_roles.yaml",
+		PackageCapabilityConstraintsPath: "package_capability_constraints.yaml",
+		SliceObjectiveClaimsPath:         "slice_objective_claims.yaml",
+		SliceObjectiveLedgerPath:         "slice_objective_ledger.yaml",
+		ClusterProposalPath:              "cluster_proposal.md",
+		RefinedSnapshotPath:              "refined_snapshot.yaml",
+		JourneyPath:                      "journey.md",
 	}
 	err := ValidateTypologyManifest(m)
 	if err == nil || !strings.Contains(err.Error(), "human_intervention_path") {

@@ -12,15 +12,16 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/config"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
+	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	stropdspy "github.com/behaviorengineering/strop/dspy"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	typroles "github.com/behaviorengineering/typology/roles"
 )
 
 const (
-	agreementMatch      = "match"
-	agreementDisagree   = "disagree"
-	agreementAbstain    = "abstain"
+	agreementMatch       = "match"
+	agreementDisagree    = "disagree"
+	agreementAbstain     = "abstain"
 	agreementUnvalidated = "unvalidated"
 
 	confidenceAgreeMatch   = 0.95
@@ -80,6 +81,9 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig) (package
 			iters := 0
 			if result != nil {
 				iters = result.Iterations
+				llmusage.FromContext(ctx).AddTokenUsageValue(jmodules.TaskTypologyInspect, result.Usage)
+			} else {
+				llmusage.FromContext(ctx).Add(jmodules.TaskTypologyInspect, 0, 0, 0)
 			}
 			return answer, iters, nil
 		}},

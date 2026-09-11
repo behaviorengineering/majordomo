@@ -20,9 +20,6 @@ const (
 	roleObservability = "observability"
 	roleUnknown       = "unknown"
 
-	confidencePublishBar = 0.80
-	maxInspectPackages   = 8
-	maxInspectFileBytes  = 24000
 	llmInspectConfidence = 0.75
 )
 
@@ -106,44 +103,4 @@ func rejectInspectRoleContradiction(role, source string) bool {
 		}
 	}
 	return false
-}
-
-func packagesNeedingInspect(doc packageRolesDoc) []packageRoleNode {
-	var out []packageRoleNode
-	for _, n := range doc.Packages {
-		if n.Confidence >= confidencePublishBar && n.Role != "" && n.Role != roleUnknown {
-			continue
-		}
-		out = append(out, n)
-		if len(out) >= maxInspectPackages {
-			break
-		}
-	}
-	return out
-}
-
-func readPackageSources(analysisDir, pkgPath string) string {
-	dir := filepath.Join(analysisDir, filepath.FromSlash(normalizeRolePath(pkgPath)))
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
-	var b strings.Builder
-	total := 0
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			continue
-		}
-		if total+len(raw) > maxInspectFileBytes {
-			fmt.Fprintf(&b, "\n// file %s truncated for inspect budget\n", e.Name())
-			break
-		}
-		fmt.Fprintf(&b, "// file %s\n%s\n", e.Name(), string(raw))
-		total += len(raw)
-	}
-	return b.String()
 }

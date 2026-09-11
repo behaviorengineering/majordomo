@@ -141,6 +141,9 @@ func TestJobForTask(t *testing.T) {
 	if JobForTask("typology_inspect") != JobContextDigest {
 		t.Fatal("typology_inspect")
 	}
+	if JobForTask("typology_objective_grounding") != JobContextDigest {
+		t.Fatal("typology_objective_grounding")
+	}
 	if JobForTask("typology_human_intervention") != JobContextDigest {
 		t.Fatal("typology_human_intervention")
 	}

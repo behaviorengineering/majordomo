@@ -22,6 +22,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/aigateway"
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
 
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
@@ -241,7 +242,9 @@ func (rt *Runtime) Generate(ctx context.Context, task string, fields map[string]
 		StepName:     task,
 		ErrorMessage: task,
 	}
-	return rt.runner.Generate(ctx, cfg, newMapInput(fields, version), nil)
+	out, err := rt.runner.Generate(ctx, cfg, newMapInput(fields, version), nil)
+	llmusage.RecordExecutionState(ctx, task)
+	return out, err
 }
 
 // Evaluate runs the registered evaluation workflow for a generator task.
@@ -258,7 +261,9 @@ func (rt *Runtime) Evaluate(
 	// Drain a buffered channel until strop is bumped with the nil-safe JobRunner path.
 	eventChan, stop := discardEventChannel()
 	defer stop()
-	return rt.runner.EvaluateWorkflow(ctx, task, newMapInput(inputFields, version), outputFields, eventChan)
+	out, err := rt.runner.EvaluateWorkflow(ctx, task, newMapInput(inputFields, version), outputFields, eventChan)
+	llmusage.RecordExecutionState(ctx, task)
+	return out, err
 }
 
 // discardEventChannel returns a stream sink so EvaluateWorkflow can emit start/end

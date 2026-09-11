@@ -32,24 +32,30 @@ type TypologyRefineGenerator interface {
 
 // TypologyRefineInput is the evidence pack for typology_cluster / typology_refine.
 type TypologyRefineInput struct {
-	RepoID             string
-	ModuleScope        string
-	DraftCatalogYAML   string
-	GraphText          string
-	PackageContracts   string
-	PackageRoles       string
-	ArchitectureDraft  string
-	RepoLayout         string
-	ReadmeSnapshot     string
-	ValidationFeedback string
-	ClusterProposalMD  string
+	RepoID                string
+	ModuleScope           string
+	DraftCatalogYAML      string
+	GraphText             string
+	PackageContracts      string
+	PackageRoles          string
+	CapabilityConstraints string
+	ArchitectureDraft     string
+	RepoLayout            string
+	ReadmeSnapshot        string
+	ValidationFeedback    string
+	ClusterProposalMD     string
+	AnalysisDir           string
+	EvidenceDir           string
+	LedgerBuilder         sliceObjectiveLedgerBuilder
 }
 
 // TypologyRefineOutput is the refined catalog proposal and journey notes.
 type TypologyRefineOutput struct {
-	ClusterProposalMD  string
-	RefinedCatalogYAML string
-	JourneyMD          string
+	ClusterProposalMD   string
+	RefinedCatalogYAML  string
+	JourneyMD           string
+	ObjectiveLedgerYAML string
+	ObjectiveClaimsYAML string
 }
 
 // JudgeTypologyRefineGenerator uses typology_cluster then typology_refine tasks.
@@ -68,19 +74,34 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	}
 	rolesDoc := mustParseRoles(input.PackageRoles)
 	mechanicalGroupingMD := mechanicalPreCluster(rolesDoc)
+	constraintsDoc, constraintsErr := parseCapabilityConstraintsYAML(input.CapabilityConstraints)
+	if constraintsErr != nil && strings.TrimSpace(input.CapabilityConstraints) != "" {
+		return TypologyRefineOutput{}, fmt.Errorf("typology refine capability constraints: %w", constraintsErr)
+	}
+	if constraintsErr != nil {
+		constraintsDoc = buildCapabilityConstraints(rolesDoc)
+	}
 
 	clusterFields := map[string]interface{}{
-		"repo_id":                input.RepoID,
-		"module_scope":           input.ModuleScope,
-		"draft_catalog_yaml":     input.DraftCatalogYAML,
-		"graph_text":             input.GraphText,
-		"package_contracts":      input.PackageContracts,
-		"package_roles":          input.PackageRoles,
-		"mechanical_grouping_md": mechanicalGroupingMD,
-		"architecture_draft":     input.ArchitectureDraft,
-		"repo_layout":            input.RepoLayout,
-		"readme_snapshot":        input.ReadmeSnapshot,
-		"validation_feedback":    input.ValidationFeedback,
+		"repo_id":                        input.RepoID,
+		"module_scope":                   input.ModuleScope,
+		"draft_catalog_yaml":             input.DraftCatalogYAML,
+		"graph_text":                     input.GraphText,
+		"package_contracts":              input.PackageContracts,
+		"package_roles":                  input.PackageRoles,
+		"package_capability_constraints": input.CapabilityConstraints,
+		"mechanical_grouping_md":         mechanicalGroupingMD,
+		"architecture_draft":             input.ArchitectureDraft,
+		"repo_layout":                    input.RepoLayout,
+		"readme_snapshot":                input.ReadmeSnapshot,
+		"validation_feedback":            input.ValidationFeedback,
+	}
+	if strings.TrimSpace(input.CapabilityConstraints) == "" {
+		encoded, err := marshalConstraints(constraintsDoc)
+		if err != nil {
+			return TypologyRefineOutput{}, err
+		}
+		clusterFields["package_capability_constraints"] = encoded
 	}
 	var clusterMD string
 	clusterFeedback := input.ValidationFeedback
@@ -96,11 +117,19 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		if clusterMD == "" {
 			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: cluster_proposal_md is required")
 		}
+		clusterMD = ensureClusterCapabilityConstraintsSection(clusterMD, constraintsDoc)
 		if fixed, note := scrubForbiddenHTTPEntrypointMerges(clusterMD, input.PackageRoles); note != "" {
 			// Deterministic role gate: do not keep asking the LLM to unlearn sole-importer folds.
-			clusterMD = fixed
+			clusterMD = ensureClusterCapabilityConstraintsSection(fixed, constraintsDoc)
 			_ = note
 			break
+		}
+		if ok, fb := clusterProposalHasCapabilityConstraints(clusterMD, constraintsDoc); !ok {
+			if attempt == maxTypologyRefineAttempts {
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+			}
+			clusterFeedback = fb
+			continue
 		}
 		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologyCluster, clusterFields, map[string]interface{}{
 			"cluster_proposal_md": clusterMD,
@@ -124,19 +153,92 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 
 	var refined string
 	var journey string
+	var ledgerYAML string
+	var claimsYAML string
 	feedback := input.ValidationFeedback
+	constraintsYAML := input.CapabilityConstraints
+	if strings.TrimSpace(constraintsYAML) == "" {
+		encoded, err := marshalConstraints(constraintsDoc)
+		if err != nil {
+			return TypologyRefineOutput{}, err
+		}
+		constraintsYAML = encoded
+	}
+
+	draftTypo, err := loadTypologyFromYAML(input.DraftCatalogYAML)
+	if err != nil {
+		return TypologyRefineOutput{}, fmt.Errorf("typology refine load draft catalog: %w", err)
+	}
+	needsLedger := false
+	for _, s := range draftTypo.Slices {
+		if len(slicePackagePaths(s)) > 0 {
+			needsLedger = true
+			break
+		}
+	}
+	if needsLedger && input.LedgerBuilder == nil {
+		return TypologyRefineOutput{}, fmt.Errorf("%s: slice_objective_ledger RLM is required for owned packages but no ledger builder is configured",
+			typologypack.CriterionIDRoleGrounding)
+	}
+
+	var ledgerDoc sliceObjectiveLedgerDoc
+	if needsLedger {
+		var ledgerFeedback string
+		builtOK := false
+		for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
+			built, issues, buildErr := input.LedgerBuilder.BuildSliceLedger(ctx, sliceLedgerBuildRequest{
+				AnalysisDir: input.AnalysisDir,
+				EvidenceDir: input.EvidenceDir,
+				DraftTypo:   draftTypo,
+				Constraints: constraintsDoc,
+				ClusterMD:   clusterMD,
+			})
+			if buildErr != nil {
+				ledgerFeedback = buildErr.Error()
+				if attempt == maxTypologyRefineAttempts {
+					return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts: %w", maxTypologyRefineAttempts, buildErr)
+				}
+				continue
+			}
+			if len(issues) > 0 {
+				ledgerFeedback = strings.Join(issues, "\n")
+				if attempt == maxTypologyRefineAttempts {
+					return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s", maxTypologyRefineAttempts, ledgerFeedback)
+				}
+				continue
+			}
+			ledgerDoc = built
+			var err error
+			ledgerYAML, err = marshalLedger(ledgerDoc)
+			if err != nil {
+				return TypologyRefineOutput{}, err
+			}
+			claimsYAML, err = marshalClaims(claimsDocFromLedger(ledgerDoc))
+			if err != nil {
+				return TypologyRefineOutput{}, err
+			}
+			builtOK = true
+			break
+		}
+		if !builtOK {
+			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s", maxTypologyRefineAttempts, ledgerFeedback)
+		}
+	}
+
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
 		refineFields := map[string]interface{}{
-			"repo_id":             input.RepoID,
-			"module_scope":        input.ModuleScope,
-			"draft_catalog_yaml":  input.DraftCatalogYAML,
-			"cluster_proposal_md": clusterMD,
-			"package_contracts":   input.PackageContracts,
-			"package_roles":       input.PackageRoles,
-			"architecture_draft":  input.ArchitectureDraft,
-			"repo_layout":         input.RepoLayout,
-			"readme_snapshot":     input.ReadmeSnapshot,
-			"validation_feedback": feedback,
+			"repo_id":                        input.RepoID,
+			"module_scope":                   input.ModuleScope,
+			"draft_catalog_yaml":             input.DraftCatalogYAML,
+			"cluster_proposal_md":            clusterMD,
+			"package_contracts":              input.PackageContracts,
+			"package_roles":                  input.PackageRoles,
+			"package_capability_constraints": constraintsYAML,
+			"slice_objective_ledger_yaml":    ledgerYAML,
+			"architecture_draft":             input.ArchitectureDraft,
+			"repo_layout":                    input.RepoLayout,
+			"readme_snapshot":                input.ReadmeSnapshot,
+			"validation_feedback":            feedback,
 		}
 		out, err := gen.Generate(ctx, jmodules.TaskTypologyRefine, refineFields, attempt)
 		if err != nil {
@@ -166,9 +268,50 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			feedback = evalFeedback
 			continue
 		}
+		typo, err := loadTypologyFromYAML(refined)
+		if err != nil {
+			if attempt == maxTypologyRefineAttempts {
+				return TypologyRefineOutput{}, err
+			}
+			feedback = err.Error()
+			continue
+		}
+		if needsLedger {
+			aligned, alignedClaims, alignIssues := alignLedgerToRefinedCatalog(typo, ledgerDoc)
+			if len(alignIssues) > 0 {
+				fb := strings.Join(alignIssues, "\n")
+				if attempt == maxTypologyRefineAttempts {
+					return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+				}
+				feedback = fb
+				continue
+			}
+			ledgerDoc = aligned
+			var marshalErr error
+			ledgerYAML, marshalErr = marshalLedger(ledgerDoc)
+			if marshalErr != nil {
+				return TypologyRefineOutput{}, marshalErr
+			}
+			claimsDoc := alignedClaims
+			claimsYAML, marshalErr = marshalClaims(claimsDoc)
+			if marshalErr != nil {
+				return TypologyRefineOutput{}, marshalErr
+			}
+			claimIssues := appendConstraintClaimIssues(typo, constraintsDoc, claimsDoc, nil)
+			if len(claimIssues) > 0 {
+				fb := strings.Join(claimIssues, "\n")
+				if attempt == maxTypologyRefineAttempts {
+					return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+				}
+				feedback = fb
+				continue
+			}
+		}
 		evalOut := map[string]interface{}{
-			"refined_catalog_yaml": refined,
-			"journey_md":           journey,
+			"refined_catalog_yaml":        refined,
+			"journey_md":                  journey,
+			"slice_objective_ledger_yaml": ledgerYAML,
+			"objective_claims_yaml":       claimsYAML,
 		}
 		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologyRefine, refineFields, evalOut, attempt)
 		if err != nil {
@@ -189,9 +332,11 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	}
 
 	return TypologyRefineOutput{
-		ClusterProposalMD:  clusterMD,
-		RefinedCatalogYAML: refined,
-		JourneyMD:          journey,
+		ClusterProposalMD:   clusterMD,
+		RefinedCatalogYAML:  refined,
+		JourneyMD:           journey,
+		ObjectiveLedgerYAML: ledgerYAML,
+		ObjectiveClaimsYAML: claimsYAML,
 	}, nil
 }
 
@@ -204,7 +349,7 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, roles
 		return false, fmt.Sprintf("%s: temp file: %v", typologypack.CriterionIDObjectives, err)
 	}
 	path := tmp.Name()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(refinedYAML); err != nil {
 		_ = tmp.Close()
 		return false, fmt.Sprintf("%s: write temp: %v", typologypack.CriterionIDObjectives, err)
@@ -245,6 +390,8 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, roles
 	if journeyStatusClaimsComplete(journeyMD) && journeyDebtStillSaysMerge(journeyMD) {
 		issues = append(issues, fmt.Sprintf("%s: journey Status claims complete but debt still lists Merge into actions", typologypack.CriterionIDJourneyConsistent))
 	}
+
+	issues = appendEvidenceGroundingIssues(typo, issues)
 
 	if len(issues) == 0 {
 		return true, ""
@@ -288,7 +435,7 @@ func looksLikeInteractionPath(path string, roles map[string]packageRoleNode) boo
 
 func journeyStatusClaimsComplete(journey string) bool {
 	lower := strings.ToLower(journey)
-	if !(strings.Contains(lower, "completed") || strings.Contains(lower, "complete")) {
+	if !strings.Contains(lower, "completed") && !strings.Contains(lower, "complete") {
 		return false
 	}
 	if strings.Contains(lower, "status:") {
@@ -392,7 +539,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 		return "", fmt.Errorf("typology refine temp file: %w", err)
 	}
 	path := tmp.Name()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(raw); err != nil {
 		_ = tmp.Close()
 		return "", fmt.Errorf("typology refine write temp: %w", err)
@@ -458,7 +605,7 @@ func loadDraftCatalog(draftYAML string) (catalog.Typology, map[string]struct{}, 
 		return catalog.Typology{}, nil, fmt.Errorf("typology refine draft temp: %w", err)
 	}
 	path := tmp.Name()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(draftYAML); err != nil {
 		_ = tmp.Close()
 		return catalog.Typology{}, nil, fmt.Errorf("typology refine write draft temp: %w", err)
@@ -1031,7 +1178,7 @@ func sanitizeRefinedCatalog(t, draft catalog.Typology, roles map[string]packageR
 		compBindings = append(compBindings, b)
 	}
 	t.ComponentBindings = compBindings
-	return separateHTTPSurfacesFromEntrypoint(t, roles)
+	return collapseHollowPackageSlices(separateHTTPSurfacesFromEntrypoint(t, roles))
 }
 
 // separateHTTPSurfacesFromEntrypoint moves server packages off any slice that
@@ -1138,6 +1285,22 @@ func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]pac
 		t.Slices = append(t.Slices, extra...)
 	}
 	return t
+}
+
+func marshalConstraints(doc packageCapabilityConstraintsDoc) (string, error) {
+	data, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("capability constraints encode: %w", err)
+	}
+	return string(data), nil
+}
+
+func marshalClaims(doc sliceObjectiveClaimsDoc) (string, error) {
+	data, err := yaml.Marshal(&doc)
+	if err != nil {
+		return "", fmt.Errorf("objective claims encode: %w", err)
+	}
+	return string(data), nil
 }
 
 func stripCodeFence(s string) string {
@@ -1279,7 +1442,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	}
 	rolesRel := strings.TrimSpace(manifest.PackageRolesPath)
 	if rolesRel == "" {
-		rolesRel = "package_roles.yaml"
+		rolesRel = packageRolesRel
 	}
 	rolesPath := filepath.Join(evidenceDir, rolesRel)
 	rolesText, err := os.ReadFile(rolesPath)
@@ -1308,16 +1471,37 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	}
 	rolesText = []byte(rolesUpdated)
 
+	constraintsDoc := buildCapabilityConstraints(mustParseRoles(string(rolesText)))
+	constraintsPath := filepath.Join(evidenceDir, packageCapabilityConstraintsRel)
+	if err := writeCapabilityConstraints(constraintsPath, constraintsDoc); err != nil {
+		return err
+	}
+	constraintsYAML, err := marshalConstraints(constraintsDoc)
+	if err != nil {
+		return err
+	}
+
+	var ledgerBuilder sliceObjectiveLedgerBuilder
+	if g, err := newLedgerBuilderFromOpts(ctx, opts); err != nil {
+		logf("WARN", "typology objective ledger RLM unavailable: %v", err)
+	} else {
+		ledgerBuilder = g
+	}
+
 	out, err := gen.Refine(ctx, TypologyRefineInput{
-		RepoID:            manifest.RepoID,
-		ModuleScope:       manifest.ModuleScope,
-		DraftCatalogYAML:  string(draftYAML),
-		GraphText:         string(graphText),
-		PackageContracts:  string(contractsText),
-		PackageRoles:      string(rolesText),
-		ArchitectureDraft: string(archDraft),
-		RepoLayout:        strings.Join(collectTopLevelEntries(analysisDir), "\n"),
-		ReadmeSnapshot:    capReadmeSnapshot(readText(filepath.Join(analysisDir, "README.md"))),
+		RepoID:                manifest.RepoID,
+		ModuleScope:           manifest.ModuleScope,
+		DraftCatalogYAML:      string(draftYAML),
+		GraphText:             string(graphText),
+		PackageContracts:      string(contractsText),
+		PackageRoles:          string(rolesText),
+		CapabilityConstraints: constraintsYAML,
+		ArchitectureDraft:     string(archDraft),
+		RepoLayout:            strings.Join(collectTopLevelEntries(analysisDir), "\n"),
+		ReadmeSnapshot:        capReadmeSnapshot(readText(filepath.Join(analysisDir, "README.md"))),
+		AnalysisDir:           analysisDir,
+		EvidenceDir:           evidenceDir,
+		LedgerBuilder:         ledgerBuilder,
 	})
 	if err != nil {
 		return err
@@ -1334,6 +1518,25 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	journeyPath := filepath.Join(evidenceDir, manifest.JourneyPath)
 	if err := writeText(journeyPath, out.JourneyMD); err != nil {
 		return err
+	}
+	if strings.TrimSpace(out.ObjectiveLedgerYAML) != "" {
+		ledgerDoc, err := parseObjectiveLedgerYAML(out.ObjectiveLedgerYAML)
+		if err != nil {
+			return fmt.Errorf("typology refine write objective ledger: %w", err)
+		}
+		if err := writeObjectiveLedger(filepath.Join(evidenceDir, sliceObjectiveLedgerRel), ledgerDoc); err != nil {
+			return err
+		}
+	}
+	claimsPath := filepath.Join(evidenceDir, sliceObjectiveClaimsRel)
+	if strings.TrimSpace(out.ObjectiveClaimsYAML) != "" {
+		claimsDoc, err := parseObjectiveClaimsYAML(out.ObjectiveClaimsYAML)
+		if err != nil {
+			return fmt.Errorf("typology refine write objective claims: %w", err)
+		}
+		if err := writeObjectiveClaims(claimsPath, claimsDoc); err != nil {
+			return err
+		}
 	}
 	snapshotPath := filepath.Join(evidenceDir, manifest.SnapshotPath)
 	if err := copyFile(refinedPath, snapshotPath); err != nil {
@@ -1393,6 +1596,9 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		return err
 	}
 	manifest.HumanInterventionPath = updated.HumanInterventionPath
+	manifest.PackageCapabilityConstraintsPath = packageCapabilityConstraintsRel
+	manifest.SliceObjectiveClaimsPath = sliceObjectiveClaimsRel
+	manifest.SliceObjectiveLedgerPath = sliceObjectiveLedgerRel
 	manifest.RefineStatus = contextstore.TypologyRefineComplete
 	return writeTypologyManifest(evidenceDir, manifest)
 }
@@ -1403,78 +1609,6 @@ func capReadmeSnapshot(text string) string {
 		return text
 	}
 	return string(runes[:maxReadmeSnapshotRunes]) + "\n[... README truncated for typology cluster/refine ...]\n"
-}
-
-// inspectLowConfidencePackages asks the LLM to classify thin packages from source only.
-// Folder names are forbidden as evidence. LLM confidence is capped below mechanical facts.
-func inspectLowConfidencePackages(ctx context.Context, gen judge.Generator, analysisDir, rolesPath, rolesYAML, contractsYAML string) (string, error) {
-	if gen == nil || !gen.Ready() {
-		return rolesYAML, nil
-	}
-	doc := mustParseRoles(rolesYAML)
-	need := packagesNeedingInspect(doc)
-	if len(need) == 0 {
-		return rolesYAML, nil
-	}
-	byPath := roleByPath(doc)
-	changed := false
-	for i, n := range need {
-		src := readPackageSources(analysisDir, n.Path)
-		if strings.TrimSpace(src) == "" {
-			continue
-		}
-		fields := map[string]interface{}{
-			"package_path":      n.Path,
-			"package_contracts": contractsSnippetFor(n.Path, contractsYAML),
-			"package_source":    src,
-			"candidate_role":    n.CandidateRole,
-			"current_evidence":  strings.Join(n.Evidence, ", "),
-		}
-		out, err := gen.Generate(ctx, jmodules.TaskTypologyInspect, fields, i+1)
-		if err != nil {
-			continue
-		}
-		role := strings.TrimSpace(stringField(out, "role"))
-		evidence := strings.TrimSpace(stringField(out, "evidence"))
-		if role == "" || role == roleUnknown {
-			continue
-		}
-		if rejectInspectRoleContradiction(role, src) {
-			continue
-		}
-		node := byPath[normalizeRolePath(n.Path)]
-		node.Role = role
-		node.Confidence = llmInspectConfidence
-		node.InspectedStage = 3
-		if evidence != "" {
-			node.Evidence = appendUnique(node.Evidence, "llm_inspect:"+evidence)
-		} else {
-			node.Evidence = appendUnique(node.Evidence, "llm_inspect")
-		}
-		node.CandidateRole = ""
-		byPath[normalizeRolePath(n.Path)] = node
-		changed = true
-	}
-	if !changed {
-		return rolesYAML, nil
-	}
-	var packages []packageRoleNode
-	for _, n := range doc.Packages {
-		if updated, ok := byPath[normalizeRolePath(n.Path)]; ok {
-			packages = append(packages, updated)
-			continue
-		}
-		packages = append(packages, n)
-	}
-	doc.Packages = packages
-	if err := writePackageRoles(rolesPath, doc); err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(rolesPath)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }
 
 func newRLMValidatorFromOpts(ctx context.Context, opts Options) (packageRoleRLMValidator, error) {
@@ -1490,24 +1624,6 @@ func newRLMValidatorFromOpts(ctx context.Context, opts Options) (packageRoleRLMV
 		return nil, err
 	}
 	return newStropPackageRoleRLM(ctx, cfg)
-}
-
-func contractsSnippetFor(pkgPath, contractsYAML string) string {
-	want := "## ./" + normalizeRolePath(pkgPath)
-	alt := "## " + normalizeRolePath(pkgPath)
-	idx := strings.Index(contractsYAML, want)
-	if idx < 0 {
-		idx = strings.Index(contractsYAML, alt)
-	}
-	if idx < 0 {
-		return ""
-	}
-	rest := contractsYAML[idx:]
-	next := strings.Index(rest[3:], "\n## ")
-	if next >= 0 {
-		return strings.TrimSpace(rest[:next+3])
-	}
-	return strings.TrimSpace(rest)
 }
 
 func appendUnique(list []string, item string) []string {

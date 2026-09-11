@@ -169,6 +169,9 @@ func (packageJudgeGenerator) Ready() bool { return judge.StoryLLMAvailable() }
 func (packageJudgeGenerator) TaskModel(string) string { return "" }
 
 func writeBootstrapStory(ctxDir, analysisDir string, at time.Time, sourceSHA string, gen BootstrapStoryGenerator, judgeGen judge.Generator) error {
+	if err := assertEvidenceGroundingBeforeStory(ctxDir); err != nil {
+		return err
+	}
 	input, err := loadBootstrapStoryInput(ctxDir, analysisDir, at, sourceSHA)
 	if err != nil {
 		return err

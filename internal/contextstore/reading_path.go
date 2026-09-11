@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 )
 
 const (
@@ -15,6 +16,63 @@ const (
 
 	TypologyReadingIndexPath = "README.md"
 )
+
+func mdCode(s string) string {
+	return "`" + s + "`"
+}
+
+func mustRender(t *template.Template, data any) string {
+	var b strings.Builder
+	if err := t.Execute(&b, data); err != nil {
+		panic(fmt.Sprintf("contextstore template %s: %v", t.Name(), err))
+	}
+	return b.String()
+}
+
+var readingTmplFuncs = template.FuncMap{
+	"code": mdCode,
+}
+
+var rootReadingTOCTmpl = template.Must(template.New("rootReadingTOC").Funcs(readingTmplFuncs).Parse(`{{.Start}}
+## Reading order
+
+1. [README.md](README.md) (this file)
+2. [mission.md](mission.md)
+3. [architecture.md](architecture.md)
+4. [conventions.md](conventions.md)
+5. [weaknesses.md](weaknesses.md)
+6. [chronology.md](chronology.md)
+{{if .TypologyPresent}}7. [evidence/typology/README.md](evidence/typology/README.md) - Typology seed briefing
+{{else}}7. {{code "evidence/typology/"}} - appears after a Typology survey seed
+{{end}}
+{{.End}}
+`))
+
+var typologyReadingIndexTmpl = template.Must(template.New("typologyReadingIndex").Funcs(readingTmplFuncs).Parse(`# Typology seed evidence
+
+Briefing for this digest proposal. Not the teaching-story root files and not a confirmed {{code ".typology/"}} catalog.
+
+## Reading order
+
+1. This index ({{code "README.md"}})
+2. [{{code "architecture_brief.md"}}](architecture_brief.md) - observed map / architecture brief
+3. [{{code "cluster_proposal.md"}}](cluster_proposal.md) - optional grouping overlay
+4. [{{code "journey.md"}}](journey.md) - refine decisions and debt
+5. [{{code "human_intervention.md"}}](human_intervention.md) - operator priorities
+6. [{{code "pr_priority.md"}}](pr_priority.md) - when present; cold-reader PR counsel
+7. Per-finding PR comments - upserted on the context update PR for conversation/trace (not SCM Resolve threads)
+8. Back to the [story TOC](../../README.md)
+
+## Appendix (reference, no Prev/Next)
+
+{{range .Appendix}}- [{{code .}}]({{.}})
+{{end}}
+`))
+
+var readingNavTmpl = template.Must(template.New("readingNav").Parse(`{{.Start}}
+**Reading path:** {{.Trail}}
+{{.End}}
+`))
 
 // StoryReadingOrder is the guided teaching-story sequence on the context branch root.
 var StoryReadingOrder = []string{
@@ -40,6 +98,9 @@ var TypologyReadingOrder = []string{
 // TypologyAppendixFiles are machine/reference artifacts listed in the typology TOC only.
 var TypologyAppendixFiles = []string{
 	"package_roles.yaml",
+	"package_capability_constraints.yaml",
+	"slice_objective_ledger.yaml",
+	"slice_objective_claims.yaml",
 	"package_contracts.md",
 	"graph.txt",
 	"refined_snapshot.yaml",
@@ -112,48 +173,29 @@ func ApplyReadingPath(ctxDir string) error {
 }
 
 func writeTypologyReadingIndex(evidenceDir string) error {
-	var b strings.Builder
-	b.WriteString("# Typology seed evidence\n\n")
-	b.WriteString("Briefing for this digest proposal. Not the teaching-story root files and not a confirmed `.typology/` catalog.\n\n")
-	b.WriteString("## Reading order\n\n")
-	b.WriteString("1. This index (`README.md`)\n")
-	b.WriteString("2. [`architecture_brief.md`](architecture_brief.md) — observed map / architecture brief\n")
-	b.WriteString("3. [`cluster_proposal.md`](cluster_proposal.md) — optional grouping overlay\n")
-	b.WriteString("4. [`journey.md`](journey.md) — refine decisions and debt\n")
-	b.WriteString("5. [`human_intervention.md`](human_intervention.md) — operator priorities\n")
-	b.WriteString("6. [`pr_priority.md`](pr_priority.md) — when present; cold-reader PR counsel\n")
-	b.WriteString("7. Per-finding PR comments — upserted on the context update PR for conversation/trace (not SCM Resolve threads)\n")
-	b.WriteString("7. Back to the [story TOC](../../README.md)\n\n")
-	b.WriteString("## Appendix (reference, no Prev/Next)\n\n")
+	appendix := make([]string, 0, len(TypologyAppendixFiles))
 	for _, name := range TypologyAppendixFiles {
 		if fileExists(filepath.Join(evidenceDir, name)) {
-			fmt.Fprintf(&b, "- [`%s`](%s)\n", name, name)
+			appendix = append(appendix, name)
 		}
 	}
-	b.WriteString("\n")
+	body := mustRender(typologyReadingIndexTmpl, struct {
+		Appendix []string
+	}{Appendix: appendix})
 	path := filepath.Join(evidenceDir, TypologyReadingIndexPath)
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	return os.WriteFile(path, []byte(body), 0o644)
 }
 
 func formatRootReadingTOC(typologyPresent bool) string {
-	var b strings.Builder
-	b.WriteString(readingTOCStart)
-	b.WriteString("\n## Reading order\n\n")
-	b.WriteString("1. [README.md](README.md) (this file)\n")
-	b.WriteString("2. [mission.md](mission.md)\n")
-	b.WriteString("3. [architecture.md](architecture.md)\n")
-	b.WriteString("4. [conventions.md](conventions.md)\n")
-	b.WriteString("5. [weaknesses.md](weaknesses.md)\n")
-	b.WriteString("6. [chronology.md](chronology.md)\n")
-	if typologyPresent {
-		b.WriteString("7. [evidence/typology/README.md](evidence/typology/README.md) — Typology seed briefing\n")
-	} else {
-		b.WriteString("7. `evidence/typology/` — appears after a Typology survey seed\n")
-	}
-	b.WriteString("\n")
-	b.WriteString(readingTOCEnd)
-	b.WriteString("\n")
-	return b.String()
+	return mustRender(rootReadingTOCTmpl, struct {
+		Start           string
+		End             string
+		TypologyPresent bool
+	}{
+		Start:           readingTOCStart,
+		End:             readingTOCEnd,
+		TypologyPresent: typologyPresent,
+	})
 }
 
 func formatReadingNav(prevLabel, prevHref, nextLabel, nextHref, tocHref string) string {
@@ -177,14 +219,15 @@ func formatReadingNav(prevLabel, prevHref, nextLabel, nextHref, tocHref string) 
 		toc = "README.md"
 	}
 	parts = append(parts, fmt.Sprintf("[TOC](%s)", toc))
-	var b strings.Builder
-	b.WriteString(readingNavStart)
-	b.WriteString("\n**Reading path:** ")
-	b.WriteString(strings.Join(parts, " · "))
-	b.WriteString("\n")
-	b.WriteString(readingNavEnd)
-	b.WriteString("\n")
-	return b.String()
+	return mustRender(readingNavTmpl, struct {
+		Start string
+		End   string
+		Trail string
+	}{
+		Start: readingNavStart,
+		End:   readingNavEnd,
+		Trail: strings.Join(parts, " · "),
+	})
 }
 
 func applyNavChain(ctxDir string, relChain []string, tocRel string, typologyLinks bool) error {

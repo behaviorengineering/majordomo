@@ -146,6 +146,9 @@ func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string,
 		if err := writeStoryDraft(ctxDir, draft); err != nil {
 			return err
 		}
+		if err := assertArchitectureKeepsGroundedObjectives(ctxDir); err != nil {
+			return err
+		}
 	}
 	return nil
 }

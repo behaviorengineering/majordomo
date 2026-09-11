@@ -29,23 +29,26 @@ const (
 // Discover drafts stay ephemeral under the analysis worktree and are not
 // listed here for committed evidence.
 type TypologyManifest struct {
-	RepoID                string `yaml:"repo_id,omitempty"`
-	SourceSHA             string `yaml:"source_sha"`
-	GeneratedAt           string `yaml:"generated_at,omitempty"`
-	TypologyVersion       string `yaml:"typology_version,omitempty"`
-	Mode                  string `yaml:"mode"`
-	ModuleScope           string `yaml:"module_scope,omitempty"`
-	SnapshotPath          string `yaml:"snapshot_path,omitempty"`
-	ArchitecturePath      string `yaml:"architecture_path"`
-	RefineStatus          string `yaml:"refine_status,omitempty"`
-	GraphPath             string `yaml:"graph_path,omitempty"`
-	PackageContractsPath  string `yaml:"package_contracts_path,omitempty"`
-	PackageRolesPath      string `yaml:"package_roles_path,omitempty"`
-	PackageRLMContextPath string `yaml:"package_rlm_context_path,omitempty"`
-	ClusterProposalPath   string `yaml:"cluster_proposal_path,omitempty"`
-	RefinedSnapshotPath   string `yaml:"refined_snapshot_path,omitempty"`
-	JourneyPath           string `yaml:"journey_path,omitempty"`
-	HumanInterventionPath string `yaml:"human_intervention_path,omitempty"`
+	RepoID                           string `yaml:"repo_id,omitempty"`
+	SourceSHA                        string `yaml:"source_sha"`
+	GeneratedAt                      string `yaml:"generated_at,omitempty"`
+	TypologyVersion                  string `yaml:"typology_version,omitempty"`
+	Mode                             string `yaml:"mode"`
+	ModuleScope                      string `yaml:"module_scope,omitempty"`
+	SnapshotPath                     string `yaml:"snapshot_path,omitempty"`
+	ArchitecturePath                 string `yaml:"architecture_path"`
+	RefineStatus                     string `yaml:"refine_status,omitempty"`
+	GraphPath                        string `yaml:"graph_path,omitempty"`
+	PackageContractsPath             string `yaml:"package_contracts_path,omitempty"`
+	PackageRolesPath                 string `yaml:"package_roles_path,omitempty"`
+	PackageRLMContextPath            string `yaml:"package_rlm_context_path,omitempty"`
+	PackageCapabilityConstraintsPath string `yaml:"package_capability_constraints_path,omitempty"`
+	SliceObjectiveClaimsPath         string `yaml:"slice_objective_claims_path,omitempty"`
+	SliceObjectiveLedgerPath         string `yaml:"slice_objective_ledger_path,omitempty"`
+	ClusterProposalPath              string `yaml:"cluster_proposal_path,omitempty"`
+	RefinedSnapshotPath              string `yaml:"refined_snapshot_path,omitempty"`
+	JourneyPath                      string `yaml:"journey_path,omitempty"`
+	HumanInterventionPath            string `yaml:"human_intervention_path,omitempty"`
 }
 
 // ParseTypologyManifest reads a manifest from path.
@@ -118,6 +121,9 @@ func ValidateTypologyManifest(m TypologyManifest) error {
 			{m.GraphPath, "graph_path"},
 			{m.PackageContractsPath, "package_contracts_path"},
 			{m.PackageRolesPath, "package_roles_path"},
+			{m.PackageCapabilityConstraintsPath, "package_capability_constraints_path"},
+			{m.SliceObjectiveClaimsPath, "slice_objective_claims_path"},
+			{m.SliceObjectiveLedgerPath, "slice_objective_ledger_path"},
 			{m.ClusterProposalPath, "cluster_proposal_path"},
 			{m.RefinedSnapshotPath, "refined_snapshot_path"},
 			{m.JourneyPath, "journey_path"},

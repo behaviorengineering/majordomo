@@ -121,12 +121,12 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	comments := make([]FindingCommentBody, 0, len(findings))
 	for _, finding := range findings {
 		commentFields := map[string]interface{}{
-			"repo_id":              input.RepoID,
-			"architecture_md":      input.ArchitectureMD,
-			"refined_catalog_yaml": input.RefinedCatalogYAML,
-			"journey_md":           journey,
+			"repo_id":               input.RepoID,
+			"architecture_md":       input.ArchitectureMD,
+			"refined_catalog_yaml":  input.RefinedCatalogYAML,
+			"journey_md":            journey,
 			"human_intervention_md": brief,
-			"finding":              finding,
+			"finding":               finding,
 		}
 		body, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyFindingComment, commentFields, "comment_md",
 			func(out map[string]interface{}) error {

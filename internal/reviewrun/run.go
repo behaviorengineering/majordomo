@@ -11,6 +11,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
 	"github.com/behaviorengineering/majordomo/internal/orchestrate"
 	"github.com/behaviorengineering/majordomo/internal/publish"
@@ -51,6 +52,20 @@ func logf(level, format string, args ...any) {
 
 // Run executes clone, SA, orchestrate, and optional publish for one PR.
 func Run(opts Options) (err error) {
+	usage := llmusage.New()
+	llmusage.Push(usage)
+	defer func() {
+		snap := usage.Snapshot()
+		logf("INFO", "repo=%s pr=%s LLM usage summary", opts.RepoID, opts.PRNumber)
+		for _, line := range strings.Split(llmusage.Format(snap), "\n") {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			logf("INFO", "%s", line)
+		}
+		llmusage.Pop()
+	}()
+
 	if strings.TrimSpace(opts.ConfigDir) == "" || strings.TrimSpace(opts.RepoID) == "" {
 		return fmt.Errorf("run review requires --config-dir and --repo-id")
 	}
