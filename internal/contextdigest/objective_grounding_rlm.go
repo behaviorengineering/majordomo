@@ -229,8 +229,16 @@ func buildSliceObjectiveLedger(
 				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterMD, sliceFeedback)
 				answer, _, err := caller.Complete(ctx, strings.Join(parts, "\n\n"), query)
 				if err != nil {
-					results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
-						typologypack.CriterionIDRoleGrounding, t.id, err)}
+					if ctx.Err() != nil {
+						results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
+							typologypack.CriterionIDRoleGrounding, t.id, err)}
+						return
+					}
+					// Provider timeouts / 502s are per-slice retry fuel, not a full abort.
+					results[i] = result{issue: fmt.Sprintf(
+						"%s: slice %q objective ledger RLM failed: %v",
+						typologypack.CriterionIDRoleGrounding, t.id, err,
+					)}
 					return
 				}
 				evidence, claims, objective, verdict, err := parseSliceObjectiveLedgerAnswer(answer)
