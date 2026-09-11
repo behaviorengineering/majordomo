@@ -24,7 +24,7 @@ import (
 const (
 	maxLedgerSlices  = 24
 	ledgerRLMWorkers = 2
-	ledgerRLMTimeout = 8 * time.Minute
+	ledgerRLMTimeout = 15 * time.Minute
 )
 
 var objectiveVerdictRE = regexp.MustCompile(`(?i)\bverdict\s*[:=]\s*(grounded|overclaim)\b`)
