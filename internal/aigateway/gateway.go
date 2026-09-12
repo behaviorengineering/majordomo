@@ -3,6 +3,7 @@ package aigateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -17,11 +18,12 @@ import (
 
 // Gateway is an embedded Bifrost client plus an OpenAI-compatible loopback.
 type Gateway struct {
-	account *Account
-	client  *bifrost.Bifrost
-	server  *http.Server
-	ln      net.Listener
-	baseURL string // e.g. http://127.0.0.1:port/v1
+	account  *Account
+	client   *bifrost.Bifrost
+	server   *http.Server
+	ln       net.Listener
+	baseURL  string // e.g. http://127.0.0.1:port/v1
+	serveErr chan error
 
 	mu      sync.Mutex
 	started bool
@@ -52,13 +54,15 @@ func Ensure() (*Gateway, error) {
 }
 
 // ShutdownGlobal stops the process-wide gateway if running.
-func ShutdownGlobal() {
+func ShutdownGlobal() error {
 	globalMu.Lock()
 	defer globalMu.Unlock()
 	if globalGW != nil {
-		globalGW.Shutdown()
+		err := globalGW.Shutdown()
 		globalGW = nil
+		return err
 	}
+	return nil
 }
 
 // ResetForTests clears the process-wide gateway (tests only).
@@ -88,23 +92,26 @@ func Start(ctx context.Context, account *Account) (*Gateway, error) {
 		return nil, fmt.Errorf("aigateway: listen: %w", err)
 	}
 	gw := &Gateway{
-		account: account,
-		client:  client,
-		ln:      ln,
-		baseURL: fmt.Sprintf("http://%s/v1", ln.Addr().String()),
+		account:  account,
+		client:   client,
+		ln:       ln,
+		baseURL:  fmt.Sprintf("http://%s/v1", ln.Addr().String()),
+		serveErr: make(chan error, 1),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", gw.handleChatCompletions)
 	mux.HandleFunc("/openai/v1/chat/completions", gw.handleChatCompletions)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		if _, err := w.Write([]byte("ok")); err != nil {
+			return
+		}
 	})
 	gw.server = &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	go func() { _ = gw.server.Serve(ln) }()
+	go func() { gw.serveErr <- gw.server.Serve(ln) }()
 	gw.started = true
 	return gw, nil
 }
@@ -126,24 +133,35 @@ func (g *Gateway) Origin() string {
 }
 
 // Shutdown stops the loopback server and Bifrost.
-func (g *Gateway) Shutdown() {
+func (g *Gateway) Shutdown() error {
 	if g == nil {
-		return
+		return nil
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if !g.started {
-		return
+		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	var shutdownErr error
 	if g.server != nil {
-		_ = g.server.Shutdown(ctx)
+		shutdownErr = g.server.Shutdown(ctx)
+	}
+	if g.serveErr != nil {
+		serveErr := <-g.serveErr
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			if shutdownErr != nil {
+				return fmt.Errorf("aigateway: shutdown: %w; serve: %v", shutdownErr, serveErr)
+			}
+			return fmt.Errorf("aigateway: serve: %w", serveErr)
+		}
 	}
 	if g.client != nil {
 		g.client.Shutdown()
 	}
 	g.started = false
+	return shutdownErr
 }
 
 // PrepareChildEnv starts the process gateway (if needed) and returns ChildEnv(parent).
@@ -400,16 +418,20 @@ func writeOpenAIChatResponse(w http.ResponseWriter, resp *schemas.BifrostChatRes
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(o)
+	if err := json.NewEncoder(w).Encode(o); err != nil {
+		return
+	}
 }
 
 func writeOpenAIError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"error": map[string]any{
 			"message": message,
 			"type":    "aigateway_error",
 		},
-	})
+	}); err != nil {
+		return
+	}
 }

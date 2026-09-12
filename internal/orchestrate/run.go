@@ -288,7 +288,9 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 	skillOut := filepath.Join(opts.OutputDir, b.Skill)
 	cp := CheckpointPath(skillOut, b.BatchNum)
 	label := b.Skill + " / batch_" + b.BatchNum
-	_ = os.MkdirAll(filepath.Join(skillOut, "logs"), 0o755)
+	if err := os.MkdirAll(filepath.Join(skillOut, "logs"), 0o755); err != nil {
+		return fmt.Errorf("%s logs directory: %w", label, err)
+	}
 	if FileExists(cp) {
 		agent.Logf("INFO", "%s: checkpoint — skipping", label)
 		return nil
@@ -404,7 +406,10 @@ func runSynthesis(opts Options, batches []BatchEntry) error {
 			skillOut := filepath.Join(opts.OutputDir, b.Skill)
 			cp := CheckpointPath(skillOut, b.BatchNum)
 			label := b.Skill + " / batch_" + b.BatchNum
-			_ = os.MkdirAll(filepath.Join(skillOut, "logs"), 0o755)
+			if err := os.MkdirAll(filepath.Join(skillOut, "logs"), 0o755); err != nil {
+				errCh <- fmt.Errorf("%s logs directory: %w", label, err)
+				return
+			}
 			if FileExists(cp) {
 				agent.Logf("INFO", "%s: checkpoint — skipping", label)
 				return
@@ -488,10 +493,16 @@ func runTechDeep(opts Options) error {
 		return nil
 	}
 	deepOut := filepath.Join(opts.OutputDir, "pr-review-technical-deep")
-	_ = os.MkdirAll(deepOut, 0o755)
+	if err := os.MkdirAll(deepOut, 0o755); err != nil {
+		return fmt.Errorf("tech-review-deep output directory: %w", err)
+	}
 	repo := opts.RepoRoot
 	if repo == "" {
-		repo, _ = os.Getwd()
+		var err error
+		repo, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("tech-review-deep working directory: %w", err)
+		}
 	}
 	if err := agent.RunTechDeep(agent.TechDeepOptions{
 		PRNumber:       opts.PRNumber,
@@ -538,6 +549,8 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	_ = os.MkdirAll(filepath.Dir(dst), 0o755)
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
 	return os.WriteFile(dst, data, 0o644)
 }

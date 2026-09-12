@@ -93,8 +93,7 @@ func firstLine(s string) string {
 }
 
 // WalkCommits processes each SHA in order, advancing partial cursor in meta when opts allow.
-func WalkCommits(ctxDir string, g *Git, commits []string, at time.Time, regenFeedback string) error {
-	_ = regenFeedback
+func WalkCommits(ctxDir string, g *Git, commits []string, at time.Time, _ string) error {
 	for _, sha := range commits {
 		cc, err := LoadCommitContext(g, sha)
 		if err != nil {

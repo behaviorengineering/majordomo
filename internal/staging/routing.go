@@ -144,7 +144,13 @@ func decodeJSONObjectOrder(data []byte) ([]string, error) {
 			return nil, err
 		}
 	}
-	_, _ = dec.Token() // closing }
+	end, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if delimiter, ok := end.(json.Delim); !ok || delimiter != '}' {
+		return nil, fatalf("routing root must end with an object delimiter")
+	}
 	return keys, nil
 }
 

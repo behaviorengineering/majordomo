@@ -74,7 +74,9 @@ func Push(opts PushOptions) error {
 	}
 	// Best-effort fetch: branch may not exist yet on first push.
 	if err := run("fetch", opts.Remote, opts.Branch+":"+opts.Branch); err != nil {
-		_ = run("fetch", opts.Remote, opts.Branch)
+		if fallbackErr := run("fetch", opts.Remote, opts.Branch); fallbackErr != nil {
+			return fmt.Errorf("cache fetch failed (%v); fallback fetch failed: %w", err, fallbackErr)
+		}
 	}
 	err = run("push", opts.Remote, "HEAD:"+opts.Branch)
 	if err != nil {

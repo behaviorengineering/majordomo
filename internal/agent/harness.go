@@ -66,7 +66,9 @@ func defaultScriptRunner(timeout time.Duration) func(name string, args []string,
 		if timeout > 0 {
 			timer := time.AfterFunc(timeout, func() {
 				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
+					if err := cmd.Process.Kill(); err != nil {
+						fmt.Fprintf(os.Stderr, "opencode harness timeout kill: %v\n", err)
+					}
 				}
 			})
 			defer timer.Stop()

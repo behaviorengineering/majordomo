@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -317,31 +319,42 @@ func stageDeepFile(a stageDeepArgs) ([]string, error) {
 }
 
 func aggregateDeepOutputs(citedOrder []string, outputDir, prNumber string) error {
-	lines := []string{
-		fmt.Sprintf("# PR #%s — Technical Deep Review", prNumber),
-		"",
-		fmt.Sprintf("_Generated: %s_", time.Now().UTC().Format("2006-01-02T15:04:05Z")),
-		"",
-		"---",
-		"",
-	}
+	sections := make([]string, 0, len(citedOrder))
 	for _, filePath := range citedOrder {
 		slug := fileSlug(filePath)
 		reportPath := filepath.Join(outputDir, slug+".md")
 		if data, err := os.ReadFile(reportPath); err == nil {
-			lines = append(lines, strings.TrimSpace(string(data)))
+			sections = append(sections, strings.TrimSpace(string(data)))
 		} else {
-			lines = append(lines, fmt.Sprintf("## %s\n\n_No deep review output produced for this file._", filePath))
+			sections = append(sections, fmt.Sprintf("## %s\n\n_No deep review output produced for this file._", filePath))
 		}
-		lines = append(lines, "\n---\n")
+	}
+	var b bytes.Buffer
+	if err := deepReviewTemplate.Execute(&b, struct {
+		PRNumber  string
+		Generated string
+		Sections  []string
+	}{PRNumber: prNumber, Generated: time.Now().UTC().Format("2006-01-02T15:04:05Z"), Sections: sections}); err != nil {
+		return fmt.Errorf("render technical deep review: %w", err)
 	}
 	out := filepath.Join(outputDir, "tech-review-deep.md")
-	if err := os.WriteFile(out, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+	if err := os.WriteFile(out, b.Bytes(), 0o644); err != nil {
 		return err
 	}
 	Logf("INFO", "[tech-review-deep] Wrote %s", out)
 	return nil
 }
+
+var deepReviewTemplate = template.Must(template.New("deepReview").Parse(`# PR #{{.PRNumber}} — Technical Deep Review
+
+_Generated: {{.Generated}}_
+
+---
+{{range .Sections}}
+{{.}}
+
+---
+{{end}}`))
 
 func chunkLines(lines []string, size int) [][]string {
 	if size <= 0 {

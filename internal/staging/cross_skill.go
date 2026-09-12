@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -68,7 +69,11 @@ func StageCrossSkillBatches(
 
 	summaryFiles := make([]string, 0, len(summaryTasks))
 	for _, t := range summaryTasks {
-		summaryFiles = append(summaryFiles, t["file"].(string))
+		file, err := requiredTaskString(t, "file")
+		if err != nil {
+			return nil, nil, err
+		}
+		summaryFiles = append(summaryFiles, file)
 	}
 	summaryClusters := cluster.ClusterFiles(summaryFiles, repoRoot)
 	summaryDepClusters := [][]string{}
@@ -79,7 +84,10 @@ func StageCrossSkillBatches(
 	}
 	logf("INFO", "Summary dep clusters: %d multi-file cluster(s)", len(summaryDepClusters))
 
-	summaryReverseDeps := cluster.ReverseDeps(summaryFiles, repoRoot)
+	summaryReverseDeps, err := cluster.ReverseDeps(summaryFiles, repoRoot)
+	if err != nil {
+		return nil, nil, err
+	}
 	logf("INFO", "Summary reverse deps: %d changed file(s) have external importers", len(summaryReverseDeps))
 
 	summarySA := map[string]string{}
@@ -137,13 +145,18 @@ func StageCrossSkillBatches(
 			return nil, nil, err
 		}
 		for _, task := range summaryTasks {
-			inputFile := task["input_file"].(string)
+			inputFile, err := requiredTaskString(task, "input_file")
+			if err != nil {
+				return nil, nil, err
+			}
 			src := filepath.Join(summaryStaging, inputFile)
 			dst := filepath.Join(blastStaging, inputFile)
 			if _, err := os.Stat(dst); err == nil {
 				continue
 			}
-			_ = copyFile(src, dst)
+			if err := copyFile(src, dst); err != nil {
+				return nil, nil, fmt.Errorf("copy blast-radius input %q: %w", inputFile, err)
+			}
 		}
 		blastManifest := map[string]any{
 			"base_branch":     baseBranch,
@@ -173,13 +186,18 @@ func StageCrossSkillBatches(
 		return nil, nil, err
 	}
 	for _, task := range summaryTasks {
-		inputFile := task["input_file"].(string)
+		inputFile, err := requiredTaskString(task, "input_file")
+		if err != nil {
+			return nil, nil, err
+		}
 		src := filepath.Join(summaryStaging, inputFile)
 		dst := filepath.Join(technicalStaging, inputFile)
 		if _, err := os.Stat(dst); err == nil {
 			continue
 		}
-		_ = copyFile(src, dst)
+		if err := copyFile(src, dst); err != nil {
+			return nil, nil, fmt.Errorf("copy technical input %q: %w", inputFile, err)
+		}
 	}
 	technicalManifest := map[string]any{
 		"base_branch":   baseBranch,

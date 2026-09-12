@@ -283,9 +283,9 @@ func DepClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot
 }
 
 // ReverseDeps returns unchanged repo files that directly import any of the changed files.
-func ReverseDeps(changedFiles []string, repoRoot string) map[string][]string {
+func ReverseDeps(changedFiles []string, repoRoot string) (map[string][]string, error) {
 	if len(changedFiles) == 0 {
-		return map[string][]string{}
+		return map[string][]string{}, nil
 	}
 
 	changed := make(map[string]struct{}, len(changedFiles))
@@ -295,9 +295,9 @@ func ReverseDeps(changedFiles []string, repoRoot string) map[string][]string {
 
 	result := make(map[string][]string)
 
-	_ = filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if d.IsDir() {
 			if pathExcluded(strings.Split(path, string(filepath.Separator))) {
@@ -334,11 +334,13 @@ func ReverseDeps(changedFiles []string, repoRoot string) map[string][]string {
 			result[dep] = append(result[dep], rel)
 		}
 		return nil
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("scan reverse dependencies under %q: %w", repoRoot, err)
+	}
 
 	for dep, importers := range result {
 		sort.Strings(importers)
 		result[dep] = importers
 	}
-	return result
+	return result, nil
 }

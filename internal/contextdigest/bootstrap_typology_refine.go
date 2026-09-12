@@ -125,7 +125,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		if fixed, note := scrubForbiddenHTTPEntrypointMerges(clusterMD, input.PackageRoles); note != "" {
 			// Deterministic role gate: do not keep asking the LLM to unlearn sole-importer folds.
 			clusterMD = ensureClusterCapabilityConstraintsSection(fixed, constraintsDoc)
-			_ = note
+			logf("INFO", "typology role gate applied: %s", note)
 			break
 		}
 		if ok, fb := clusterProposalHasCapabilityConstraints(clusterMD, constraintsDoc); !ok {
@@ -342,7 +342,9 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, roles
 	path := tmp.Name()
 	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(refinedYAML); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return false, fmt.Sprintf("%s: write temp: %v; close temp: %v", typologypack.CriterionIDObjectives, err, closeErr)
+		}
 		return false, fmt.Sprintf("%s: write temp: %v", typologypack.CriterionIDObjectives, err)
 	}
 	if err := tmp.Close(); err != nil {
@@ -532,7 +534,9 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 	path := tmp.Name()
 	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(raw); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return "", fmt.Errorf("typology refine write temp: %w; close temp: %v", err, closeErr)
+		}
 		return "", fmt.Errorf("typology refine write temp: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
@@ -598,7 +602,9 @@ func loadDraftCatalog(draftYAML string) (catalog.Typology, map[string]struct{}, 
 	path := tmp.Name()
 	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(draftYAML); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return catalog.Typology{}, nil, fmt.Errorf("typology refine write draft temp: %w; close temp: %v", err, closeErr)
+		}
 		return catalog.Typology{}, nil, fmt.Errorf("typology refine write draft temp: %w", err)
 	}
 	if err := tmp.Close(); err != nil {

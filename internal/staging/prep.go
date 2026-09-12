@@ -54,7 +54,10 @@ func Run(opts Options) error {
 		return ErrNothingToReview
 	}
 
-	saDir := DetectSADir(workDir)
+	saDir, err := DetectSADir(workDir)
+	if err != nil {
+		return err
+	}
 	g := &GitRunner{Dir: workDir}
 	tasks, reviewAgents, excluded, err := stageReviewableFiles(
 		g, reviewable, excluded, routing, setup.Refspec, opts.StagingDir,

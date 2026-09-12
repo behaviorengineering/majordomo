@@ -212,15 +212,23 @@ func Run(opts Options) (res Result, err error) {
 			return Result{}, err
 		}
 		if openPR {
-			openPRNum, _ = forge.findOpenPRNumber(baseBranch, updateBranch)
+			openPRNum, err = forge.findOpenPRNumber(baseBranch, updateBranch)
+			if err != nil {
+				return Result{}, fmt.Errorf("find open context PR: %w", err)
+			}
 			if openPRNum != "" {
 				comments, err := forge.ListPRComments(openPRNum)
 				if err != nil {
 					logf("WARN", "list PR comments: %v", err)
 				} else {
-					meta, _ := readRewriteMeta(ctxDir)
+					meta, err := readRewriteMeta(ctxDir)
+					if err != nil {
+						return Result{}, err
+					}
 					if _, _, why := contextgate.ApplyComments(comments, gatePrefix); why != "" && meta.RewritePending {
-						_ = ApplyRewriteWhy(ctxDir, why)
+						if err := ApplyRewriteWhy(ctxDir, why); err != nil {
+							return Result{}, err
+						}
 					}
 					gateSidecar, err = contextgate.SyncFromComments(ctxDir, openPRNum, gatePrefix, comments, meta.RewritePending, meta.RewriteWhy)
 					if err != nil {
@@ -264,7 +272,10 @@ func Run(opts Options) (res Result, err error) {
 						}
 						return Result{}, err
 					}
-					cursorBefore, _ = ReadCursor(ctxDir)
+					cursorBefore, err = ReadCursor(ctxDir)
+					if err != nil {
+						return Result{}, err
+					}
 					caughtUp = false
 					behind = false
 				} else {
@@ -316,7 +327,10 @@ func Run(opts Options) (res Result, err error) {
 		regenFeedback := ""
 		if gateSidecar.RegenRequested() {
 			g := contextgate.NewGate(gatePrefix)
-			regenFeedback, _ = g.NormalizeReject(gateSidecar.RejectReason)
+			regenFeedback, err = g.NormalizeReject(gateSidecar.RejectReason)
+			if err != nil {
+				return Result{}, fmt.Errorf("normalize gate rejection: %w", err)
+			}
 			action = "gate_regen"
 		}
 
@@ -499,7 +513,10 @@ func handleRewrite(ctxDir string, g *Git, cursor, newHead string, at time.Time, 
 		if _, err := BeginRewrite(ctxDir, newHead, at, "majordomo", "cursor "+cursor+" not ancestor of "+newHead); err != nil {
 			return err
 		}
-		meta, _ = readRewriteMeta(ctxDir)
+		meta, err = readRewriteMeta(ctxDir)
+		if err != nil {
+			return err
+		}
 	}
 	if meta.RewritePending && strings.TrimSpace(meta.RewriteWhy) == "" {
 		return fmt.Errorf("rewrite blocked: why is required (@majordomo why … on context PR)")

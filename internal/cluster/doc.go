@@ -248,9 +248,9 @@ func DocClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot
 }
 
 // ReverseLinks returns unchanged repo markdown files that link to any changed files.
-func ReverseLinks(changedFiles []string, repoRoot string) map[string][]string {
+func ReverseLinks(changedFiles []string, repoRoot string) (map[string][]string, error) {
 	if len(changedFiles) == 0 {
-		return map[string][]string{}
+		return map[string][]string{}, nil
 	}
 
 	changed := make(map[string]struct{}, len(changedFiles))
@@ -260,9 +260,9 @@ func ReverseLinks(changedFiles []string, repoRoot string) map[string][]string {
 
 	result := make(map[string][]string)
 
-	_ = filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if d.IsDir() {
 			if docPathExcluded(strings.Split(path, string(filepath.Separator))) {
@@ -290,22 +290,24 @@ func ReverseLinks(changedFiles []string, repoRoot string) map[string][]string {
 			result[linked] = append(result[linked], rel)
 		}
 		return nil
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("scan reverse links under %q: %w", repoRoot, err)
+	}
 
 	for dep, linkers := range result {
 		sort.Strings(linkers)
 		result[dep] = linkers
 	}
-	return result
+	return result, nil
 }
 
 // BuildCorpusIndex extracts title, headings, key terms, and outgoing links from every markdown file.
-func BuildCorpusIndex(repoRoot string) []map[string]any {
+func BuildCorpusIndex(repoRoot string) ([]map[string]any, error) {
 	allMD := make(map[string]string)
 
-	_ = filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(repoRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if d.IsDir() {
 			if docPathExcluded(strings.Split(path, string(filepath.Separator))) {
@@ -325,7 +327,9 @@ func BuildCorpusIndex(repoRoot string) []map[string]any {
 		}
 		allMD[rel] = path
 		return nil
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("build corpus index under %q: %w", repoRoot, err)
+	}
 
 	targetSet := make(map[string]struct{}, len(allMD))
 	for rel := range allMD {
@@ -363,5 +367,5 @@ func BuildCorpusIndex(repoRoot string) []map[string]any {
 		})
 	}
 
-	return entries
+	return entries, nil
 }

@@ -245,7 +245,9 @@ func loadTypologyFromYAML(raw string) (catalog.Typology, error) {
 	path := tmp.Name()
 	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(raw); err != nil {
-		_ = tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			return catalog.Typology{}, fmt.Errorf("evidence grounding write temp: %w; close temp: %v", err, closeErr)
+		}
 		return catalog.Typology{}, fmt.Errorf("evidence grounding write temp: %w", err)
 	}
 	if err := tmp.Close(); err != nil {

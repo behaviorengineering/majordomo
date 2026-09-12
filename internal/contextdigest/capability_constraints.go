@@ -1,11 +1,13 @@
 package contextdigest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -231,18 +233,21 @@ func constraintsByPath(doc packageCapabilityConstraintsDoc) map[string]packageCa
 	return out
 }
 
+var capabilityConstraintsTemplate = template.Must(template.New("capabilityConstraints").Funcs(template.FuncMap{
+	"join": strings.Join,
+}).Parse(`{{.Section}}
+
+Factual priors for refine. MUST NOT contradict.
+{{range .Packages}}- ` + "`{{.Path}}`" + ` role={{.Role}} is=[{{join .Is ", "}}] must_not=[{{join .MustNot ", "}}]{{if .FilledBy}} filled_by=[{{join .FilledBy ", "}}]{{end}}
+{{end}}`))
+
 func formatCapabilityConstraintsMarkdown(doc packageCapabilityConstraintsDoc) string {
-	var b strings.Builder
-	b.WriteString(capabilityConstraintsSection)
-	b.WriteString("\n\n")
-	b.WriteString("Factual priors for refine. MUST NOT contradict.\n\n")
-	for _, p := range doc.Packages {
-		fmt.Fprintf(&b, "- `%s` role=%s is=[%s] must_not=[%s]",
-			p.Path, p.Role, strings.Join(p.Is, ", "), strings.Join(p.MustNot, ", "))
-		if len(p.FilledBy) > 0 {
-			fmt.Fprintf(&b, " filled_by=[%s]", strings.Join(p.FilledBy, ", "))
-		}
-		b.WriteString("\n")
+	var b bytes.Buffer
+	if err := capabilityConstraintsTemplate.Execute(&b, struct {
+		Section  string
+		Packages []packageCapabilityConstraint
+	}{Section: capabilityConstraintsSection, Packages: doc.Packages}); err != nil {
+		panic(fmt.Sprintf("render capability constraints: %v", err))
 	}
 	return b.String()
 }

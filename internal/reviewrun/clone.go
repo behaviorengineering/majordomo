@@ -62,7 +62,9 @@ func checkoutSHA(dir, token, scm, cloneURL, headSHA, baseBranch string) error {
 		}
 	}
 	if cloneURL != "" {
-		_, _ = git(dir, "", scm, "remote", "set-url", "origin", cloneURL)
+		if _, err := git(dir, "", scm, "remote", "set-url", "origin", cloneURL); err != nil {
+			return fmt.Errorf("remote set-url: %w", err)
+		}
 	}
 	return fetchBase(dir, token, scm, baseBranch)
 }

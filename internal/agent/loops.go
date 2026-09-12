@@ -35,7 +35,9 @@ func RunSummaryLoop(opts SummaryLoopOptions) error {
 	pipelineOut := filepath.Dir(opts.OutputDir)
 	scoreFile := filepath.Join(pipelineOut, "score.md")
 	logsDir := filepath.Join(opts.OutputDir, "logs")
-	_ = os.MkdirAll(logsDir, 0o755)
+	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+		return fmt.Errorf("summary-loop: create logs directory: %w", err)
+	}
 
 	Logf("INFO", "========== Summary loop: PR #%s (pass>=%d, max=%d) ==========",
 		opts.PRNumber, opts.PassScore, opts.MaxIter)
@@ -74,8 +76,12 @@ func RunSummaryLoop(opts SummaryLoopOptions) error {
 
 		// Archive iteration artefacts
 		summarySrc := filepath.Join(pipelineOut, "summary.md")
-		_ = copyIfExists(summarySrc, filepath.Join(logsDir, fmt.Sprintf("summary_iter_%d.md", iteration)))
-		_ = copyIfExists(scoreFile, filepath.Join(logsDir, fmt.Sprintf("score_iter_%d.md", iteration)))
+		if err := copyIfExists(summarySrc, filepath.Join(logsDir, fmt.Sprintf("summary_iter_%d.md", iteration))); err != nil {
+			return fmt.Errorf("summary-loop: archive summary: %w", err)
+		}
+		if err := copyIfExists(scoreFile, filepath.Join(logsDir, fmt.Sprintf("score_iter_%d.md", iteration))); err != nil {
+			return fmt.Errorf("summary-loop: archive score: %w", err)
+		}
 
 		if score >= opts.PassScore {
 			Logf("INFO", "[summary-loop] Accepted score %d", score)
@@ -117,7 +123,9 @@ func RunTechLoop(opts TechLoopOptions) error {
 	pipelineOut := filepath.Dir(opts.OutputDir)
 	scoreFile := filepath.Join(pipelineOut, "tech-score.md")
 	logsDir := filepath.Join(opts.OutputDir, "logs")
-	_ = os.MkdirAll(logsDir, 0o755)
+	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+		return fmt.Errorf("tech-loop: create logs directory: %w", err)
+	}
 
 	Logf("INFO", "========== Tech loop: PR #%s (pass>=%d, max=%d) ==========",
 		opts.PRNumber, opts.PassScore, opts.MaxIter)
@@ -154,9 +162,13 @@ func RunTechLoop(opts TechLoopOptions) error {
 		}
 		Logf("INFO", "[tech-loop] Score: %d (threshold %d)", score, opts.PassScore)
 
-		_ = copyIfExists(filepath.Join(pipelineOut, "tech-review.md"),
-			filepath.Join(logsDir, fmt.Sprintf("tech_review_iter_%d.md", iteration)))
-		_ = copyIfExists(scoreFile, filepath.Join(logsDir, fmt.Sprintf("tech_score_iter_%d.md", iteration)))
+		if err := copyIfExists(filepath.Join(pipelineOut, "tech-review.md"),
+			filepath.Join(logsDir, fmt.Sprintf("tech_review_iter_%d.md", iteration))); err != nil {
+			return fmt.Errorf("tech-loop: archive review: %w", err)
+		}
+		if err := copyIfExists(scoreFile, filepath.Join(logsDir, fmt.Sprintf("tech_score_iter_%d.md", iteration))); err != nil {
+			return fmt.Errorf("tech-loop: archive score: %w", err)
+		}
 
 		if score >= opts.PassScore {
 			Logf("INFO", "[tech-loop] Accepted score %d", score)

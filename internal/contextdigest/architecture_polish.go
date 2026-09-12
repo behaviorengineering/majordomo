@@ -1,10 +1,12 @@
 package contextdigest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -55,24 +57,25 @@ func formatRolesYAMLAsMarkdown(raw string) string {
 	if err := yaml.Unmarshal([]byte(raw), &topo); err != nil {
 		return "# Observed package roles\n\n_(roles YAML present but could not be parsed)_\n"
 	}
-	var b strings.Builder
-	b.WriteString("# Observed package roles\n\n")
-	b.WriteString("Roles come from AST, imports, and interfaces. Folder names are not evidence.\n\n")
-	for _, n := range topo.Packages {
-		fmt.Fprintf(&b, "- `%s`: **%s** (%.2f)", n.Path, n.Role, n.Confidence)
-		if len(n.Evidence) > 0 {
-			fmt.Fprintf(&b, " (%s)", strings.Join(n.Evidence, ", "))
-		}
-		b.WriteByte('\n')
-	}
-	if len(topo.Edges) > 0 {
-		b.WriteString("\n## Mappings\n\n")
-		for _, e := range topo.Edges {
-			fmt.Fprintf(&b, "- %s -> %s (%s)\n", e.From, e.To, e.Kind)
-		}
+	var b bytes.Buffer
+	if err := rolesMarkdownTemplate.Execute(&b, topo); err != nil {
+		return fmt.Sprintf("# Observed package roles\n\n_(roles could not be rendered: %v)_\n", err)
 	}
 	return b.String()
 }
+
+var rolesMarkdownTemplate = template.Must(template.New("rolesMarkdown").Funcs(template.FuncMap{
+	"join": strings.Join,
+}).Parse(`# Observed package roles
+
+Roles come from AST, imports, and interfaces. Folder names are not evidence.
+
+{{range .Packages}}- ` + "`{{.Path}}`" + `: **{{.Role}}** ({{printf "%.2f" .Confidence}}){{if .Evidence}} ({{join .Evidence ", "}}){{end}}
+{{end}}{{if .Edges}}
+## Mappings
+
+{{range .Edges}}- {{.From}} -> {{.To}} ({{.Kind}})
+{{end}}{{end}}`))
 
 type packageRolesDoc struct {
 	Packages []packageRoleNode `yaml:"packages"`

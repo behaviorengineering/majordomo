@@ -52,7 +52,11 @@ func StageSkillBatches(
 	}
 	var corpusIndex []map[string]any
 	if len(docChanged) > 0 {
-		corpusIndex = cluster.BuildCorpusIndex(repoRoot)
+		var err error
+		corpusIndex, err = cluster.BuildCorpusIndex(repoRoot)
+		if err != nil {
+			return nil, nil, err
+		}
 		logf("INFO", "Corpus index: %d .md file(s) indexed", len(corpusIndex))
 	}
 
@@ -101,7 +105,11 @@ func StageSkillBatches(
 					skillDocClusters = append(skillDocClusters, c)
 				}
 			}
-			skillReverseLinks = cluster.ReverseLinks(skillMD, repoRoot)
+			var reverseErr error
+			skillReverseLinks, reverseErr = cluster.ReverseLinks(skillMD, repoRoot)
+			if reverseErr != nil {
+				return nil, nil, reverseErr
+			}
 		} else {
 			clusterBatches, err := cluster.DepClusterAwareBatches(asMaps, batchSize, repoRoot)
 			if err != nil {

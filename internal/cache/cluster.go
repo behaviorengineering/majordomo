@@ -161,8 +161,12 @@ func Precheck(opts PrecheckOptions) (map[string]any, error) {
 	expiredFiles := []string{}
 	invalidFiles := map[string][]string{}
 	var validRecords []cacheRecord
+	cacheFiles, err := collectCacheFiles(cacheDir)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, filePath := range collectCacheFiles(cacheDir) {
+	for _, filePath := range cacheFiles {
 		record, errors := loadCacheRecord(filePath)
 		rel := toRel(filePath, cacheDir)
 		if record == nil {
@@ -213,7 +217,7 @@ func Precheck(opts PrecheckOptions) (map[string]any, error) {
 		"cache_dir":        filepath.ToSlash(cacheDir),
 		"retention_days":   retentionDays,
 		"retention_source": source,
-		"scanned_files":    len(collectCacheFiles(cacheDir)),
+		"scanned_files":    len(cacheFiles),
 		"expired_deleted":  len(expiredFiles),
 		"expired_files":    expiredFiles,
 		"invalid_files":    invalidFiles,
@@ -393,7 +397,10 @@ func Store(opts StoreOptions) (map[string]any, error) {
 		}
 	}
 
-	frontmatter := formatFrontmatter(metadata)
+	frontmatter, err := formatFrontmatter(metadata)
+	if err != nil {
+		return nil, err
+	}
 	outputText := frontmatter + "\n" + string(payloadText)
 	if err := os.WriteFile(outputPath, []byte(outputText), 0o644); err != nil {
 		return nil, err
@@ -498,20 +505,25 @@ func resolveRetentionDays(project, central *int, global, minDays int) (int, stri
 	return resolved, source, nil
 }
 
-func collectCacheFiles(cacheDir string) []string {
+func collectCacheFiles(cacheDir string) ([]string, error) {
 	var out []string
-	_ = filepath.Walk(cacheDir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.Walk(cacheDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info == nil || info.IsDir() {
-			return nil
+			return err
 		}
-		ok, _ := filepath.Match("analysis-*.*", info.Name())
+		ok, err := filepath.Match("analysis-*.*", info.Name())
+		if err != nil {
+			return err
+		}
 		if ok {
 			out = append(out, path)
 		}
 		return nil
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("scan cache directory %q: %w", cacheDir, err)
+	}
 	sort.Strings(out)
-	return out
+	return out, nil
 }
 
 func buildIndex(records []cacheRecord) map[string]cacheRecord {
@@ -723,7 +735,7 @@ func parseClusterFilesArgument(files []string, filesPath string) ([]string, erro
 	return normalized, nil
 }
 
-func formatFrontmatter(metadata Meta) string {
+func formatFrontmatter(metadata Meta) (string, error) {
 	lines := []string{frontmatterDelim}
 	for _, key := range storeMetadataOrder {
 		value, ok := metadata[key]
@@ -733,7 +745,10 @@ func formatFrontmatter(metadata Meta) string {
 		if list, ok := value.([]string); ok {
 			lines = append(lines, key+":")
 			for _, item := range list {
-				encoded, _ := json.Marshal(item)
+				encoded, err := json.Marshal(item)
+				if err != nil {
+					return "", fmt.Errorf("marshal frontmatter list item %q: %w", key, err)
+				}
 				lines = append(lines, "  - "+string(encoded))
 			}
 			continue
@@ -741,14 +756,22 @@ func formatFrontmatter(metadata Meta) string {
 		var encoded []byte
 		switch v := value.(type) {
 		case string:
-			encoded, _ = json.Marshal(v)
+			var err error
+			encoded, err = json.Marshal(v)
+			if err != nil {
+				return "", fmt.Errorf("marshal frontmatter field %q: %w", key, err)
+			}
 		default:
-			encoded, _ = json.Marshal(fmt.Sprint(v))
+			var err error
+			encoded, err = json.Marshal(fmt.Sprint(v))
+			if err != nil {
+				return "", fmt.Errorf("marshal frontmatter field %q: %w", key, err)
+			}
 		}
 		lines = append(lines, key+": "+string(encoded))
 	}
 	lines = append(lines, frontmatterDelim)
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n"), nil
 }
 
 func collectMarkdownArtifact(analysisFile, reportsDir string, artifactFiles []string) (map[string]string, string, error) {
@@ -785,7 +808,10 @@ func collectMarkdownArtifact(analysisFile, reportsDir string, artifactFiles []st
 	}
 	artifactHash := ""
 	if len(markdownFiles) > 0 {
-		canonical, _ := json.Marshal(markdownFiles) // sorted keys
+		canonical, err := json.Marshal(markdownFiles) // sorted keys
+		if err != nil {
+			return nil, "", fmt.Errorf("marshal markdown artifacts: %w", err)
+		}
 		artifactHash = sha256Hex(string(canonical))
 	}
 	return markdownFiles, artifactHash, nil

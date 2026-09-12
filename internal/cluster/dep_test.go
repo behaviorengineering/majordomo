@@ -99,7 +99,10 @@ func TestReverseDeps(t *testing.T) {
 	writeFile(t, filepath.Join(root, "caller.py"), "import changed\n")
 	writeFile(t, filepath.Join(root, "node_modules", "ignored.js"), "import changed\n")
 
-	got := ReverseDeps([]string{"changed.py"}, root)
+	got, err := ReverseDeps([]string{"changed.py"}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := map[string][]string{"changed.py": {"caller.py"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("reverse deps = %#v, want %#v", got, want)

@@ -290,14 +290,20 @@ func PushDigest(opts DigestPushOptions) error {
 		cmd.Stderr = os.Stderr
 		return cmd.Run()
 	}
-	_ = run("add", "-A")
+	if err := run("add", "-A"); err != nil {
+		return fmt.Errorf("digest cache stage: %w", err)
+	}
 	// Commit only when there is something to commit.
 	if err := run("diff", "--cached", "--quiet"); err != nil {
 		if err := run("commit", "-m", "digest inference cache"); err != nil {
 			return fmt.Errorf("digest cache commit: %w", err)
 		}
 	}
-	_ = run("fetch", opts.Remote, opts.Branch+":"+opts.Branch)
+	if err := run("fetch", opts.Remote, opts.Branch+":"+opts.Branch); err != nil {
+		if ferr := run("fetch", opts.Remote, opts.Branch); ferr != nil {
+			return fmt.Errorf("digest cache fetch failed (%v); fallback fetch failed: %w", err, ferr)
+		}
+	}
 	if err := run("push", opts.Remote, "HEAD:"+opts.Branch); err != nil {
 		if ferr := run("fetch", opts.Remote, opts.Branch); ferr != nil {
 			return fmt.Errorf("digest cache push failed (%v); refetch also failed: %w", err, ferr)

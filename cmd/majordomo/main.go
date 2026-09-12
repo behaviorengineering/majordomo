@@ -17,7 +17,9 @@ import (
 
 func main() {
 	defer func() {
-		aigateway.ShutdownGlobal()
+		if err := aigateway.ShutdownGlobal(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = observability.Flush(ctx)

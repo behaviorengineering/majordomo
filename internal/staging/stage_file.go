@@ -60,7 +60,7 @@ func CollectSAFindings(file, saDir string) string {
 }
 
 // DetectSADir returns .sa if present under workDir.
-func DetectSADir(workDir string) string {
+func DetectSADir(workDir string) (string, error) {
 	sa := ".sa"
 	if workDir != "" {
 		sa = filepath.Join(workDir, ".sa")
@@ -68,9 +68,12 @@ func DetectSADir(workDir string) string {
 	info, err := os.Stat(sa)
 	if err != nil || !info.IsDir() {
 		logf("INFO", "Static analysis: .sa/ not present — skipping SA embedding")
-		return ""
+		return "", nil
 	}
-	entries, _ := os.ReadDir(sa)
+	entries, err := os.ReadDir(sa)
+	if err != nil {
+		return "", fmt.Errorf("read static analysis directory %q: %w", sa, err)
+	}
 	n := 0
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".txt") {
@@ -78,7 +81,7 @@ func DetectSADir(workDir string) string {
 		}
 	}
 	logf("INFO", "Static analysis: %d tool output(s) found in .sa/", n)
-	return sa
+	return sa, nil
 }
 
 // StageFile writes staging input(s) for one file and returns task dicts.

@@ -233,17 +233,22 @@ func resolveGatewayOrUnavailable(model string) (stropdspy.ProviderConfig, error)
 }
 
 // Generate runs one registered generator task.
-func (rt *Runtime) Generate(ctx context.Context, task string, fields map[string]interface{}, version int) (map[string]interface{}, error) {
+func (rt *Runtime) Generate(ctx context.Context, task string, fields map[string]interface{}, version int) (out map[string]interface{}, err error) {
 	if rt == nil || rt.runner == nil {
 		return nil, ErrNotReady
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, span := observability.StartChainSpan(ctx, observability.DefaultServiceName, "majordomo.judge.generate")
+	defer observability.EndSpanWithStatus(span, &err)
 	cfg := runner.GenerationConfig{
 		ModuleName:   task,
 		JobName:      task,
 		StepName:     task,
 		ErrorMessage: task,
 	}
-	out, err := rt.runner.Generate(ctx, cfg, newMapInput(fields, version), nil)
+	out, err = rt.runner.Generate(ctx, cfg, newMapInput(fields, version), nil)
 	llmusage.RecordExecutionState(ctx, task)
 	return out, err
 }
@@ -254,15 +259,20 @@ func (rt *Runtime) Evaluate(
 	task string,
 	inputFields, outputFields map[string]interface{},
 	version int,
-) (*evaluation.AggregatedEvaluation, error) {
+) (out *evaluation.AggregatedEvaluation, err error) {
 	if rt == nil || rt.runner == nil {
 		return nil, ErrNotReady
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, span := observability.StartChainSpan(ctx, observability.DefaultServiceName, "majordomo.judge.evaluate")
+	defer observability.EndSpanWithStatus(span, &err)
 	// strop v0.2.4 EvaluateStream blocks forever on nil eventChan (send on nil channel).
 	// Drain a buffered channel until strop is bumped with the nil-safe JobRunner path.
 	eventChan, stop := discardEventChannel()
 	defer stop()
-	out, err := rt.runner.EvaluateWorkflow(ctx, task, newMapInput(inputFields, version), outputFields, eventChan)
+	out, err = rt.runner.EvaluateWorkflow(ctx, task, newMapInput(inputFields, version), outputFields, eventChan)
 	llmusage.RecordExecutionState(ctx, task)
 	return out, err
 }

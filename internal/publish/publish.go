@@ -267,7 +267,10 @@ func writeTempBody(content string) (path string, cleanup func(), err error) {
 	path = f.Name()
 	cleanup = func() { _ = os.Remove(path) }
 	if _, err := f.WriteString(content); err != nil {
-		_ = f.Close()
+		if closeErr := f.Close(); closeErr != nil {
+			cleanup()
+			return "", nil, fmt.Errorf("write temp body: %w; close temp body: %v", err, closeErr)
+		}
 		cleanup()
 		return "", nil, err
 	}

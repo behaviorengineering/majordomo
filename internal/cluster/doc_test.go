@@ -25,7 +25,10 @@ func TestReverseLinks(t *testing.T) {
 	writeFile(t, filepath.Join(root, "linker.md"), "See [target](target.md)\n")
 	writeFile(t, filepath.Join(root, "node_modules", "skip.md"), "[target](target.md)\n")
 
-	got := ReverseLinks([]string{"target.md"}, root)
+	got, err := ReverseLinks([]string{"target.md"}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := map[string][]string{"target.md": {"linker.md"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("reverse links = %#v, want %#v", got, want)
@@ -37,7 +40,10 @@ func TestBuildCorpusIndex(t *testing.T) {
 	writeFile(t, filepath.Join(root, "guide.md"), "# Guide Title\n\n## Section\n\nUse **`config`** and **setup**.\n\n[other](other.md)\n")
 	writeFile(t, filepath.Join(root, "other.md"), "# Other\n")
 
-	entries := BuildCorpusIndex(root)
+	entries, err := BuildCorpusIndex(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}

@@ -1,10 +1,12 @@
 package contextdigest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 )
@@ -59,8 +61,7 @@ func CompactChronology(ctxDir string, opts CompactOptions) (bool, error) {
 }
 
 func rewriteChronology(path string, events []contextstore.ChronologyEvent) error {
-	var b strings.Builder
-	b.WriteString("# Chronology\n\nNewest first.\n")
+	normalized := make([]contextstore.ChronologyEvent, 0, len(events))
 	for _, ev := range events {
 		if ev.Date.IsZero() {
 			continue
@@ -71,12 +72,23 @@ func rewriteChronology(path string, events []contextstore.ChronologyEvent) error
 		if strings.TrimSpace(ev.Source) == "" {
 			ev.Source = "compaction"
 		}
-		b.WriteString("\n")
-		fmt.Fprintf(&b, "### %s - %s - %s\n\n", ev.Date.Format("2006-01-02"), ev.Actor, ev.Source)
-		fmt.Fprintf(&b, "- **Did:** %s\n", ev.Did)
-		fmt.Fprintf(&b, "- **Because:** %s\n", ev.Because)
-		fmt.Fprintf(&b, "- **In order to:** %s\n", ev.InOrderTo)
-		fmt.Fprintf(&b, "- **Evidence:** %s\n", ev.Evidence)
+		normalized = append(normalized, ev)
+	}
+	var b bytes.Buffer
+	if err := chronologyTemplate.Execute(&b, normalized); err != nil {
+		return fmt.Errorf("render chronology: %w", err)
 	}
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
+
+var chronologyTemplate = template.Must(template.New("chronology").Parse(`# Chronology
+
+Newest first.
+{{range .}}
+### {{.Date.Format "2006-01-02"}} - {{.Actor}} - {{.Source}}
+
+- **Did:** {{.Did}}
+- **Because:** {{.Because}}
+- **In order to:** {{.InOrderTo}}
+- **Evidence:** {{.Evidence}}
+{{end}}`))

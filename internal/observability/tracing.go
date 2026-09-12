@@ -23,8 +23,7 @@ func StartChainSpan(ctx context.Context, serviceName, operationName string) (con
 	))
 	spanCtx := span.SpanContext()
 	ctx = core.WithExecutionState(ctx)
-	if state := core.GetExecutionState(ctx); state != nil {
-		_ = state
+	if core.GetExecutionState(ctx) != nil {
 		ctx = context.WithValue(ctx, contextKey("otel.trace_id"), spanCtx.TraceID().String())
 		ctx = context.WithValue(ctx, contextKey("otel.span_id"), spanCtx.SpanID().String())
 	}

@@ -2,6 +2,7 @@ package contextdigest
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
@@ -432,19 +434,10 @@ func moduleScopeExists(scope string, modules []string) bool {
 }
 
 func fallbackArchitecture(dir string) (string, error) {
-	var b strings.Builder
-	b.WriteString("# Architecture\n\n")
-	b.WriteString("Present-tense snapshot seeded without Typology.\n\n")
-
+	title, intro := "", ""
 	readme := filepath.Join(dir, "README.md")
 	if data, err := os.ReadFile(readme); err == nil {
-		title, intro := firstMarkdownParagraph(string(data))
-		if strings.TrimSpace(title) != "" {
-			fmt.Fprintf(&b, "## README snapshot\n\n%s\n\n", strings.TrimSpace(title))
-			if strings.TrimSpace(intro) != "" {
-				fmt.Fprintf(&b, "%s\n\n", strings.TrimSpace(intro))
-			}
-		}
+		title, intro = firstMarkdownParagraph(string(data))
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -460,15 +453,32 @@ func fallbackArchitecture(dir string) (string, error) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	b.WriteString("## Top-level shape\n\n")
-	for _, name := range names {
-		fmt.Fprintf(&b, "- `%s`\n", name)
-	}
-	if len(names) == 0 {
-		b.WriteString("- No tracked top-level entries were discovered.\n")
+	var b bytes.Buffer
+	if err := fallbackArchitectureTemplate.Execute(&b, struct {
+		Title string
+		Intro string
+		Names []string
+	}{Title: strings.TrimSpace(title), Intro: strings.TrimSpace(intro), Names: names}); err != nil {
+		return "", fmt.Errorf("render fallback architecture: %w", err)
 	}
 	return b.String(), nil
 }
+
+var fallbackArchitectureTemplate = template.Must(template.New("fallbackArchitecture").Parse(`# Architecture
+
+Present-tense snapshot seeded without Typology.
+
+{{if .Title}}## README snapshot
+
+{{.Title}}
+
+{{if .Intro}}{{.Intro}}
+
+{{end}}{{end}}## Top-level shape
+
+{{if .Names}}{{range .Names}}- ` + "`{{.}}`" + `
+{{end}}{{else}}- No tracked top-level entries were discovered.
+{{end}}`))
 
 func firstMarkdownParagraph(src string) (string, string) {
 	sc := bufio.NewScanner(strings.NewReader(src))
@@ -545,7 +555,9 @@ func cloneAnalysisRepo(ctx context.Context, sourceDir string) (string, error) {
 	}
 	cmd := exec.CommandContext(ctx, "git", "clone", "--local", "--no-hardlinks", sourceDir, dst)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		_ = os.RemoveAll(dst)
+		if cleanupErr := os.RemoveAll(dst); cleanupErr != nil {
+			return "", fmt.Errorf("clone analysis repo: %w; cleanup: %v\n%s", err, cleanupErr, strings.TrimSpace(string(out)))
+		}
 		return "", fmt.Errorf("clone analysis repo: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return dst, nil
