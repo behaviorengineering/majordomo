@@ -79,35 +79,36 @@ func roleCapabilityTable() map[string]roleCapabilityDefaults {
 		},
 		roleHTTPSurface: {
 			Is:      []string{capServeHTTP, capWireHandlers},
-			MustNot: []string{capOwnDomainRules},
+			MustNot: []string{capOwnDomainRules, capOrchestrate},
 		},
 		roleEntrypoint: {
-			Is:      []string{capRunCLI},
+			// orchestrate is entrypoint-only; kept in is so constraint rows show the prior.
+			Is:      []string{capRunCLI, capOrchestrate},
 			MustNot: []string{capOwnDomainRules, capServeHTTP},
 		},
 		roleAggregator: {
 			Is:      []string{capAggregateViews},
-			MustNot: []string{capServeHTTP, capRunCLI},
+			MustNot: []string{capServeHTTP, capRunCLI, capOrchestrate},
 		},
 		roleExecRunner: {
 			Is:      []string{capExecProcess},
-			MustNot: []string{capRunCLI, capOwnDomainRules},
+			MustNot: []string{capRunCLI, capOwnDomainRules, capOrchestrate},
 		},
 		roleAdapter: {
 			Is:      []string{capAdaptExternal, capFillDTO},
-			MustNot: []string{},
+			MustNot: []string{capOrchestrate},
 		},
 		roleConfig: {
 			Is:      []string{capConfig},
-			MustNot: []string{capOwnDomainRules},
+			MustNot: []string{capOwnDomainRules, capOrchestrate},
 		},
 		roleObservability: {
 			Is:      []string{capObservability},
-			MustNot: []string{capConfig, capOwnDomainRules},
+			MustNot: []string{capConfig, capOwnDomainRules, capOrchestrate},
 		},
 		roleUnknown: {
 			Is:      []string{},
-			MustNot: []string{},
+			MustNot: []string{capOrchestrate},
 		},
 	}
 }
@@ -163,6 +164,10 @@ func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraint
 			MustNot: append([]string(nil), defs.MustNot...),
 			Source:  "role_table",
 			Role:    role,
+		}
+		// Fail-closed: orchestrate is entrypoint-only even for unknown/custom roles.
+		if role != roleEntrypoint {
+			c.MustNot = uniqueStrings(append(c.MustNot, capOrchestrate))
 		}
 		if fillers := uniqueStrings(filledBy[path]); len(fillers) > 0 {
 			c.FilledBy = fillers
