@@ -16,7 +16,7 @@ import (
 const defaultModuleTimeout = 45 * time.Minute
 
 // defaultModuleRetryAttempts is the MaxAttempts for dspy-go RetryModuleInterceptor
-// wired through strop InterceptorSetup (provider and validation failures).
+// (NewRuntime) and for WrapLLMWithRetry on bare LLM hops such as RLM CreateLLM.
 const defaultModuleRetryAttempts = 3
 
 // ResolveProvider returns an OpenAI-schema ProviderConfig aimed at the embedded

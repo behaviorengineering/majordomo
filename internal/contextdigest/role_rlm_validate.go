@@ -12,6 +12,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	stropdspy "github.com/behaviorengineering/strop/dspy"
@@ -66,6 +67,7 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig) (package
 	if err != nil {
 		return nil, fmt.Errorf("typology_inspect RLM LLM: %w", err)
 	}
+	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	rlmCfg := stropdspy.RLMDefaults()
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	rlmCfg.Timeout = provider.GetTimeout(3 * time.Minute)

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
-	"github.com/XiaoConstantine/dspy-go/pkg/interceptors"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	"github.com/behaviorengineering/strop/dspy/registry"
 	"github.com/behaviorengineering/strop/dspy/runner"
@@ -132,14 +131,9 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 	if svc == "" {
 		svc = observability.DefaultServiceName
 	}
-	retryConfig := &interceptors.RetryConfig{
-		MaxAttempts: defaultModuleRetryAttempts,
-		Delay:       2 * time.Second,
-		MaxBackoff:  30 * time.Second,
-		Backoff:     2.0,
-	}
+	retryConfig := DefaultModuleRetryConfig()
 	interceptorSetup := factory.NewInterceptorSetup(
-		otelOn, svc, retryConfig, defaultModuleTimeout,
+		otelOn, svc, &retryConfig, defaultModuleTimeout,
 		dspyTracing.OpenInferenceModuleInterceptor,
 		nil,
 		reg.GetModelProvider,
