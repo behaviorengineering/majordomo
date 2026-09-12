@@ -151,6 +151,7 @@ func normalizeEvidenceList(in []string) []string {
 func alignLedgerToRefinedCatalog(
 	typo catalog.Typology,
 	ledger sliceObjectiveLedgerDoc,
+	constraints packageCapabilityConstraintsDoc,
 ) (sliceObjectiveLedgerDoc, sliceObjectiveClaimsDoc, []string) {
 	var issues []string
 	byPath := map[string][]sliceObjectiveLedgerEntry{}
@@ -163,6 +164,7 @@ func alignLedgerToRefinedCatalog(
 			byPath[np] = append(byPath[np], e)
 		}
 	}
+	constraintByPath := constraintsByPath(constraints)
 	aligned := sliceObjectiveLedgerDoc{}
 	claims := sliceObjectiveClaimsDoc{}
 	for _, s := range typo.Slices {
@@ -213,11 +215,14 @@ func alignLedgerToRefinedCatalog(
 				typologypack.CriterionIDRoleGrounding, id, s.Objective, opts,
 			))
 		}
+		// Contributor ledgers may cover wider draft ownership. Keep only claims
+		// allowed by at least one refined owned package's is=[] prior.
+		claimCodes = filterClaimsToOwnedIs(uniqueStrings(claimCodes), paths, constraintByPath)
 		entry := sliceObjectiveLedgerEntry{
 			ID:         id,
 			OwnedPaths: append([]string(nil), paths...),
 			Evidence:   uniqueStrings(normalizeEvidenceList(evidence)),
-			Claims:     uniqueStrings(claimCodes),
+			Claims:     claimCodes,
 			Objective:  s.Objective,
 			Verdict:    ledgerVerdictGrounded,
 			Source:     "slice_objective_rlm_aligned",
@@ -236,16 +241,70 @@ func alignLedgerToRefinedCatalog(
 	return aligned, claims, issues
 }
 
-// validateLedgerAgainstConstraints rejects claim∩must_not, unentailed claims, and empty evidence for runtime claims.
+// filterClaimsToOwnedIs keeps claim codes that appear in at least one owned
+// package is=[] prior. Dropped codes are usually from wider draft ledger rows.
+func filterClaimsToOwnedIs(claims []string, paths []string, byPath map[string]packageCapabilityConstraint) []string {
+	if len(claims) == 0 {
+		return claims
+	}
+	allowed := ownedIsSet(paths, byPath)
+	if len(allowed) == 0 {
+		return nil
+	}
+	var out []string
+	for _, c := range claims {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if _, ok := allowed[c]; ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func ownedIsSet(paths []string, byPath map[string]packageCapabilityConstraint) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, p := range paths {
+		c, ok := byPath[normalizeRolePath(p)]
+		if !ok {
+			continue
+		}
+		for _, code := range c.Is {
+			code = strings.TrimSpace(code)
+			if code != "" {
+				out[code] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+func claimsNotAllowedByOwnedIs(claims []string, paths []string, byPath map[string]packageCapabilityConstraint) []string {
+	allowed := ownedIsSet(paths, byPath)
+	var hit []string
+	for _, c := range claims {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if _, ok := allowed[c]; !ok {
+			hit = append(hit, c)
+		}
+	}
+	return uniqueStrings(hit)
+}
+
+// validateLedgerAgainstConstraints rejects claims outside owned is=[], unentailed claims, and empty evidence for runtime claims.
 func validateLedgerAgainstConstraints(ledger sliceObjectiveLedgerDoc, constraints packageCapabilityConstraintsDoc, roles packageRolesDoc) []string {
 	byPath := constraintsByPath(constraints)
 	var issues []string
 	for _, s := range ledger.Slices {
 		id := strings.TrimSpace(s.ID)
-		mustNot := sliceMustNotUnion(s.OwnedPaths, byPath)
-		if hit := intersectStrings(s.Claims, mustNot); len(hit) > 0 {
+		if hit := claimsNotAllowedByOwnedIs(s.Claims, s.OwnedPaths, byPath); len(hit) > 0 {
 			issues = append(issues, fmt.Sprintf(
-				"%s: ledger slice %q claims %v intersect must_not %v",
+				"%s: ledger slice %q claims %v are not allowed by owned package is=[] priors (disallowed=%v)",
 				typologypack.CriterionIDRoleGrounding, id, s.Claims, hit,
 			))
 		}
