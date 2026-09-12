@@ -78,7 +78,10 @@ func TestClusterCacheRoundTrip(t *testing.T) {
 		t.Fatalf("lookup miss: %+v", hit)
 	}
 
-	entry, _ := hit["file"].(string)
+	entry, ok := hit["file"].(string)
+	if !ok || entry == "" {
+		t.Fatalf("lookup file has unexpected value: %#v", hit["file"])
+	}
 	outDir := filepath.Join(dir, "restored")
 	restored, err := Restore(RestoreOptions{
 		CacheDir:  cacheDir,

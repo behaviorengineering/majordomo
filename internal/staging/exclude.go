@@ -85,7 +85,7 @@ func matchStarSlash(pattern, name string) bool {
 				return false
 			}
 			if n >= len(name) || pattern[p] != name[n] {
-				// handle ? 
+				// handle ?
 				if pattern[p] == '?' && n < len(name) {
 					p++
 					n++

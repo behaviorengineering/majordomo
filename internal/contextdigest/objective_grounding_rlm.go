@@ -309,7 +309,7 @@ func buildSliceObjectiveLedger(
 					return
 				}
 				if req.DigestCache != nil && entry.Verdict == ledgerVerdictGrounded {
-					_ = req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
+					if err := req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
 						ID:         entry.ID,
 						OwnedPaths: append([]string(nil), entry.OwnedPaths...),
 						Evidence:   append([]string(nil), entry.Evidence...),
@@ -317,7 +317,10 @@ func buildSliceObjectiveLedger(
 						Objective:  entry.Objective,
 						Verdict:    entry.Verdict,
 						Source:     entry.Source,
-					})
+					}); err != nil {
+						results[i] = result{err: fmt.Errorf("store slice %q objective ledger cache: %w", t.id, err)}
+						return
+					}
 				}
 				results[i] = result{entry: entry}
 			}(i, t)

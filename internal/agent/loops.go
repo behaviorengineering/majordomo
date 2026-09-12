@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 // SummaryLoopOptions configures the summary generate/score loop.
 type SummaryLoopOptions struct {
+	Context    context.Context
 	PRNumber   string
 	StagingDir string
 	OutputDir  string // skill output: .../pr-review-summary
@@ -46,12 +48,14 @@ func RunSummaryLoop(opts SummaryLoopOptions) error {
 		}
 
 		if err := dispatch(DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: opts.StagingDir,
 			OutputDir: opts.OutputDir, Mode: ModeSummary, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {
 			return fmt.Errorf("summary-loop: --summary failed: %w", err)
 		}
 		if err := dispatch(DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: opts.StagingDir,
 			OutputDir: opts.OutputDir, Mode: ModeScore, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {
@@ -88,6 +92,7 @@ func RunSummaryLoop(opts SummaryLoopOptions) error {
 
 // TechLoopOptions configures the technical review loop.
 type TechLoopOptions struct {
+	Context    context.Context
 	PRNumber   string
 	StagingDir string
 	OutputDir  string
@@ -125,12 +130,14 @@ func RunTechLoop(opts TechLoopOptions) error {
 		}
 
 		if err := dispatch(DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: opts.StagingDir,
 			OutputDir: opts.OutputDir, Mode: ModeTechnical, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {
 			return fmt.Errorf("tech-loop: --technical failed: %w", err)
 		}
 		if err := dispatch(DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: opts.StagingDir,
 			OutputDir: opts.OutputDir, Mode: ModeTechScore, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {

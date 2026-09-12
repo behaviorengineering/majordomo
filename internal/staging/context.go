@@ -40,15 +40,15 @@ func LoadAgentContextConfig(path string) (AgentContext, error) {
 }
 
 func loadScopedForm(raw map[string]any, path string) (AgentContext, error) {
-	globalCtx, _ := raw["global"].(map[string]any)
-	if globalCtx == nil {
+	globalCtx, globalOK := raw["global"].(map[string]any)
+	if !globalOK || globalCtx == nil {
 		if raw["global"] != nil {
 			return AgentContext{}, fatalf("agentContext must define object values for 'global' and 'scoped'")
 		}
 		globalCtx = map[string]any{}
 	}
-	scopedCtx, _ := raw["scoped"].(map[string]any)
-	if scopedCtx == nil {
+	scopedCtx, scopedOK := raw["scoped"].(map[string]any)
+	if !scopedOK || scopedCtx == nil {
 		if raw["scoped"] != nil {
 			return AgentContext{}, fatalf("agentContext must define object values for 'global' and 'scoped'")
 		}
@@ -161,8 +161,14 @@ func ContextForFile(filePath string, agentContext AgentContext, repoRoot string)
 		}
 		merged[key] = value
 	}
-	gRules, _ := globalCtx["customRules"].([]any)
-	sRules, _ := scopedCtx["customRules"].([]any)
+	gRules, ok := globalCtx["customRules"].([]any)
+	if !ok {
+		return nil, fatalf("agentContext.global customRules must be a list")
+	}
+	sRules, ok := scopedCtx["customRules"].([]any)
+	if !ok {
+		return nil, fatalf("agentContext.scoped['%s'] customRules must be a list", matchedGlob)
+	}
 	combined := append([]any{}, gRules...)
 	combined = append(combined, sRules...)
 	merged["customRules"] = combined

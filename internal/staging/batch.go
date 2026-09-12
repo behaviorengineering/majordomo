@@ -30,7 +30,10 @@ func StageSkillBatches(
 	bySkill := map[string][]Task{}
 	skillOrder := []string{}
 	for _, task := range tasks {
-		agent, _ := task["agent"].(string)
+		agent, err := requiredTaskString(task, "agent")
+		if err != nil {
+			return nil, nil, err
+		}
 		if _, ok := bySkill[agent]; !ok {
 			skillOrder = append(skillOrder, agent)
 		}
@@ -39,7 +42,10 @@ func StageSkillBatches(
 
 	docChanged := []string{}
 	for _, t := range tasks {
-		f, _ := t["file"].(string)
+		f, err := requiredTaskString(t, "file")
+		if err != nil {
+			return nil, nil, err
+		}
 		if strings.HasSuffix(f, ".md") {
 			docChanged = append(docChanged, f)
 		}
@@ -58,12 +64,12 @@ func StageSkillBatches(
 			return nil, nil, err
 		}
 		skillManifest := map[string]any{
-			"base_branch":    baseBranch,
-			"refspec":        refspec,
-			"skill_dir":      skill,
-			"review_agents":  map[string][]string{skill: reviewAgents[skill]},
-			"reviewable":     skillTasks,
-			"excluded":       excluded,
+			"base_branch":   baseBranch,
+			"refspec":       refspec,
+			"skill_dir":     skill,
+			"review_agents": map[string][]string{skill: reviewAgents[skill]},
+			"reviewable":    skillTasks,
+			"excluded":      excluded,
 		}
 		if err := writeJSON(filepath.Join(skillStaging, "manifest.json"), skillManifest); err != nil {
 			return nil, nil, err
@@ -71,7 +77,10 @@ func StageSkillBatches(
 
 		skillMD := []string{}
 		for _, t := range skillTasks {
-			f, _ := t["file"].(string)
+			f, err := requiredTaskString(t, "file")
+			if err != nil {
+				return nil, nil, err
+			}
 			if strings.HasSuffix(f, ".md") {
 				skillMD = append(skillMD, f)
 			}
@@ -82,7 +91,11 @@ func StageSkillBatches(
 		var batches [][]map[string]any
 		asMaps := tasksToMaps(skillTasks)
 		if skillHasMD {
-			batches = cluster.DocClusterAwareBatches(asMaps, batchSize, repoRoot)
+			clusterBatches, err := cluster.DocClusterAwareBatches(asMaps, batchSize, repoRoot)
+			if err != nil {
+				return nil, nil, err
+			}
+			batches = clusterBatches
 			for _, c := range cluster.ClusterDocs(skillMD, repoRoot) {
 				if len(c) > 1 {
 					skillDocClusters = append(skillDocClusters, c)
@@ -90,7 +103,11 @@ func StageSkillBatches(
 			}
 			skillReverseLinks = cluster.ReverseLinks(skillMD, repoRoot)
 		} else {
-			batches = cluster.DepClusterAwareBatches(asMaps, batchSize, repoRoot)
+			clusterBatches, err := cluster.DepClusterAwareBatches(asMaps, batchSize, repoRoot)
+			if err != nil {
+				return nil, nil, err
+			}
+			batches = clusterBatches
 		}
 
 		for batchIdx, batchSlice := range batches {
@@ -115,7 +132,10 @@ func StageSkillBatches(
 				return nil, nil, err
 			}
 			for _, task := range batchSlice {
-				inputFile, _ := task["input_file"].(string)
+				inputFile, err := requiredTaskString(task, "input_file")
+				if err != nil {
+					return nil, nil, err
+				}
 				src := filepath.Join(stagingDir, inputFile)
 				dst := filepath.Join(batchDir, inputFile)
 				if err := copyFile(src, dst); err != nil {
@@ -130,7 +150,10 @@ func StageSkillBatches(
 			}
 			dirs := map[string]struct{}{}
 			for _, t := range batchSlice {
-				f, _ := t["file"].(string)
+				f, err := requiredTaskString(t, "file")
+				if err != nil {
+					return nil, nil, err
+				}
 				dirs[filepath.ToSlash(filepath.Dir(f))] = struct{}{}
 			}
 			dirList := make([]string, 0, len(dirs))
@@ -159,6 +182,14 @@ func tasksToMaps(tasks []Task) []map[string]any {
 		out[i] = map[string]any(t)
 	}
 	return out
+}
+
+func requiredTaskString(task Task, key string) (string, error) {
+	value, ok := task[key].(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("staging task requires a non-empty string %q", key)
+	}
+	return value, nil
 }
 
 func fmtBatchDir(n int) string {

@@ -68,6 +68,9 @@ func ResetForTests() {
 
 // Start initializes Bifrost and a loopback OpenAI HTTP server.
 func Start(ctx context.Context, account *Account) (*Gateway, error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("aigateway: context is required")
+	}
 	if account == nil || !account.HasProviders() {
 		return nil, fmt.Errorf("aigateway: account required")
 	}
@@ -316,8 +319,8 @@ func messageContentString(content any) (string, error) {
 			if !ok {
 				continue
 			}
-			if t, _ := m["type"].(string); t == "text" {
-				if s, _ := m["text"].(string); s != "" {
+			if t, ok := m["type"].(string); ok && t == "text" {
+				if s, ok := m["text"].(string); ok && s != "" {
 					b.WriteString(s)
 				}
 			}

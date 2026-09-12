@@ -59,22 +59,22 @@ var storeMetadataOrder = []string{
 }
 
 var indexMetaKeys = map[string]bool{
-	"cluster_sha":              true,
-	"skill_name":               true,
-	"fingerprint_version":      true,
-	"cluster_files":            true,
-	"cluster_files_hash":       true,
-	"model_id":                 true,
-	"model_revision":           true,
-	"instruction_bundle_hash":  true,
-	"prompt_template_hash":     true,
-	"scoring_rubric_hash":      true,
-	"output_schema_version":    true,
-	"analysis_payload_hash":    true,
-	"markdown_artifact_file":   true,
-	"markdown_artifact_hash":   true,
-	"markdown_artifact_count":  true,
-	"created_at":               true,
+	"cluster_sha":             true,
+	"skill_name":              true,
+	"fingerprint_version":     true,
+	"cluster_files":           true,
+	"cluster_files_hash":      true,
+	"model_id":                true,
+	"model_revision":          true,
+	"instruction_bundle_hash": true,
+	"prompt_template_hash":    true,
+	"scoring_rubric_hash":     true,
+	"output_schema_version":   true,
+	"analysis_payload_hash":   true,
+	"markdown_artifact_file":  true,
+	"markdown_artifact_hash":  true,
+	"markdown_artifact_count": true,
+	"created_at":              true,
 }
 
 // Meta is frontmatter metadata: string or list of strings.
@@ -88,48 +88,48 @@ type cacheRecord struct {
 
 // PrecheckOptions configures cache precheck / index build.
 type PrecheckOptions struct {
-	ProjectID             string
-	CacheDir              string
-	ProjectRetentionDays  *int
-	CentralRetentionDays  *int
-	GlobalRetentionDays   int
-	MinRetentionDays      int
-	IndexOut              string
+	ProjectID            string
+	CacheDir             string
+	ProjectRetentionDays *int
+	CentralRetentionDays *int
+	GlobalRetentionDays  int
+	MinRetentionDays     int
+	IndexOut             string
 }
 
 // LookupOptions configures a cache hit evaluation.
 type LookupOptions struct {
-	IndexFile              string
-	ClusterSHA             string
-	SkillName              string
-	FingerprintVersion     string
-	ClusterFiles           []string
-	ClusterFilesFile       string
-	ModelID                string
-	ModelRevision          string
-	InstructionBundleHash  string
-	PromptTemplateHash     string
-	ScoringRubricHash      string
-	OutputSchemaVersion    string
+	IndexFile             string
+	ClusterSHA            string
+	SkillName             string
+	FingerprintVersion    string
+	ClusterFiles          []string
+	ClusterFilesFile      string
+	ModelID               string
+	ModelRevision         string
+	InstructionBundleHash string
+	PromptTemplateHash    string
+	ScoringRubricHash     string
+	OutputSchemaVersion   string
 }
 
 // StoreOptions configures writing a cache entry.
 type StoreOptions struct {
-	CacheDir               string
-	SkillName              string
-	ClusterSHA             string
-	FingerprintVersion     string
-	ClusterFiles           []string
-	ClusterFilesFile       string
-	ModelID                string
-	ModelRevision          string
-	InstructionBundleHash  string
-	PromptTemplateHash     string
-	ScoringRubricHash      string
-	OutputSchemaVersion    string
-	AnalysisFile           string
-	ReportsDir             string
-	ArtifactFiles          []string
+	CacheDir              string
+	SkillName             string
+	ClusterSHA            string
+	FingerprintVersion    string
+	ClusterFiles          []string
+	ClusterFilesFile      string
+	ModelID               string
+	ModelRevision         string
+	InstructionBundleHash string
+	PromptTemplateHash    string
+	ScoringRubricHash     string
+	OutputSchemaVersion   string
+	AnalysisFile          string
+	ReportsDir            string
+	ArtifactFiles         []string
 }
 
 // RestoreOptions configures restoring markdown artifacts from cache.
@@ -181,8 +181,8 @@ func Precheck(opts PrecheckOptions) (map[string]any, error) {
 			invalidFiles[rel] = []string{"file name must match analysis-<sha256>.<ext>"}
 			continue
 		}
-		clusterSHA, _ := record.metadata["cluster_sha"].(string)
-		if clusterSHA != "" && clusterSHA != match[1] {
+		clusterSHA, ok := record.metadata["cluster_sha"].(string)
+		if ok && clusterSHA != "" && clusterSHA != match[1] {
 			invalidFiles[rel] = []string{"cluster_sha does not match file name hash"}
 			continue
 		}
@@ -199,26 +199,26 @@ func Precheck(opts PrecheckOptions) (map[string]any, error) {
 			}
 		}
 		metadataForIndex["file"] = toRel(record.filePath, cacheDir)
-		skillName, _ := metadataForIndex["skill_name"].(string)
-		clusterSHA, _ := metadataForIndex["cluster_sha"].(string)
-		if strings.TrimSpace(skillName) != "" && clusterSHA != "" {
+		skillName, skillNameOK := metadataForIndex["skill_name"].(string)
+		clusterSHA, clusterSHAOK := metadataForIndex["cluster_sha"].(string)
+		if skillNameOK && strings.TrimSpace(skillName) != "" && clusterSHAOK && clusterSHA != "" {
 			indexEntries[skillName+":"+clusterSHA] = metadataForIndex
-		} else if clusterSHA != "" {
+		} else if clusterSHAOK && clusterSHA != "" {
 			indexEntries[clusterSHA] = metadataForIndex
 		}
 	}
 
 	result := map[string]any{
-		"project_id":      opts.ProjectID,
-		"cache_dir":       filepath.ToSlash(cacheDir),
-		"retention_days":  retentionDays,
+		"project_id":       opts.ProjectID,
+		"cache_dir":        filepath.ToSlash(cacheDir),
+		"retention_days":   retentionDays,
 		"retention_source": source,
-		"scanned_files":   len(collectCacheFiles(cacheDir)),
-		"expired_deleted": len(expiredFiles),
-		"expired_files":   expiredFiles,
-		"invalid_files":   invalidFiles,
-		"valid_entries":   len(indexEntries),
-		"index":           indexEntries,
+		"scanned_files":    len(collectCacheFiles(cacheDir)),
+		"expired_deleted":  len(expiredFiles),
+		"expired_files":    expiredFiles,
+		"invalid_files":    invalidFiles,
+		"valid_entries":    len(indexEntries),
+		"index":            indexEntries,
 	}
 	if opts.IndexOut != "" {
 		if err := os.MkdirAll(filepath.Dir(opts.IndexOut), 0o755); err != nil {
@@ -296,7 +296,10 @@ func Lookup(opts LookupOptions) (map[string]any, error) {
 			"mismatches": mismatches,
 		}, nil
 	}
-	fileVal, _ := entry["file"].(string)
+	fileVal, ok := entry["file"].(string)
+	if !ok || strings.TrimSpace(fileVal) == "" {
+		return nil, fmt.Errorf("index entry missing string file")
+	}
 	return map[string]any{
 		"hit":         true,
 		"cluster_sha": opts.ClusterSHA,
@@ -420,12 +423,15 @@ func Restore(opts RestoreOptions) (map[string]any, error) {
 		}
 		return nil, fmt.Errorf("cache entry file is invalid: %s", joined)
 	}
-	artifactRel, _ := record.metadata["markdown_artifact_file"].(string)
+	artifactRel, ok := record.metadata["markdown_artifact_file"].(string)
+	if !ok {
+		return nil, fmt.Errorf("cache entry markdown_artifact_file must be a string")
+	}
 	if strings.TrimSpace(artifactRel) == "" {
 		return map[string]any{
-			"restored":    false,
-			"reason":      "no-markdown-artifact",
-			"entry_file":  opts.EntryFile,
+			"restored":   false,
+			"reason":     "no-markdown-artifact",
+			"entry_file": opts.EntryFile,
 		}, nil
 	}
 	artifactPath := filepath.Clean(filepath.Join(cacheDir, filepath.FromSlash(artifactRel)))
@@ -511,13 +517,13 @@ func collectCacheFiles(cacheDir string) []string {
 func buildIndex(records []cacheRecord) map[string]cacheRecord {
 	index := map[string]cacheRecord{}
 	for _, record := range records {
-		clusterSHA, _ := record.metadata["cluster_sha"].(string)
-		if clusterSHA == "" {
+		clusterSHA, clusterSHAOK := record.metadata["cluster_sha"].(string)
+		if !clusterSHAOK || clusterSHA == "" {
 			continue
 		}
-		skillName, _ := record.metadata["skill_name"].(string)
+		skillName, skillNameOK := record.metadata["skill_name"].(string)
 		key := clusterSHA
-		if strings.TrimSpace(skillName) != "" {
+		if skillNameOK && strings.TrimSpace(skillName) != "" {
 			key = skillName + ":" + clusterSHA
 		}
 		existing, ok := index[key]
@@ -541,7 +547,10 @@ func loadCacheRecord(filePath string) (*cacheRecord, []string) {
 	if len(errors) > 0 {
 		return nil, errors
 	}
-	createdAtStr, _ := metadata["created_at"].(string)
+	createdAtStr, ok := metadata["created_at"].(string)
+	if !ok {
+		return nil, []string{"created_at must be a string"}
+	}
 	createdAt, err := time.Parse(timestampFmt, createdAtStr)
 	if err != nil {
 		return nil, []string{"created_at must use UTC format YYYY-MM-DDTHH:MM:SSZ"}
@@ -820,8 +829,11 @@ func writeMarkdownArtifactFile(path string, files map[string]string) error {
 }
 
 func existingCachePayloadUnchanged(existing *cacheRecord, payloadHash, markdownArtifactFile, markdownArtifactHash string, markdownArtifactCount int) bool {
-	existingPayload, _ := existing.metadata["analysis_payload_hash"].(string)
-	existingArtifactHash, _ := existing.metadata["markdown_artifact_hash"].(string)
+	existingPayload, payloadOK := existing.metadata["analysis_payload_hash"].(string)
+	existingArtifactHash, artifactHashOK := existing.metadata["markdown_artifact_hash"].(string)
+	if !payloadOK || !artifactHashOK {
+		return false
+	}
 	existingArtifactCount := existing.metadata["markdown_artifact_count"]
 	artifactUnchanged := false
 	if markdownArtifactFile != "" {

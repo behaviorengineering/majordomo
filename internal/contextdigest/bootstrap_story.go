@@ -289,7 +289,10 @@ func writeText(path, text string) error {
 }
 
 func stringField(out map[string]interface{}, key string) string {
-	text, _ := out[key].(string)
+	text, ok := out[key].(string)
+	if !ok {
+		return ""
+	}
 	return text
 }
 

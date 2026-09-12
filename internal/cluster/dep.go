@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -220,14 +221,17 @@ func ClusterFiles(changedFiles []string, repoRoot string) [][]string {
 }
 
 // DepClusterAwareBatches packs manifest tasks into batches that keep dependency clusters together.
-func DepClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot string) [][]map[string]any {
+func DepClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot string) ([][]map[string]any, error) {
 	if len(skillTasks) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	fileToTasks := make(map[string][]map[string]any)
 	for _, task := range skillTasks {
-		fileKey, _ := task["file"].(string)
+		fileKey, ok := task["file"].(string)
+		if !ok || strings.TrimSpace(fileKey) == "" {
+			return nil, fmt.Errorf("dependency cluster task requires a non-empty string file")
+		}
 		fileToTasks[fileKey] = append(fileToTasks[fileKey], task)
 	}
 
@@ -275,7 +279,7 @@ func DepClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot
 		batches = append(batches, current)
 	}
 
-	return batches
+	return batches, nil
 }
 
 // ReverseDeps returns unchanged repo files that directly import any of the changed files.

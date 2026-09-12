@@ -67,7 +67,10 @@ func TestLoadAgentContextConfigSupportsLegacyFlatForm(t *testing.T) {
 	if len(parsed.Scoped) != 0 {
 		t.Fatalf("scoped should be empty: %v", parsed.Scoped)
 	}
-	stack, _ := parsed.Global["techStack"].([]any)
+	stack, ok := parsed.Global["techStack"].([]any)
+	if !ok {
+		t.Fatalf("techStack has unexpected type: %T", parsed.Global["techStack"])
+	}
 	if len(stack) != 1 || stack[0] != "python" {
 		t.Fatalf("techStack: %v", parsed.Global["techStack"])
 	}

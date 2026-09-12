@@ -75,7 +75,10 @@ func TestDocClusterAwareBatches(t *testing.T) {
 		{"file": "c.md"},
 	}
 
-	batches := DocClusterAwareBatches(tasks, 2, root)
+	batches, err := DocClusterAwareBatches(tasks, 2, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(batches) != 2 {
 		t.Fatalf("expected 2 batches, got %d", len(batches))
 	}

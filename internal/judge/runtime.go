@@ -352,7 +352,10 @@ func ResolveGatewayProvider(model string) (stropdspy.ProviderConfig, error) {
 	if err != nil {
 		return stropdspy.ProviderConfig{}, err
 	}
-	account, _ := aigateway.NewAccountFromEnv()
+	account, err := aigateway.NewAccountFromEnv()
+	if err != nil {
+		return stropdspy.ProviderConfig{}, fmt.Errorf("resolve gateway account: %w", err)
+	}
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("MAJORDOMO_MODEL"))

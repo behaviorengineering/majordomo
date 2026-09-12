@@ -14,6 +14,7 @@ import (
 
 // FileReviewOptions configures strop-backed file review Judge step.
 type FileReviewOptions struct {
+	Context    context.Context
 	StagingDir string
 	SkillOut   string
 }
@@ -32,7 +33,10 @@ func FileReviewBatch(opts FileReviewOptions) error {
 		return err
 	}
 	grounding := readGrounding(opts.StagingDir)
-	ctx := context.Background()
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for _, r := range reviewables {
 		diff, err := readReviewableInput(opts.StagingDir, r)
 		if err != nil {
@@ -47,7 +51,10 @@ func FileReviewBatch(opts FileReviewOptions) error {
 		if err != nil {
 			return fmt.Errorf("filereview %s: %w", r.Slug, err)
 		}
-		md, _ := out["markdown"].(string)
+		md, ok := out["markdown"].(string)
+		if !ok {
+			return fmt.Errorf("filereview %s: output missing string field markdown", r.Slug)
+		}
 		if strings.TrimSpace(md) == "" {
 			md = filereview.FormatMarkdown(filereview.Report{File: r.File, Slug: r.Slug, NoIssues: true})
 		}
@@ -72,9 +79,10 @@ func readReviewableInput(stagingDir string, r filereview.Reviewable) (string, er
 	}
 	inputRel := ""
 	for _, row := range raw.Reviewable {
-		slug, _ := row["slug"].(string)
-		if slug == r.Slug {
-			inputRel, _ = row["input_file"].(string)
+		slug, slugOK := row["slug"].(string)
+		inputFile, inputFileOK := row["input_file"].(string)
+		if slugOK && inputFileOK && slug == r.Slug {
+			inputRel = inputFile
 			break
 		}
 	}

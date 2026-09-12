@@ -15,10 +15,10 @@ const sidecarName = "gate.json"
 type Status string
 
 const (
-	StatusOpen        Status = "open"
-	StatusRejected    Status = "rejected"
-	StatusDone        Status = "done"
-	StatusBlockedWhy  Status = "blocked_why"
+	StatusOpen       Status = "open"
+	StatusRejected   Status = "rejected"
+	StatusDone       Status = "done"
+	StatusBlockedWhy Status = "blocked_why"
 )
 
 // Sidecar persists gate state beside the context update branch tree.

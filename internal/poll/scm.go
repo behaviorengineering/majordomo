@@ -56,8 +56,7 @@ func listGitHubPRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 		if err != nil {
 			return nil, err
 		}
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
+		body, err := readResponseBody(resp)
 		if err != nil {
 			return nil, err
 		}
@@ -110,8 +109,7 @@ func listGitLabMRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 		if err != nil {
 			return nil, err
 		}
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
+		body, err := readResponseBody(resp)
 		if err != nil {
 			return nil, err
 		}
@@ -146,6 +144,11 @@ func listGitLabMRs(cfg config.RepoConfig, token string) ([]openPR, error) {
 		page = n
 	}
 	return out, nil
+}
+
+func readResponseBody(resp *http.Response) ([]byte, error) {
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
 }
 
 // newGitLabMRListRequest builds GET .../projects/:id/merge_requests with %2F preserved for nested paths.

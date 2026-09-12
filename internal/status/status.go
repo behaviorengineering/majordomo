@@ -22,9 +22,9 @@ const (
 
 // Options configures a status post.
 type Options struct {
-	SCM        string // github | bitbucket
-	CommitSHA  string
-	State      State
+	SCM       string // github | bitbucket
+	CommitSHA string
+	State     State
 	// Bitbucket
 	BBBaseURL   string
 	BBProject   string
@@ -212,7 +212,10 @@ func doJSON(client *http.Client, method, url, token string, body any) error {
 		return err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read status response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(raw))
 	}

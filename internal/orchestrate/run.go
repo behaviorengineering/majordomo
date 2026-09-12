@@ -1,6 +1,7 @@
 package orchestrate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ import (
 
 // Options configures an orchestrate run.
 type Options struct {
+	Context     context.Context
 	PRNumber    string
 	BaseBranch  string
 	StagingDir  string
@@ -122,7 +124,9 @@ func Run(opts Options) error {
 			return fmt.Errorf("central config: %w", err)
 		}
 		if opts.ConfigDir != "" && opts.RepoID != "" {
-			config.ApplyPipelineModelEnv(cfg, opts.Pipeline)
+			if err := config.ApplyPipelineModelEnv(cfg, opts.Pipeline); err != nil {
+				return fmt.Errorf("apply pipeline model environment: %w", err)
+			}
 		}
 		logf("INFO", "Running prep against %s → %s", opts.BaseBranch, opts.StagingDir)
 		err = staging.Run(staging.Options{
@@ -146,7 +150,9 @@ func Run(opts Options) error {
 		if err != nil {
 			return fmt.Errorf("central config: %w", err)
 		}
-		config.ApplyPipelineModelEnv(cfg, opts.Pipeline)
+		if err := config.ApplyPipelineModelEnv(cfg, opts.Pipeline); err != nil {
+			return fmt.Errorf("apply pipeline model environment: %w", err)
+		}
 	}
 
 	if !shouldRun(opts.Until, StageWaves) {
@@ -298,6 +304,7 @@ func runOneFileBatch(opts Options, b BatchEntry) error {
 			},
 			Judge: func() error {
 				return opts.Dispatch(agent.DispatchOptions{
+					Context:    opts.Context,
 					PRNumber:   opts.PRNumber,
 					StagingDir: b.StagingDir,
 					OutputDir:  skillOut,
@@ -340,6 +347,7 @@ func runFinalize(opts Options, skills []string) error {
 		}
 		stagingSkill := filepath.Join(opts.StagingDir, skill)
 		if err := opts.Dispatch(agent.DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: stagingSkill,
 			OutputDir: skillOut, Mode: agent.ModeFinalize, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {
@@ -368,6 +376,7 @@ func runFileProse(opts Options, skills []string) error {
 		}
 		stagingSkill := filepath.Join(opts.StagingDir, skill)
 		if err := opts.Dispatch(agent.DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: stagingSkill,
 			OutputDir: skillOut, Mode: agent.ModeProse, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {
@@ -404,18 +413,21 @@ func runSynthesis(opts Options, batches []BatchEntry) error {
 			switch b.Skill {
 			case "pr-review-summary":
 				err = opts.RunSummary(agent.SummaryLoopOptions{
+					Context:  opts.Context,
 					PRNumber: opts.PRNumber, StagingDir: b.StagingDir,
 					OutputDir: skillOut, ScriptsDir: opts.ScriptsDir,
 					Dispatch: opts.Dispatch,
 				})
 			case "pr-review-technical":
 				err = opts.RunTech(agent.TechLoopOptions{
+					Context:  opts.Context,
 					PRNumber: opts.PRNumber, StagingDir: b.StagingDir,
 					OutputDir: skillOut, ScriptsDir: opts.ScriptsDir,
 					Dispatch: opts.Dispatch,
 				})
 			case "pr-review-blast-radius":
 				err = opts.Dispatch(agent.DispatchOptions{
+					Context:  opts.Context,
 					PRNumber: opts.PRNumber, StagingDir: b.StagingDir,
 					OutputDir: skillOut, Mode: agent.ModeSummary, ScriptsDir: opts.ScriptsDir,
 				})
@@ -451,6 +463,7 @@ func runSynthesisProse(opts Options, batches []BatchEntry) error {
 		}
 		stagingSkill := filepath.Join(opts.StagingDir, b.Skill)
 		if err := opts.Dispatch(agent.DispatchOptions{
+			Context:  opts.Context,
 			PRNumber: opts.PRNumber, StagingDir: stagingSkill,
 			OutputDir: skillOut, Mode: agent.ModeProse, ScriptsDir: opts.ScriptsDir,
 		}); err != nil {

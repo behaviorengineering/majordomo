@@ -258,7 +258,7 @@ func Run(opts Options) (res Result, err error) {
 								action: "rewrite_blocked", defaultBranch: defaultBranch, defaultHEAD: defaultHEAD,
 								cursorBefore: cursorBefore, cursorAfter: cursorBefore, commits: commits, needsWrite: needsWrite,
 								gateSidecar: gateSidecar, openPRNum: openPRNum, cloneURL: cfg.Repository.CloneURL,
-								message: err.Error(),
+								message:   err.Error(),
 								digestDir: digestDir, digestBranch: digestBranch, servedGit: servedGit, digestReady: opts.DigestCache != nil,
 							})
 						}
@@ -387,7 +387,9 @@ func Run(opts Options) (res Result, err error) {
 			if gateSidecar.RegenRequested() {
 				gateSidecar.Status = contextgate.StatusOpen
 				gateSidecar.RejectReason = ""
-				_ = contextgate.SaveSidecar(ctxDir, gateSidecar)
+				if err := contextgate.SaveSidecar(ctxDir, gateSidecar); err != nil {
+					return Result{}, fmt.Errorf("save context gate sidecar: %w", err)
+				}
 			}
 		}
 	}

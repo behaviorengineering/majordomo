@@ -29,24 +29,24 @@ func (f *flakyLLM) GenerateWithContent(ctx context.Context, _ []core.ContentBloc
 	return f.Generate(ctx, "", opts...)
 }
 
-func (f *flakyLLM) GenerateWithJSON(context.Context, string, ...core.GenerateOption) (map[string]any, error) {
-	return nil, errors.New("not implemented")
-}
-
-func (f *flakyLLM) GenerateWithFunctions(context.Context, string, []map[string]any, ...core.GenerateOption) (map[string]any, error) {
-	return nil, errors.New("not implemented")
-}
-
 func (f *flakyLLM) CreateEmbedding(context.Context, string, ...core.EmbeddingOption) (*core.EmbeddingResult, error) {
-	return nil, errors.New("not implemented")
+	return nil, errors.New("embedding unsupported in flaky test LLM")
 }
 
 func (f *flakyLLM) CreateEmbeddings(context.Context, []string, ...core.EmbeddingOption) (*core.BatchEmbeddingResult, error) {
-	return nil, errors.New("not implemented")
+	return nil, errors.New("embeddings unsupported in flaky test LLM")
+}
+
+func (f *flakyLLM) GenerateWithFunctions(context.Context, string, []map[string]any, ...core.GenerateOption) (map[string]any, error) {
+	return nil, errors.New("function calls unsupported in flaky test LLM")
+}
+
+func (f *flakyLLM) GenerateWithJSON(context.Context, string, ...core.GenerateOption) (map[string]any, error) {
+	return nil, errors.New("JSON generation unsupported in flaky test LLM")
 }
 
 func (f *flakyLLM) StreamGenerate(context.Context, string, ...core.GenerateOption) (*core.StreamResponse, error) {
-	return nil, errors.New("not implemented")
+	return nil, errors.New("stream generation unsupported in flaky test LLM")
 }
 
 func TestWrapLLMWithRetrySucceedsAfterTransientFailures(t *testing.T) {

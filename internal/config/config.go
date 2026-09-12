@@ -59,12 +59,12 @@ type PollCache struct {
 
 // Context is the served-repo orphan branch for human-reviewed project understanding.
 type Context struct {
-	Repo              string `yaml:"repo"`   // served
-	Branch            string `yaml:"branch"` // majordomo-context/<repo-id>
-	AutoMerge         *bool  `yaml:"autoMerge,omitempty"`
-	GateCommentPrefix string `yaml:"gateCommentPrefix,omitempty"`
-	Compaction        ContextCompaction    `yaml:"compaction,omitempty"`
-	MaxCommitsPerRun  int                  `yaml:"maxCommitsPerRun,omitempty"`
+	Repo              string            `yaml:"repo"`   // served
+	Branch            string            `yaml:"branch"` // majordomo-context/<repo-id>
+	AutoMerge         *bool             `yaml:"autoMerge,omitempty"`
+	GateCommentPrefix string            `yaml:"gateCommentPrefix,omitempty"`
+	Compaction        ContextCompaction `yaml:"compaction,omitempty"`
+	MaxCommitsPerRun  int               `yaml:"maxCommitsPerRun,omitempty"`
 }
 
 const defaultMaxCommitsPerRun = 20
@@ -201,19 +201,19 @@ type Pipeline struct {
 
 // RepoConfig is one file under majordomo-central-config/<repo-id>.yaml.
 type RepoConfig struct {
-	SCM            string                       `yaml:"scm"` // github | gitlab | bitbucket | generic
-	Repository     Repository                   `yaml:"repository"`
-	SCMAPI         SCMAPI                       `yaml:"scmApi"`
-	Trigger        Trigger                      `yaml:"trigger"`
-	Cache          Cache                        `yaml:"cache"`
-	PollCache      PollCache                    `yaml:"pollCache"`
-	Context        Context                      `yaml:"context"`
-	Review         Review                       `yaml:"review"`
-	PublishMode    string                       `yaml:"publishMode,omitempty"` // legacy alias
-	StaticAnalysis []StaticAnalysisTool         `yaml:"staticAnalysis,omitempty"`
-	Pipelines      map[string]Pipeline          `yaml:"pipelines,omitempty"`
-	AIProviders    map[string]AIProviderConfig  `yaml:"ai_providers,omitempty"`
-	JobConfigs     map[string]JobConfig         `yaml:"job_configs,omitempty"`
+	SCM            string                      `yaml:"scm"` // github | gitlab | bitbucket | generic
+	Repository     Repository                  `yaml:"repository"`
+	SCMAPI         SCMAPI                      `yaml:"scmApi"`
+	Trigger        Trigger                     `yaml:"trigger"`
+	Cache          Cache                       `yaml:"cache"`
+	PollCache      PollCache                   `yaml:"pollCache"`
+	Context        Context                     `yaml:"context"`
+	Review         Review                      `yaml:"review"`
+	PublishMode    string                      `yaml:"publishMode,omitempty"` // legacy alias
+	StaticAnalysis []StaticAnalysisTool        `yaml:"staticAnalysis,omitempty"`
+	Pipelines      map[string]Pipeline         `yaml:"pipelines,omitempty"`
+	AIProviders    map[string]AIProviderConfig `yaml:"ai_providers,omitempty"`
+	JobConfigs     map[string]JobConfig        `yaml:"job_configs,omitempty"`
 }
 
 // EffectivePublishMode returns review.publishMode, else top-level publishMode, else "auto".

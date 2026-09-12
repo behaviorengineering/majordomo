@@ -71,8 +71,8 @@ func parseReport(path string) (reviewedFile string, meta [][2]string, findings [
 }
 
 type xmlTestsuites struct {
-	XMLName xml.Name     `xml:"testsuites"`
-	Suites  []xmlSuite   `xml:"testsuite"`
+	XMLName xml.Name   `xml:"testsuites"`
+	Suites  []xmlSuite `xml:"testsuite"`
 }
 
 type xmlSuite struct {

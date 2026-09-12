@@ -64,6 +64,12 @@ See docs/PLAN-control-tower-github-go.md.`,
 	return root
 }
 
+func mustMarkFlagRequired(cmd *cobra.Command, name string) {
+	if err := cmd.MarkFlagRequired(name); err != nil {
+		panic(fmt.Errorf("mark flag %q required: %w", name, err))
+	}
+}
+
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
@@ -177,6 +183,7 @@ func newDispatchCmd() *cobra.Command {
 				mode = agent.ModeTechnicalDeep
 			}
 			opts := agent.DispatchOptions{
+				Context:    cmd.Context(),
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],
@@ -273,9 +280,9 @@ func newOrchestrateCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&skipDeep, "skip-deep", false, "skip technical deep review pass")
 	cmd.Flags().BoolVar(&skipReport, "skip-report", false, "skip JUnit conversion")
 	cmd.Flags().StringVar(&until, "until", "", "stop after stage: prep|waves|finalize|prose|synth|report")
-	_ = cmd.MarkFlagRequired("pr")
-	_ = cmd.MarkFlagRequired("staging-dir")
-	_ = cmd.MarkFlagRequired("output-dir")
+	mustMarkFlagRequired(cmd, "pr")
+	mustMarkFlagRequired(cmd, "staging-dir")
+	mustMarkFlagRequired(cmd, "output-dir")
 	return cmd
 }
 
@@ -341,8 +348,8 @@ clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 	cmd.Flags().BoolVar(&skipDeep, "skip-deep", false, "skip technical deep review pass")
 	cmd.Flags().BoolVar(&skipReport, "skip-report", false, "skip JUnit conversion")
 	cmd.Flags().IntVar(&concurrency, "concurrency", 0, "max parallel batches")
-	_ = cmd.MarkFlagRequired("repo-id")
-	_ = cmd.MarkFlagRequired("pr")
+	mustMarkFlagRequired(cmd, "repo-id")
+	mustMarkFlagRequired(cmd, "pr")
 	return cmd
 }
 
@@ -368,8 +375,8 @@ func newSACmd() *cobra.Command {
 	cmd.Flags().StringVar(&baseBranch, "base-branch", "", "base branch for changed-file list (required)")
 	cmd.Flags().StringVar(&scriptsDir, "scripts-dir", "", "pipelines/scripts with run-sa-tool.sh")
 	cmd.Flags().StringVar(&imagePrefix, "image-prefix", "", "registry prefix when tool has no image (or MAJORDOMO_SA_IMAGE_PREFIX)")
-	_ = cmd.MarkFlagRequired("repo-id")
-	_ = cmd.MarkFlagRequired("base-branch")
+	mustMarkFlagRequired(cmd, "repo-id")
+	mustMarkFlagRequired(cmd, "base-branch")
 	return cmd
 }
 
@@ -446,9 +453,9 @@ func newCacheCmd() *cobra.Command {
 	pushCmd.Flags().StringVar(&remote, "remote", "", "https remote URL")
 	pushCmd.Flags().StringVar(&branch, "branch", "", "cache branch name")
 	pushCmd.Flags().StringVar(&worktree, "worktree", "", "cache worktree path")
-	_ = pushCmd.MarkFlagRequired("remote")
-	_ = pushCmd.MarkFlagRequired("branch")
-	_ = pushCmd.MarkFlagRequired("worktree")
+	mustMarkFlagRequired(pushCmd, "remote")
+	mustMarkFlagRequired(pushCmd, "branch")
+	mustMarkFlagRequired(pushCmd, "worktree")
 	cmd.AddCommand(pushCmd)
 
 	cmd.AddCommand(&cobra.Command{
@@ -480,8 +487,8 @@ func newCacheCmd() *cobra.Command {
 	}
 	setCmd.Flags().StringVar(&pr, "pr", "", "PR number")
 	setCmd.Flags().StringVar(&sha, "sha", "", "head commit SHA")
-	_ = setCmd.MarkFlagRequired("pr")
-	_ = setCmd.MarkFlagRequired("sha")
+	mustMarkFlagRequired(setCmd, "pr")
+	mustMarkFlagRequired(setCmd, "sha")
 	cmd.AddCommand(setCmd)
 
 	var (
@@ -528,8 +535,8 @@ func newCacheCmd() *cobra.Command {
 	precheckCmd.Flags().IntVar(&globalRetentionDays, "global-retention-days", 180, "global retention days")
 	precheckCmd.Flags().IntVar(&minRetentionDays, "min-retention-days", 30, "minimum retention days")
 	precheckCmd.Flags().StringVar(&indexOut, "index-out", "", "optional path to write index JSON")
-	_ = precheckCmd.MarkFlagRequired("project-id")
-	_ = precheckCmd.MarkFlagRequired("cache-dir")
+	mustMarkFlagRequired(precheckCmd, "project-id")
+	mustMarkFlagRequired(precheckCmd, "cache-dir")
 	precheckCmd.PreRun = func(cmd *cobra.Command, args []string) {
 		haveProjectRet = cmd.Flags().Changed("project-retention-days")
 		haveCentralRet = cmd.Flags().Changed("central-retention-days")
@@ -586,14 +593,14 @@ func newCacheCmd() *cobra.Command {
 	lookupCmd.Flags().StringVar(&promptTemplateHash, "prompt-template-hash", "", "prompt template hash")
 	lookupCmd.Flags().StringVar(&scoringRubricHash, "scoring-rubric-hash", "", "scoring rubric hash")
 	lookupCmd.Flags().StringVar(&outputSchemaVersion, "output-schema-version", "", "output schema version")
-	_ = lookupCmd.MarkFlagRequired("index-file")
-	_ = lookupCmd.MarkFlagRequired("cluster-sha")
-	_ = lookupCmd.MarkFlagRequired("fingerprint-version")
-	_ = lookupCmd.MarkFlagRequired("model-id")
-	_ = lookupCmd.MarkFlagRequired("instruction-bundle-hash")
-	_ = lookupCmd.MarkFlagRequired("prompt-template-hash")
-	_ = lookupCmd.MarkFlagRequired("scoring-rubric-hash")
-	_ = lookupCmd.MarkFlagRequired("output-schema-version")
+	mustMarkFlagRequired(lookupCmd, "index-file")
+	mustMarkFlagRequired(lookupCmd, "cluster-sha")
+	mustMarkFlagRequired(lookupCmd, "fingerprint-version")
+	mustMarkFlagRequired(lookupCmd, "model-id")
+	mustMarkFlagRequired(lookupCmd, "instruction-bundle-hash")
+	mustMarkFlagRequired(lookupCmd, "prompt-template-hash")
+	mustMarkFlagRequired(lookupCmd, "scoring-rubric-hash")
+	mustMarkFlagRequired(lookupCmd, "output-schema-version")
 	cmd.AddCommand(lookupCmd)
 
 	var (
@@ -655,16 +662,16 @@ func newCacheCmd() *cobra.Command {
 	storeCmd.Flags().StringVar(&storeAnalysisFile, "analysis-file", "", "analysis payload file")
 	storeCmd.Flags().StringVar(&storeReportsDir, "reports-dir", "", "optional reports directory")
 	storeCmd.Flags().StringArrayVar(&storeArtifactFiles, "artifact-file", nil, "extra markdown artifact names")
-	_ = storeCmd.MarkFlagRequired("cache-dir")
-	_ = storeCmd.MarkFlagRequired("skill-name")
-	_ = storeCmd.MarkFlagRequired("cluster-sha")
-	_ = storeCmd.MarkFlagRequired("fingerprint-version")
-	_ = storeCmd.MarkFlagRequired("model-id")
-	_ = storeCmd.MarkFlagRequired("instruction-bundle-hash")
-	_ = storeCmd.MarkFlagRequired("prompt-template-hash")
-	_ = storeCmd.MarkFlagRequired("scoring-rubric-hash")
-	_ = storeCmd.MarkFlagRequired("output-schema-version")
-	_ = storeCmd.MarkFlagRequired("analysis-file")
+	mustMarkFlagRequired(storeCmd, "cache-dir")
+	mustMarkFlagRequired(storeCmd, "skill-name")
+	mustMarkFlagRequired(storeCmd, "cluster-sha")
+	mustMarkFlagRequired(storeCmd, "fingerprint-version")
+	mustMarkFlagRequired(storeCmd, "model-id")
+	mustMarkFlagRequired(storeCmd, "instruction-bundle-hash")
+	mustMarkFlagRequired(storeCmd, "prompt-template-hash")
+	mustMarkFlagRequired(storeCmd, "scoring-rubric-hash")
+	mustMarkFlagRequired(storeCmd, "output-schema-version")
+	mustMarkFlagRequired(storeCmd, "analysis-file")
 	cmd.AddCommand(storeCmd)
 
 	var restoreCacheDir, restoreEntry, restoreOut string
@@ -686,9 +693,9 @@ func newCacheCmd() *cobra.Command {
 	restoreCmd.Flags().StringVar(&restoreCacheDir, "cache-dir", "", "cache directory")
 	restoreCmd.Flags().StringVar(&restoreEntry, "entry-file", "", "relative cache entry path")
 	restoreCmd.Flags().StringVar(&restoreOut, "output-dir", "", "directory for restored markdown")
-	_ = restoreCmd.MarkFlagRequired("cache-dir")
-	_ = restoreCmd.MarkFlagRequired("entry-file")
-	_ = restoreCmd.MarkFlagRequired("output-dir")
+	mustMarkFlagRequired(restoreCmd, "cache-dir")
+	mustMarkFlagRequired(restoreCmd, "entry-file")
+	mustMarkFlagRequired(restoreCmd, "output-dir")
 	cmd.AddCommand(restoreCmd)
 
 	cmd.AddCommand(&cobra.Command{
@@ -755,10 +762,10 @@ func newCacheCmd() *cobra.Command {
 	digestLookup.Flags().StringVar(&digestOwnedHash, "owned-paths-hash", "", "ledger owned paths hash")
 	digestLookup.Flags().StringVar(&digestConsHash, "constraints-hash", "", "ledger constraints hash")
 	digestLookup.Flags().StringVar(&digestClusterHash, "cluster-hash", "", "ledger cluster proposal hash")
-	_ = digestLookup.MarkFlagRequired("cache-dir")
-	_ = digestLookup.MarkFlagRequired("kind")
-	_ = digestLookup.MarkFlagRequired("context-sha")
-	_ = digestLookup.MarkFlagRequired("model-id")
+	mustMarkFlagRequired(digestLookup, "cache-dir")
+	mustMarkFlagRequired(digestLookup, "kind")
+	mustMarkFlagRequired(digestLookup, "context-sha")
+	mustMarkFlagRequired(digestLookup, "model-id")
 	cmd.AddCommand(digestLookup)
 
 	digestStoreCmd := &cobra.Command{
@@ -809,11 +816,11 @@ func newCacheCmd() *cobra.Command {
 	digestStoreCmd.Flags().StringVar(&digestConsHash, "constraints-hash", "", "ledger constraints hash")
 	digestStoreCmd.Flags().StringVar(&digestClusterHash, "cluster-hash", "", "ledger cluster proposal hash")
 	digestStoreCmd.Flags().StringVar(&digestPayloadFile, "payload-file", "", "JSON payload path")
-	_ = digestStoreCmd.MarkFlagRequired("cache-dir")
-	_ = digestStoreCmd.MarkFlagRequired("kind")
-	_ = digestStoreCmd.MarkFlagRequired("context-sha")
-	_ = digestStoreCmd.MarkFlagRequired("model-id")
-	_ = digestStoreCmd.MarkFlagRequired("payload-file")
+	mustMarkFlagRequired(digestStoreCmd, "cache-dir")
+	mustMarkFlagRequired(digestStoreCmd, "kind")
+	mustMarkFlagRequired(digestStoreCmd, "context-sha")
+	mustMarkFlagRequired(digestStoreCmd, "model-id")
+	mustMarkFlagRequired(digestStoreCmd, "payload-file")
 	cmd.AddCommand(digestStoreCmd)
 
 	var digestRemote, digestBranch, digestWorktree string
@@ -829,9 +836,9 @@ func newCacheCmd() *cobra.Command {
 	digestPush.Flags().StringVar(&digestRemote, "remote", "", "https remote URL")
 	digestPush.Flags().StringVar(&digestBranch, "branch", "", "digest cache branch")
 	digestPush.Flags().StringVar(&digestWorktree, "worktree", "", "digest cache worktree")
-	_ = digestPush.MarkFlagRequired("remote")
-	_ = digestPush.MarkFlagRequired("branch")
-	_ = digestPush.MarkFlagRequired("worktree")
+	mustMarkFlagRequired(digestPush, "remote")
+	mustMarkFlagRequired(digestPush, "branch")
+	mustMarkFlagRequired(digestPush, "worktree")
 	cmd.AddCommand(digestPush)
 
 	return cmd
@@ -851,7 +858,7 @@ func newContextCmd() *cobra.Command {
 		},
 	}
 	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
-	_ = validate.MarkFlagRequired("dir")
+	mustMarkFlagRequired(validate, "dir")
 	var digestConfigDir, digestRepoID, digestWorkDir, digestOut string
 	var digestTypologyBinary, digestModuleScope, digestBootstrapPolicy string
 	var skipStory, skipCompact, forceCompact bool
@@ -910,8 +917,8 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().BoolVar(&skipStory, "skip-story", false, "cursor/meta only; skip story and agenting updates")
 	digest.Flags().BoolVar(&skipCompact, "skip-compact", false, "skip chronology compaction")
 	digest.Flags().BoolVar(&forceCompact, "force-compact", false, "run compaction even under entry threshold")
-	_ = digest.MarkFlagRequired("repo-id")
-	_ = digest.MarkFlagRequired("workdir")
+	mustMarkFlagRequired(digest, "repo-id")
+	mustMarkFlagRequired(digest, "workdir")
 	var gateConfigDir, gateRepoID, gateWorkDir, gateDir string
 	gate := &cobra.Command{
 		Use:   "gate",

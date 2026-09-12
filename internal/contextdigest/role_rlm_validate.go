@@ -225,7 +225,14 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 			}
 			updated := applyRLMAgreement(n, llmRole, evidence, iters)
 			if store != nil && updated.Agreement == agreementMatch {
-				_ = store.StoreInspect(fp, cachedFromPackageRole(updated))
+				if err := store.StoreInspect(fp, cachedFromPackageRole(updated)); err != nil {
+					results[i] = result{
+						idx:  i,
+						node: updated,
+						err:  fmt.Errorf("store inspect cache for %s: %w", n.Path, err),
+					}
+					return
+				}
 			}
 			results[i] = result{idx: i, node: updated, loggedRole: llmRole}
 		}(i, n)

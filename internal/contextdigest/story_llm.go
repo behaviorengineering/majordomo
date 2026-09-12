@@ -51,7 +51,10 @@ func (r *digestSectionRunner) Run(ctx context.Context, req orchestration.Section
 	if err != nil {
 		return nil, err
 	}
-	text, _ := out["updated_text"].(string)
+	text, ok := out["updated_text"].(string)
+	if !ok {
+		return nil, fmt.Errorf("digest story generator: output missing string field updated_text")
+	}
 	if strings.TrimSpace(text) == "" {
 		text = req.SourceText
 	}

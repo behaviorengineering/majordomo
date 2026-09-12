@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -185,14 +186,17 @@ func ClusterDocs(changedFiles []string, repoRoot string) [][]string {
 }
 
 // DocClusterAwareBatches packs manifest tasks into batches that keep doc link clusters together.
-func DocClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot string) [][]map[string]any {
+func DocClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot string) ([][]map[string]any, error) {
 	if len(skillTasks) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	fileToTasks := make(map[string][]map[string]any)
 	for _, task := range skillTasks {
-		fileKey, _ := task["file"].(string)
+		fileKey, ok := task["file"].(string)
+		if !ok || strings.TrimSpace(fileKey) == "" {
+			return nil, fmt.Errorf("document cluster task requires a non-empty string file")
+		}
 		fileToTasks[fileKey] = append(fileToTasks[fileKey], task)
 	}
 
@@ -240,7 +244,7 @@ func DocClusterAwareBatches(skillTasks []map[string]any, batchSize int, repoRoot
 		batches = append(batches, current)
 	}
 
-	return batches
+	return batches, nil
 }
 
 // ReverseLinks returns unchanged repo markdown files that link to any changed files.

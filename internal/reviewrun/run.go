@@ -88,7 +88,6 @@ func Run(opts Options) (err error) {
 	}()
 
 	ctx, span := observability.StartChainSpan(context.Background(), otelCfg.ServiceName, "majordomo.run.review")
-	_ = ctx
 	defer observability.EndSpanWithStatus(span, &err)
 
 	until, err := ParseUntil(opts.Until)
@@ -190,7 +189,7 @@ func Run(opts Options) (err error) {
 	}
 
 	contextDir := maybeContextDir(opts, token, scm, cloneURL, opts.RepoID)
-	if err := runOrchestrate(opts, contextDir); err != nil {
+	if err := runOrchestrate(opts, contextDir, ctx); err != nil {
 		return err
 	}
 	if !shouldRun(opts.Until, StagePublish) {
@@ -248,13 +247,14 @@ func runSA(opts Options) error {
 	})
 }
 
-func runOrchestrate(opts Options, contextDir string) error {
+func runOrchestrate(opts Options, contextDir string, ctx context.Context) error {
 	oUntil := orchestrateUntil(opts.Until)
 	fn := opts.Orchestrate
 	if fn == nil {
 		fn = orchestrate.Run
 	}
 	return fn(orchestrate.Options{
+		Context:     ctx,
 		PRNumber:    opts.PRNumber,
 		BaseBranch:  opts.BaseBranch,
 		StagingDir:  opts.StagingDir,

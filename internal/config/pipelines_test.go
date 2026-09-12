@@ -120,7 +120,10 @@ pipelines:
 	if err != nil {
 		t.Fatal(err)
 	}
-	rulesAny, _ := ctx.Global["customRules"].([]any)
+	rulesAny, ok := ctx.Global["customRules"].([]any)
+	if !ok {
+		t.Fatalf("customRules has unexpected type: %T", ctx.Global["customRules"])
+	}
 	if len(rulesAny) != 1 {
 		t.Fatalf("agent context %#v", ctx.Global)
 	}
