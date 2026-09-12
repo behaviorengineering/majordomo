@@ -26,3 +26,7 @@ logs/
 *.test
 *.out
 bin/
+# Strop ai-copilots (run scripts/wire-strop-ai-copilots.sh after strop bumps)
+.cursor/skills/strop-pipeline-pattern
+.cursor/skills/strop-orchestration
+.cursor/skills/strop-human-review

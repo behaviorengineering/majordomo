@@ -121,7 +121,7 @@ edges:
 	}
 }
 
-func TestJudgeTypologyRefineRetriesOnLedgerOverclaim(t *testing.T) {
+func TestJudgeTypologyRefineFailsClosedOnResidualLedgerIssues(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	evidence := filepath.Join(dir, "evidence")
@@ -145,7 +145,7 @@ slices:
     confidence: 0.9
     inspected_stage: 2
 `
-	flipping := &flippingLedgerBuilder{}
+	once := &flippingLedgerBuilder{}
 	stub := &stubJudgeGen{
 		clusterMD: "# Cluster\n\nKeep board.\n\n## Capability constraints (is / is-not)\n\n- `internal/board`\n",
 		refined: `id: demo
@@ -158,7 +158,7 @@ slices:
 `,
 		journey: "# Journey\n\n## Status\n\nOk.\n\n## Technical debt and boundary violations\n\nNone.\n",
 	}
-	out, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
+	_, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
 		RepoID: "demo", ModuleScope: ".",
 		DraftCatalogYAML: draft,
 		PackageRoles:     roles,
@@ -172,16 +172,17 @@ slices:
 		ArchitectureDraft: "# Draft\n",
 		AnalysisDir:       dir,
 		EvidenceDir:       evidence,
-		LedgerBuilder:     flipping,
+		LedgerBuilder:     once,
 	})
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("expected residual ledger issues to fail Refine")
 	}
-	if flipping.calls < 2 {
-		t.Fatalf("expected retry after overclaim, calls=%d", flipping.calls)
+	if !strings.Contains(err.Error(), "objective overclaims") {
+		t.Fatalf("err=%v", err)
 	}
-	if !strings.Contains(out.ObjectiveLedgerYAML, "Shared board payload shapes") {
-		t.Fatalf("ledger=%q", out.ObjectiveLedgerYAML)
+	// Ledger memory retries live inside BuildSliceLedger; Refine calls the builder once.
+	if once.calls != 1 {
+		t.Fatalf("BuildSliceLedger calls=%d want 1", once.calls)
 	}
 }
 
