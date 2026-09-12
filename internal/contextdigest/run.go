@@ -133,10 +133,30 @@ func Run(opts Options) (res Result, err error) {
 	if err := materializeDigestCacheWorktree(digestDir, servedGit, digestBranch, token, scm); err != nil {
 		logf("WARN", "digest inference cache unavailable: %v", err)
 	} else {
-		opts.DigestCache = &cache.DigestStore{Dir: digestDir}
+		store := &cache.DigestStore{Dir: digestDir}
+		if remote, rerr := servedGit.trim("remote", "get-url", "origin"); rerr != nil {
+			logf("WARN", "digest inference cache push disabled: remote URL: %v", rerr)
+		} else {
+			store.ConfigurePush(cache.DigestPushOptions{
+				Remote:   remote,
+				Branch:   digestBranch,
+				Worktree: digestDir,
+				Token:    token,
+				SCM:      scm,
+			})
+			store.OnFlushError = func(err error) {
+				logf("WARN", "digest inference cache push: %v", err)
+			}
+		}
+		opts.DigestCache = store
 		opts.DigestSkips = cfg.Cache.SkipsEnabled()
 		opts.DigestModelID = digestModelID(cfg)
 		logf("INFO", "digest inference cache ready branch=%s skips=%v model=%s", digestBranch, opts.DigestSkips, opts.DigestModelID)
+		defer func() {
+			if ferr := store.Flush(); ferr != nil {
+				logf("WARN", "digest inference cache final flush: %v", ferr)
+			}
+		}()
 	}
 
 	defaultBranch, err := ResolveDefaultBranch(servedGit)

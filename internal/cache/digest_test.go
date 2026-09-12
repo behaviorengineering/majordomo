@@ -1,8 +1,10 @@
 package cache
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -96,5 +98,75 @@ func TestHashDigestPartsStable(t *testing.T) {
 	}
 	if HashDigestParts("a", "b") == HashDigestParts("b", "a") {
 		t.Fatal("order should matter")
+	}
+}
+
+func TestDigestStoreFlushAfterStore(t *testing.T) {
+	dir := t.TempDir()
+	store := &DigestStore{Dir: dir}
+	var flushes int
+	store.PushFn = func() error {
+		flushes++
+		return nil
+	}
+	fp := InspectFingerprint{
+		PackagePath:   "internal/board",
+		ContextSHA:    ContentSHA("ctx"),
+		ModelID:       "gemma",
+		PromptVersion: DigestInspectPromptV1,
+		SchemaVersion: DigestInspectSchemaV1,
+	}
+	if err := store.StoreInspect(fp, InspectCachedRole{
+		Path: "internal/board", Role: "dto", Agreement: "match", LLMRole: "dto",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if flushes != 1 {
+		t.Fatalf("inspect flushes=%d want 1", flushes)
+	}
+	ledgerFP := LedgerFingerprint{
+		SliceID:         "board",
+		OwnedPathsHash:  OwnedPathsHash([]string{"internal/board"}),
+		ContextSHA:      ContentSHA("ctx"),
+		ConstraintsHash: ContentSHA("cons"),
+		ClusterHash:     ContentSHA("cluster"),
+		ModelID:         "gemma",
+	}
+	if err := store.StoreLedger(ledgerFP, LedgerCachedEntry{
+		ID: "board", Verdict: "grounded", Objective: "shapes",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if flushes != 2 {
+		t.Fatalf("after ledger flushes=%d want 2", flushes)
+	}
+}
+
+func TestDigestStoreFlushErrorDoesNotDropLocalWrite(t *testing.T) {
+	dir := t.TempDir()
+	store := &DigestStore{Dir: dir}
+	var seen error
+	store.OnFlushError = func(err error) { seen = err }
+	store.PushFn = func() error {
+		return fmt.Errorf("push boom")
+	}
+	fp := InspectFingerprint{
+		PackagePath:   "internal/board",
+		ContextSHA:    ContentSHA("ctx"),
+		ModelID:       "gemma",
+		PromptVersion: DigestInspectPromptV1,
+		SchemaVersion: DigestInspectSchemaV1,
+	}
+	if err := store.StoreInspect(fp, InspectCachedRole{
+		Path: "internal/board", Role: "dto", Agreement: "match",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if seen == nil || !strings.Contains(seen.Error(), "push boom") {
+		t.Fatalf("OnFlushError=%v", seen)
+	}
+	got, ok, err := store.LookupInspect(fp)
+	if err != nil || !ok || got.Role != "dto" {
+		t.Fatalf("local write lost: ok=%v got=%+v err=%v", ok, got, err)
 	}
 }

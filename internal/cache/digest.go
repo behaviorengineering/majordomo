@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/githttps"
@@ -37,8 +38,56 @@ func ValidateDigestCacheBranch(branch string) error {
 }
 
 // DigestStore is a local worktree (or plain directory) of digest inference JSON.
+//
+// When push is configured, every successful Store* MUST Flush (commit+push) before
+// returning. That matches PR review cache practice: durable on the go, not only after
+// the whole job succeeds. Flush is serialized; failures are reported via OnFlushError
+// and MUST NOT undo the local write.
 type DigestStore struct {
 	Dir string
+
+	pushMu       sync.Mutex
+	pushOpts     *DigestPushOptions
+	PushFn       func() error // optional test seam; overrides PushDigest when set
+	OnFlushError func(error)
+}
+
+// ConfigurePush enables push-on-the-go after each successful Store*.
+func (s *DigestStore) ConfigurePush(opts DigestPushOptions) {
+	if s == nil {
+		return
+	}
+	cp := opts
+	s.pushOpts = &cp
+}
+
+// Flush commits and pushes dirty digest-cache files when push is configured.
+func (s *DigestStore) Flush() error {
+	if s == nil {
+		return nil
+	}
+	s.pushMu.Lock()
+	defer s.pushMu.Unlock()
+	var err error
+	switch {
+	case s.PushFn != nil:
+		err = s.PushFn()
+	case s.pushOpts != nil:
+		err = PushDigest(*s.pushOpts)
+	default:
+		return nil
+	}
+	if err != nil && s.OnFlushError != nil {
+		s.OnFlushError(err)
+	}
+	return err
+}
+
+func (s *DigestStore) flushAfterStore() {
+	if s == nil || (s.PushFn == nil && s.pushOpts == nil) {
+		return
+	}
+	_ = s.Flush()
 }
 
 // InspectFingerprint keys one package role RLM result.
@@ -178,12 +227,16 @@ func (s *DigestStore) StoreInspect(fp InspectFingerprint, role InspectCachedRole
 	if err != nil {
 		return err
 	}
-	return writeDigestRecord(s.inspectPath(key), digestRecord{
+	if err := writeDigestRecord(s.inspectPath(key), digestRecord{
 		Kind:        "inspect",
 		Fingerprint: key,
 		CreatedAt:   time.Now().UTC().Format(timestampFmt),
 		Payload:     payload,
-	})
+	}); err != nil {
+		return err
+	}
+	s.flushAfterStore()
+	return nil
 }
 
 // LookupLedger returns a cached grounded ledger entry when the fingerprint matches.
@@ -216,12 +269,16 @@ func (s *DigestStore) StoreLedger(fp LedgerFingerprint, entry LedgerCachedEntry)
 	if err != nil {
 		return err
 	}
-	return writeDigestRecord(s.ledgerPath(key), digestRecord{
+	if err := writeDigestRecord(s.ledgerPath(key), digestRecord{
 		Kind:        "ledger",
 		Fingerprint: key,
 		CreatedAt:   time.Now().UTC().Format(timestampFmt),
 		Payload:     payload,
-	})
+	}); err != nil {
+		return err
+	}
+	s.flushAfterStore()
+	return nil
 }
 
 func readDigestRecord(path, wantKey string) (digestRecord, bool, error) {

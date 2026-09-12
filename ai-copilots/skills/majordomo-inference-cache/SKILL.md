@@ -57,6 +57,16 @@ be stored as hits.
 - Enforcement: branch helpers live in `internal/config` + `internal/cache`
 - Violation: STOP, reuse or extend existing prefixes
 
+**CONSTRAINT:** After each successful Store of a keyed digest or review-cache
+artifact, the step MUST commit and push the cache branch **on the go** (same
+cadence as PR review `majordomo cache store` then `cache push`). MUST NOT wait
+for the whole digest or review job to succeed. A later refine, eval, or gate
+failure MUST NOT discard already-earned inspect/ledger (or cluster) hits.
+
+- Enforcement: `DigestStore` Flush after Store*; digest run configures push when
+  materializing `majordomo-digest-cache/<repo-id>`; final Flush on exit
+- Violation: STOP, wire push-on-store (or phase flush), re-verify
+
 **CONSTRAINT:** Digest teaching reseeds MUST NOT delete `majordomo-digest-cache/*`.
 Context wipe (`majordomo-context/*`) is allowed; inference reuse must survive it.
 
@@ -73,6 +83,7 @@ if skips && store != nil {
 }
 out, err := rlm.Validate(...)
 if err == nil && out.Agreement == "match" {
+  // StoreInspect Flushes the cache branch when push is configured.
   _ = store.StoreInspect(fp, out)
 }
 ```
@@ -81,6 +92,12 @@ PROHIBITED:
 ```go
 // Always call the provider; no fingerprint; no store
 return rlm.Validate(...)
+
+// Persist only in memory until the whole digest finishes successfully
+if digestSucceeded {
+  _ = store.StoreInspect(fp, out)
+  _ = pushDigestCache(...)
+}
 ```
 
 ---
@@ -99,6 +116,10 @@ return rlm.Validate(...)
       Method: code path + unit test overclaim/error
       Pass: failures not written
       Fail: STOP, gate Store
+- [ ] Push on the go after each successful Store (not only job success)
+      Method: Flush after Store*; failed digest still leaves remote hits
+      Pass: push configured on digest materialize; test Flush called from Store
+      Fail: STOP, wire ConfigurePush / Flush
 - [ ] Branch / dir uses `internal/cache` helpers
       Method: `DigestCacheBranch` or review `CacheBranch`
       Pass: no ad-hoc branch string
