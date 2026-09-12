@@ -21,11 +21,11 @@
 
 **Pass:** A, mechanical complete
 **Counts:** critical 0, medium 1, low 0, open 0
-**Draft PR/MR:** not created
+**Draft PR/MR:** blocked because `GH_TOKEN_BEHAVIOURENGINEERING` is unset; compare URL: https://github.com/behaviorengineering/majordomo/compare/main...cursor/staged-code-review-process-8d1a
 
 ### Now
 
-Pass A fixes are verified and ready to commit.
+Pass A fixes are committed and pushed in `f234ca`. Draft PR creation is blocked by the missing configured GitHub token. The next action is the first unanswered Pass B consultant question.
 
 ### Resolutions
 
@@ -279,6 +279,8 @@ Return the encoding error from the artifact collection helper.
 - `go vet ./...` passed.
 - `gofmt -l ./cmd ./internal` returned no files.
 - `golangci-lint` remains unavailable in the environment.
+- Pass A commit: `f234ca8`.
+- Branch pushed: `cursor/staged-code-review-process-8d1a`.
 
 ## Pass A Fix Set
 
