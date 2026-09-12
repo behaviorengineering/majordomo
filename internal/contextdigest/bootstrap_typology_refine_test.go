@@ -941,6 +941,51 @@ slices:
 	if !strings.Contains(feedback, "majordomo_typology_journey_consistent") {
 		t.Fatalf("feedback=%q", feedback)
 	}
+	if !strings.Contains(feedback, "set Status to Open") {
+		t.Fatalf("feedback missing fix hint: %q", feedback)
+	}
+}
+
+func TestReconcileJourneyStatusWithDebtClearsContradiction(t *testing.T) {
+	t.Parallel()
+	refined := `id: demo
+slices:
+  - id: demo
+    objective: Keep demo packages coherent for refine tests.
+    owns:
+      - id: demo-core
+        path: internal/demo
+`
+	journey := "Status: Completed refinement of the Typology catalog.\n\n| Slice | Debt | Action |\n| --- | --- | --- |\n| git | companions | Merge into git |\n"
+	fixed := reconcileJourneyStatusWithDebt(journey)
+	if journeyStatusClaimsComplete(fixed) {
+		t.Fatalf("status still claims complete:\n%s", fixed)
+	}
+	if !journeyDebtStillSaysMerge(fixed) {
+		t.Fatal("expected Merge into debt to remain")
+	}
+	ok, feedback := evaluateTypologyBoundaries(refined, fixed, "", "")
+	if !ok {
+		t.Fatalf("expected pass after reconcile, feedback=%q", feedback)
+	}
+
+	section := "## Status\n\nRefinement complete.\n\n## Decisions\n\nKept companions separate.\n\n## Technical debt\n\n| Slice | Action |\n| --- | --- |\n| git | Merge into git |\n"
+	fixedSection := reconcileJourneyStatusWithDebt(section)
+	if journeyStatusClaimsComplete(fixedSection) {
+		t.Fatalf("section status still complete:\n%s", fixedSection)
+	}
+	ok, feedback = evaluateTypologyBoundaries(refined, fixedSection, "", "")
+	if !ok {
+		t.Fatalf("expected section pass after reconcile, feedback=%q", feedback)
+	}
+}
+
+func TestJourneyStatusClaimsCompleteIgnoresDebtWording(t *testing.T) {
+	t.Parallel()
+	open := "Status: Open\n\nDebt: finish the incomplete merge story later.\n"
+	if journeyStatusClaimsComplete(open) {
+		t.Fatalf("open status should not count as complete: %q", open)
+	}
 }
 
 func TestValidateRefinedCatalogYAMLNormalizesTempCatalogID(t *testing.T) {
