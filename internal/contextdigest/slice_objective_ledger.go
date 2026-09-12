@@ -14,9 +14,12 @@ import (
 )
 
 const (
-	sliceObjectiveLedgerRel = "slice_objective_ledger.yaml"
-	ledgerVerdictGrounded   = "grounded"
-	ledgerVerdictOverclaim  = "overclaim"
+	sliceObjectiveLedgerRel   = "slice_objective_ledger.yaml"
+	ledgerVerdictGrounded     = "grounded"
+	ledgerVerdictOverclaim    = "overclaim"
+	ledgerSourceRLM           = "slice_objective_rlm"
+	ledgerSourceUnclaimed     = "slice_objective_rlm_unclaimed"
+	ledgerUnclaimedObjective  = "Package role is unclassified; no portable capability claim is justified yet."
 )
 
 var (
@@ -94,19 +97,22 @@ func validateObjectiveLedgerDoc(doc sliceObjectiveLedgerDoc) error {
 		if verdict != ledgerVerdictGrounded {
 			return fmt.Errorf("slice_objective_ledger_yaml slice %q verdict %q is not grounded", id, s.Verdict)
 		}
-		if len(s.Claims) == 0 {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty claims", id)
-		}
 		if len(normalizeEvidenceList(s.Evidence)) == 0 {
 			return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty evidence", id)
 		}
-		for _, c := range s.Claims {
-			c = strings.TrimSpace(c)
-			if c == "" {
-				continue
+		if len(s.Claims) == 0 {
+			if strings.TrimSpace(s.Source) != ledgerSourceUnclaimed {
+				return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty claims", id)
 			}
-			if _, ok := known[c]; !ok {
-				return fmt.Errorf("slice_objective_ledger_yaml slice %q unknown claim code %q", id, c)
+		} else {
+			for _, c := range s.Claims {
+				c = strings.TrimSpace(c)
+				if c == "" {
+					continue
+				}
+				if _, ok := known[c]; !ok {
+					return fmt.Errorf("slice_objective_ledger_yaml slice %q unknown claim code %q", id, c)
+				}
 			}
 		}
 	}
@@ -318,9 +324,6 @@ func parseSliceObjectiveLedgerAnswer(text string) (evidence []string, claims []s
 		if objective == "" {
 			return nil, nil, "", "", fmt.Errorf("slice objective ledger grounded answer missing objective")
 		}
-		if len(claims) == 0 {
-			return nil, nil, "", "", fmt.Errorf("slice objective ledger grounded answer missing claims")
-		}
 		if len(evidence) == 0 {
 			return nil, nil, "", "", fmt.Errorf("slice objective ledger grounded answer missing evidence")
 		}
@@ -330,6 +333,8 @@ func parseSliceObjectiveLedgerAnswer(text string) (evidence []string, claims []s
 				return nil, nil, "", "", fmt.Errorf("slice objective ledger unknown claim code %q", c)
 			}
 		}
+		// Empty claims are allowed only when the caller accepts an unclaimed slice
+		// (every portable code is in must_not). That check lives in buildSliceObjectiveLedger.
 	}
 	return evidence, claims, objective, verdict, nil
 }
@@ -344,9 +349,28 @@ func splitLedgerList(raw string) []string {
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
 		p = strings.Trim(p, "`\"'")
-		if p != "" {
-			out = append(out, p)
+		if p == "" || strings.EqualFold(p, "none") || p == "-" {
+			continue
 		}
+		out = append(out, p)
 	}
 	return out
+}
+
+// sliceAllCapabilityCodesMustNot reports whether every portable claim code is forbidden
+// for the owned packages (typical for role=unknown with empty is[]).
+func sliceAllCapabilityCodesMustNot(paths []string, byPath map[string]packageCapabilityConstraint) bool {
+	if len(paths) == 0 {
+		return false
+	}
+	blocked := map[string]struct{}{}
+	for _, code := range sliceMustNotUnion(paths, byPath) {
+		blocked[code] = struct{}{}
+	}
+	for code := range knownCapabilityCodes() {
+		if _, ok := blocked[code]; !ok {
+			return false
+		}
+	}
+	return true
 }
