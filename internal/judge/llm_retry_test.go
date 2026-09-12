@@ -45,6 +45,10 @@ func (f *flakyLLM) GenerateWithJSON(context.Context, string, ...core.GenerateOpt
 	return nil, errors.New("JSON generation unsupported in flaky test LLM")
 }
 
+func (f *flakyLLM) StreamGenerate(context.Context, string, ...core.GenerateOption) (*core.StreamResponse, error) {
+	return nil, errors.New("stream generation unsupported in flaky test LLM")
+}
+
 func TestWrapLLMWithRetrySucceedsAfterTransientFailures(t *testing.T) {
 	t.Parallel()
 	inner := &flakyLLM{}
