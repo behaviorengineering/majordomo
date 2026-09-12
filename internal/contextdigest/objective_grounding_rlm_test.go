@@ -16,7 +16,7 @@ type countingLedgerCaller struct {
 	calls []string // queries in order
 }
 
-func (c *countingLedgerCaller) Complete(_ context.Context, _ any, query string) (string, int, error) {
+func (c *countingLedgerCaller) Complete(_ context.Context, _ any, query string) (string, int, int, int, int, error) {
 	c.mu.Lock()
 	c.calls = append(c.calls, query)
 	n := len(c.calls)
@@ -30,22 +30,31 @@ func (c *countingLedgerCaller) Complete(_ context.Context, _ any, query string) 
 
 	switch sliceID {
 	case "board":
-		return "evidence: Row, json_tags\nclaims: data_shape\nobjective: Shared board payload shapes.\nverdict: grounded\n", 1, nil
+		return "evidence: Row, json_tags\nclaims: data_shape\nobjective: Shared board payload shapes.\nverdict: grounded\n", 1, 200, 40, 240, nil
 	case "triage":
 		if !hasFeedback {
 			// First attempt: overclaim orchestrate (not entailed for unknown role).
-			return "evidence: Analyzer.Analyze\nclaims: orchestrate\nobjective: Triage orchestrates analysis.\nverdict: grounded\n", 1, nil
+			return "evidence: Analyzer.Analyze\nclaims: orchestrate\nobjective: Triage orchestrates analysis.\nverdict: grounded\n", 1, 0, 0, 0, nil
 		}
 		// Retry with feedback: drop orchestrate.
-		return "evidence: Analyzer.Analyze, Response\nclaims: adapt_external\nobjective: Triage analyzes CI log text into a structured response.\nverdict: grounded\n", n, nil
+		return "evidence: Analyzer.Analyze, Response\nclaims: adapt_external\nobjective: Triage analyzes CI log text into a structured response.\nverdict: grounded\n", n, 0, 0, 0, nil
 	default:
-		return "evidence: x\nclaims: config\nobjective: x\nverdict: grounded\n", 1, nil
+		return "evidence: x\nclaims: config\nobjective: x\nverdict: grounded\n", 1, 0, 0, 0, nil
 	}
 }
 
 func TestBuildSliceObjectiveLedger_keepsSuccessRetriesFailureWithFeedback(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	for _, p := range []string{"internal/board", "internal/triage"} {
+		pkg := filepath.Join(dir, filepath.FromSlash(p))
+		if err := os.MkdirAll(pkg, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(pkg, "x.go"), []byte("package x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	evidence := filepath.Join(dir, "evidence")
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatal(err)
