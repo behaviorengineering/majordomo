@@ -10,7 +10,14 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/aigateway"
 )
 
-const defaultModuleTimeout = 2 * time.Minute
+// defaultModuleTimeout is the outer Process budget for reliability interceptors.
+// It must cover defaultModuleRetryAttempts at the longest provider hop
+// (polypus_gemma_rlm is 15m in central config).
+const defaultModuleTimeout = 45 * time.Minute
+
+// defaultModuleRetryAttempts is the MaxAttempts for dspy-go RetryModuleInterceptor
+// wired through strop InterceptorSetup (provider and validation failures).
+const defaultModuleRetryAttempts = 3
 
 // ResolveProvider returns an OpenAI-schema ProviderConfig aimed at the embedded
 // Bifrost loopback. Real Anthropic/OpenAI/Gemini keys are owned by aigateway.
