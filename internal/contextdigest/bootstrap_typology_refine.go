@@ -236,7 +236,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine: %w", err)
 		}
 		refined = stripCodeFence(stringField(out, "refined_catalog_yaml"))
-		journey = strings.TrimSpace(stringField(out, "journey_md"))
+		journey = reconcileJourneyStatusWithDebt(strings.TrimSpace(stringField(out, "journey_md")))
 		if refined == "" {
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine: refined_catalog_yaml is required")
 		}
@@ -379,7 +379,10 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, roles
 		issues = append(issues, fmt.Sprintf("%s: architecture findings remain but journey has no technical debt / boundary violations table", typologypack.CriterionIDDebtWhenFindings))
 	}
 	if journeyStatusClaimsComplete(journeyMD) && journeyDebtStillSaysMerge(journeyMD) {
-		issues = append(issues, fmt.Sprintf("%s: journey Status claims complete but debt still lists Merge into actions", typologypack.CriterionIDJourneyConsistent))
+		issues = append(issues, fmt.Sprintf(
+			"%s: journey Status claims complete but debt still lists Merge into actions; set Status to Open while Merge into rows remain, or remove those Merge into rows if the catalog already reflects the merges",
+			typologypack.CriterionIDJourneyConsistent,
+		))
 	}
 
 	issues = appendEvidenceGroundingIssues(typo, issues)
@@ -425,19 +428,20 @@ func looksLikeInteractionPath(path string, roles map[string]packageRoleNode) boo
 }
 
 func journeyStatusClaimsComplete(journey string) bool {
-	lower := strings.ToLower(journey)
-	if !strings.Contains(lower, "completed") && !strings.Contains(lower, "complete") {
-		return false
-	}
-	if strings.Contains(lower, "status:") {
-		return true
-	}
-	// Markdown ## Status section claiming refinement/merge complete.
-	lines := strings.Split(lower, "\n")
+	lines := strings.Split(journey, "\n")
 	inStatus := false
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "#") && strings.Contains(trim, "status") {
+		low := strings.ToLower(trim)
+		if strings.HasPrefix(low, "status:") {
+			idx := strings.Index(trim, ":")
+			body := ""
+			if idx >= 0 {
+				body = strings.TrimSpace(trim[idx+1:])
+			}
+			return statusTextClaimsComplete(body)
+		}
+		if strings.HasPrefix(trim, "#") && strings.Contains(low, "status") {
 			inStatus = true
 			continue
 		}
@@ -447,15 +451,103 @@ func journeyStatusClaimsComplete(journey string) bool {
 		if !inStatus || trim == "" {
 			continue
 		}
-		if strings.Contains(trim, "complete") || strings.Contains(trim, "completed") {
+		if statusTextClaimsComplete(low) {
 			return true
 		}
 	}
 	return false
 }
 
+func statusTextClaimsComplete(text string) bool {
+	low := strings.ToLower(strings.TrimSpace(text))
+	if low == "" {
+		return false
+	}
+	if strings.Contains(low, "not complete") ||
+		strings.Contains(low, "incomplete") ||
+		strings.Contains(low, "do not claim complete") {
+		return false
+	}
+	return strings.Contains(low, "completed") || strings.Contains(low, "complete")
+}
+
 func journeyDebtStillSaysMerge(journey string) bool {
 	return strings.Contains(strings.ToLower(journey), "merge into")
+}
+
+const journeyStatusOpenPendingMerges = "Open — debt still lists Merge into actions; clear or apply those rows before marking refinement done."
+
+// reconcileJourneyStatusWithDebt downgrades a false "complete" Status when debt still
+// lists Merge into actions. Keeps pending merge counsel; only fixes the contradiction.
+func reconcileJourneyStatusWithDebt(journey string) string {
+	journey = strings.TrimSpace(journey)
+	if journey == "" {
+		return journey
+	}
+	if !journeyStatusClaimsComplete(journey) || !journeyDebtStillSaysMerge(journey) {
+		return journey
+	}
+	return rewriteJourneyStatusBody(journey, journeyStatusOpenPendingMerges)
+}
+
+func rewriteJourneyStatusBody(journey, newBody string) string {
+	lines := strings.Split(journey, "\n")
+	out := make([]string, 0, len(lines)+2)
+	replaced := false
+	inStatus := false
+	wroteBody := false
+	for _, line := range lines {
+		trim := strings.TrimSpace(line)
+		low := strings.ToLower(trim)
+		if strings.HasPrefix(low, "status:") {
+			out = append(out, "Status: "+newBody)
+			replaced = true
+			inStatus = false
+			wroteBody = true
+			continue
+		}
+		if strings.HasPrefix(trim, "#") && strings.Contains(low, "status") {
+			if inStatus && !wroteBody {
+				out = append(out, newBody)
+				out = append(out, "")
+			}
+			out = append(out, line)
+			inStatus = true
+			wroteBody = false
+			replaced = true
+			continue
+		}
+		if inStatus {
+			if strings.HasPrefix(trim, "#") {
+				if !wroteBody {
+					out = append(out, newBody)
+					out = append(out, "")
+					wroteBody = true
+				}
+				inStatus = false
+				out = append(out, line)
+				continue
+			}
+			if !wroteBody {
+				if trim == "" {
+					continue
+				}
+				out = append(out, newBody)
+				wroteBody = true
+				continue
+			}
+			// Drop the remainder of the old Status body until the next heading.
+			continue
+		}
+		out = append(out, line)
+	}
+	if inStatus && !wroteBody {
+		out = append(out, newBody)
+	}
+	if !replaced {
+		return "## Status\n\n" + newBody + "\n\n" + journey
+	}
+	return strings.TrimSpace(strings.Join(out, "\n")) + "\n"
 }
 
 func architectureHasFindings(arch string) bool {

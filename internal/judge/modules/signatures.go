@@ -243,6 +243,8 @@ Catalog rules:
 - Each decision MUST say what was rejected and why.
 - Each open debt row MUST carry smell, alternatives, and lean.
 - Journey MUST NOT assign synchronize_state / merge_adapters capabilities to dto-only slices.
+- When Status says complete or completed, the debt table MUST NOT contain "Merge into" actions.
+- If any debt row still says Merge into, Status MUST stay Open (not complete). Claim complete only after those Merge into rows are cleared because the catalog already reflects the merges.
 - When validation_feedback is present, fix those issues before emitting.
 
 Output refined_catalog_yaml as YAML only (no markdown fences). Output journey_md as markdown.`)
@@ -299,6 +301,7 @@ func typologyInterventionJourneyModule() *dspymodules.DirectivesCoT {
 Rules:
 - findings_list is authoritative. Every finding MUST appear in the Technical debt and boundary violations table.
 - When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
+- When debt rows still say Merge into, journey Status MUST stay open (not complete/completed).
 - Journey MUST include Status, decisions already taken, and a debt table that names every finding with smell, alternatives with a cost, and a lean.
 - MUST keep leans from refine counsel. MUST NOT flatten debt rows to hollow "Approve binding or refactor".
 - MUST NOT invent catalog YAML, sliceBindings, or libraries membership.
