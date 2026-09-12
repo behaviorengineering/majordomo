@@ -172,6 +172,50 @@ type BoardPayload struct {
 	}
 }
 
+func TestBuildSliceObjectiveLedgerAcceptsUnclaimedUnknown(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	evidence := filepath.Join(dir, "evidence")
+	if err := os.MkdirAll(evidence, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(evidence, "package_rlm_context.md"), []byte(`# Package RLM context index
+
+## ./internal/pruneagent
+
+package pruneagent
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	roles := packageRolesDoc{
+		Packages: []packageRoleNode{{Path: "internal/pruneagent", Role: roleUnknown}},
+	}
+	writeTestPackageRoles(t, evidence, roles)
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{{
+			ID: "pruneagent", Owns: []catalog.Component{{ID: "p", Path: "internal/pruneagent"}},
+		}},
+	}
+	constraints := buildCapabilityConstraints(roles)
+	doc, issues, err := buildSliceObjectiveLedger(context.Background(), stubSliceLedgerCaller{
+		answer: "evidence: Service.Investigate\nclaims: none\nobjective: Investigates local-only branches.\nverdict: grounded\n",
+	}, sliceLedgerBuildRequest{
+		AnalysisDir: dir, EvidenceDir: evidence, DraftTypo: typo, Constraints: constraints,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("issues=%v", issues)
+	}
+	if len(doc.Slices) != 1 || len(doc.Slices[0].Claims) != 0 {
+		t.Fatalf("doc=%+v", doc)
+	}
+	if doc.Slices[0].Source != ledgerSourceUnclaimed {
+		t.Fatalf("source=%q", doc.Slices[0].Source)
+	}
+}
+
 func TestBuildSliceObjectiveLedgerGrounded(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

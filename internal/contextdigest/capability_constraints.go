@@ -345,6 +345,7 @@ func claimPolicyPromptRules() string {
   - own_domain_rules: role is aggregator
   - adapt_external / aggregate_views / data_shape: only when already in owned is=[]
   - synchronize_state / merge_adapters: never (always must_not)
+- If owned is=[] and every code is in must_not, emit verdict: grounded with empty claims (or claims: none), quote package symbols as evidence, and write a cautious objective. Do not invent a claim code.
 - Prestige English ("orchestrates", "runs git via a helper", "builds a card DTO") is NOT a claim code.
 - When unsure, drop the claim or set verdict: overclaim.`
 }
@@ -457,7 +458,8 @@ func parseObjectiveClaimsYAML(raw string) (sliceObjectiveClaimsDoc, error) {
 			return sliceObjectiveClaimsDoc{}, fmt.Errorf("objective_claims_yaml slice[%d] missing id", i)
 		}
 		if len(s.Claims) == 0 {
-			return sliceObjectiveClaimsDoc{}, fmt.Errorf("objective_claims_yaml slice %q has empty claims", s.ID)
+			// Empty claims are valid for unclassified packages (fail-closed must_not covers all codes).
+			continue
 		}
 		for _, c := range s.Claims {
 			c = strings.TrimSpace(c)

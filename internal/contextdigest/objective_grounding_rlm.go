@@ -281,12 +281,39 @@ func buildSliceObjectiveLedger(
 					)}
 					return
 				}
+				unclaimedOK := sliceAllCapabilityCodesMustNot(t.paths, byPath)
 				if verdict == ledgerVerdictOverclaim {
-					results[i] = result{issue: fmt.Sprintf(
-						"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
-						typologypack.CriterionIDRoleGrounding, t.id,
-					)}
-					return
+					if !unclaimedOK {
+						results[i] = result{issue: fmt.Sprintf(
+							"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
+							typologypack.CriterionIDRoleGrounding, t.id,
+						)}
+						return
+					}
+					if strings.TrimSpace(objective) == "" {
+						objective = ledgerUnclaimedObjective
+					}
+					if len(evidence) == 0 {
+						evidence = []string{"role:unknown"}
+					}
+					claims = nil
+					verdict = ledgerVerdictGrounded
+				}
+				if verdict == ledgerVerdictGrounded && len(claims) == 0 {
+					if !unclaimedOK {
+						results[i] = result{issue: fmt.Sprintf(
+							"%s: slice %q grounded answer missing claims",
+							typologypack.CriterionIDRoleGrounding, t.id,
+						)}
+						return
+					}
+					if strings.TrimSpace(objective) == "" {
+						objective = ledgerUnclaimedObjective
+					}
+				}
+				source := ledgerSourceRLM
+				if len(claims) == 0 {
+					source = ledgerSourceUnclaimed
 				}
 				entry := sliceObjectiveLedgerEntry{
 					ID:         t.id,
@@ -295,7 +322,7 @@ func buildSliceObjectiveLedger(
 					Claims:     claims,
 					Objective:  objective,
 					Verdict:    verdict,
-					Source:     "slice_objective_rlm",
+					Source:     source,
 				}
 				if hit := intersectStrings(claims, sliceMustNotUnion(t.paths, byPath)); len(hit) > 0 {
 					results[i] = result{issue: fmt.Sprintf(
