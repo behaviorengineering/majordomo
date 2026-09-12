@@ -41,6 +41,10 @@ func (f *flakyLLM) GenerateWithFunctions(context.Context, string, []map[string]a
 	return nil, errors.New("function calls unsupported in flaky test LLM")
 }
 
+func (f *flakyLLM) GenerateWithJSON(context.Context, string, ...core.GenerateOption) (map[string]any, error) {
+	return nil, errors.New("JSON generation unsupported in flaky test LLM")
+}
+
 func TestWrapLLMWithRetrySucceedsAfterTransientFailures(t *testing.T) {
 	t.Parallel()
 	inner := &flakyLLM{}
