@@ -13,19 +13,19 @@
 | 1. Automated Tools | done | 9/10 | 1 medium open |
 | 2. Type Safety | done | 10/10 | fixed |
 | 3. Error Handling | done | 10/10 | fixed |
-| 4. Architecture | pending | — | — |
+| 4. Architecture | in progress | — | 1 open |
 | 5. Robustness | pending | — | — |
 | 6. Testability | pending | — | — |
 | 7. Code Clarity | done | 9/10 | — |
 | 8. Generation Gates | done | 10/10 | fixed |
 
-**Pass:** A, mechanical complete
+**Pass:** B, consultant
 **Counts:** critical 0, medium 1, low 0, open 0
 **Draft PR/MR:** blocked because `GH_TOKEN_BEHAVIOURENGINEERING` is unset; compare URL: https://github.com/behaviorengineering/majordomo/compare/main...cursor/staged-code-review-process-8d1a
 
 ### Now
 
-Pass A fixes are committed and pushed in `f234ca`. Draft PR creation is blocked by the missing configured GitHub token. The next action is the first unanswered Pass B consultant question.
+`Forge` architecture is under review. The next action is the first unanswered Pass B consultant question.
 
 ### Resolutions
 
@@ -287,6 +287,15 @@ Return the encoding error from the artifact collection helper.
 All mechanical findings in Stages 2, 3, and 8 are included. Consultant stages 4, 5, and 6 remain deferred until this fix set is committed and pushed.
 
 ## Open Questions
+
+#### Open Architecture: Forge combines multiple boundaries
+**Location:** `internal/contextdigest/forge.go:27` and `internal/contextdigest/forge_comments.go:25`
+**Observation:** `Forge` owns GitHub, GitLab, and Bitbucket CLI/HTTP operations, PR lifecycle, branch setup, merge operations, and comment lifecycle across more than 30 methods.
+**Question:** Is keeping all SCM lifecycle and comment capabilities on one `Forge` type intentional, or should provider clients and comment operations split behind focused interfaces?
+**Status:** waiting on consultant
+**Possible outcomes:**
+- If the combined facade is intentional: non-issue with rationale.
+- If the responsibilities should split: record an architecture finding and defer implementation.
 
 ## Resolutions
 
