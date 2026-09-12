@@ -104,6 +104,58 @@ func TestBuildCapabilityConstraintsExecProcessAndFillDTO(t *testing.T) {
 	}
 }
 
+func TestBuildCapabilityConstraintsPrestigeAndEvidenceFailClosed(t *testing.T) {
+	t.Parallel()
+	doc := packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/pruneagent", Role: roleUnknown, Confidence: 0},
+			{Path: "internal/kitchen", Role: roleAggregator, Confidence: 0.8},
+			{Path: "internal/server", Role: roleHTTPSurface, Confidence: 0.9, Evidence: []string{"delivery:http"}},
+			{Path: "internal/obs", Role: roleUnknown, Confidence: 0, Evidence: []string{"imports_otel"}},
+			{Path: "internal/cfg", Role: roleUnknown, Confidence: 0, Evidence: []string{"config_keys"}},
+			{Path: "internal/cli", Role: roleUnknown, Confidence: 0, Evidence: []string{"has_main"}},
+		},
+	}
+	out := buildCapabilityConstraints(doc)
+	by := constraintsByPath(out)
+
+	prune := by["internal/pruneagent"]
+	for _, code := range []string{
+		capOwnDomainRules, capAdaptExternal, capObservability, capAggregateViews,
+		capDataShape, capServeHTTP, capRunCLI, capConfig, capSynchronizeState,
+	} {
+		if !containsString(prune.MustNot, code) {
+			t.Fatalf("unknown pruneagent must_not=%v want %s", prune.MustNot, code)
+		}
+	}
+	kitchen := by["internal/kitchen"]
+	if containsString(kitchen.MustNot, capOwnDomainRules) {
+		t.Fatalf("aggregator must allow own_domain_rules; must_not=%v", kitchen.MustNot)
+	}
+	if containsString(kitchen.MustNot, capAggregateViews) {
+		t.Fatalf("aggregator must allow aggregate_views; must_not=%v", kitchen.MustNot)
+	}
+	server := by["internal/server"]
+	if containsString(server.MustNot, capServeHTTP) || containsString(server.MustNot, capWireHandlers) {
+		t.Fatalf("http_surface must allow serve/wire; must_not=%v", server.MustNot)
+	}
+	if !containsString(server.MustNot, capObservability) {
+		t.Fatalf("http_surface without otel must forbid observability; must_not=%v", server.MustNot)
+	}
+	obs := by["internal/obs"]
+	if containsString(obs.MustNot, capObservability) {
+		t.Fatalf("imports_otel must allow observability; must_not=%v", obs.MustNot)
+	}
+	cfg := by["internal/cfg"]
+	if containsString(cfg.MustNot, capConfig) {
+		t.Fatalf("config_keys must allow config; must_not=%v", cfg.MustNot)
+	}
+	cli := by["internal/cli"]
+	if containsString(cli.MustNot, capRunCLI) {
+		t.Fatalf("has_main must allow run_cli; must_not=%v", cli.MustNot)
+	}
+}
+
 func TestAppendConstraintClaimIssuesRejectsSyncOnDTO(t *testing.T) {
 	t.Parallel()
 	typo := catalog.Typology{

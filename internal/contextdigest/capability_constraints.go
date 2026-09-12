@@ -75,41 +75,75 @@ func roleCapabilityTable() map[string]roleCapabilityDefaults {
 			MustNot: []string{
 				capSynchronizeState, capMergeAdapters, capServeHTTP,
 				capOrchestrate, capOwnDomainRules, capRunCLI, capWireHandlers,
-				capExecProcess, capFillDTO,
+				capExecProcess, capFillDTO, capAdaptExternal, capAggregateViews,
+				capObservability, capConfig,
 			},
 		},
 		roleHTTPSurface: {
-			Is:      []string{capServeHTTP, capWireHandlers},
-			MustNot: []string{capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO},
+			Is: []string{capServeHTTP, capWireHandlers},
+			MustNot: []string{
+				capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO,
+				capAdaptExternal, capAggregateViews, capDataShape, capObservability,
+				capConfig, capRunCLI, capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleEntrypoint: {
 			// orchestrate is entrypoint-only; kept in is so constraint rows show the prior.
-			Is:      []string{capRunCLI, capOrchestrate},
-			MustNot: []string{capOwnDomainRules, capServeHTTP, capExecProcess, capFillDTO},
+			Is: []string{capRunCLI, capOrchestrate},
+			MustNot: []string{
+				capOwnDomainRules, capServeHTTP, capExecProcess, capFillDTO,
+				capAdaptExternal, capAggregateViews, capDataShape, capObservability,
+				capConfig, capWireHandlers, capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleAggregator: {
-			Is:      []string{capAggregateViews},
-			MustNot: []string{capServeHTTP, capRunCLI, capOrchestrate, capExecProcess, capFillDTO},
+			Is: []string{capAggregateViews},
+			MustNot: []string{
+				capServeHTTP, capRunCLI, capOrchestrate, capExecProcess, capFillDTO,
+				capAdaptExternal, capDataShape, capObservability, capConfig,
+				capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleExecRunner: {
-			Is:      []string{capExecProcess},
-			MustNot: []string{capRunCLI, capOwnDomainRules, capOrchestrate, capFillDTO},
+			Is: []string{capExecProcess},
+			MustNot: []string{
+				capRunCLI, capOwnDomainRules, capOrchestrate, capFillDTO,
+				capAdaptExternal, capAggregateViews, capDataShape, capObservability,
+				capConfig, capServeHTTP, capWireHandlers, capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleAdapter: {
-			Is:      []string{capAdaptExternal, capFillDTO},
-			MustNot: []string{capOrchestrate, capExecProcess},
+			Is: []string{capAdaptExternal, capFillDTO},
+			MustNot: []string{
+				capOrchestrate, capExecProcess, capOwnDomainRules, capAggregateViews,
+				capDataShape, capObservability, capConfig, capServeHTTP, capWireHandlers,
+				capRunCLI, capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleConfig: {
-			Is:      []string{capConfig},
-			MustNot: []string{capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO},
+			Is: []string{capConfig},
+			MustNot: []string{
+				capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO,
+				capAdaptExternal, capAggregateViews, capDataShape, capObservability,
+				capServeHTTP, capWireHandlers, capRunCLI, capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleObservability: {
-			Is:      []string{capObservability},
-			MustNot: []string{capConfig, capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO},
+			Is: []string{capObservability},
+			MustNot: []string{
+				capConfig, capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO,
+				capAdaptExternal, capAggregateViews, capDataShape, capServeHTTP,
+				capWireHandlers, capRunCLI, capSynchronizeState, capMergeAdapters,
+			},
 		},
 		roleUnknown: {
-			Is:      []string{},
-			MustNot: []string{capOrchestrate, capExecProcess, capFillDTO},
+			Is: []string{},
+			MustNot: []string{
+				capOrchestrate, capExecProcess, capFillDTO, capOwnDomainRules,
+				capAdaptExternal, capAggregateViews, capDataShape, capObservability,
+				capConfig, capServeHTTP, capWireHandlers, capRunCLI,
+				capSynchronizeState, capMergeAdapters,
+			},
 		},
 	}
 }
@@ -168,25 +202,60 @@ func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraint
 			Source:  "role_table",
 			Role:    role,
 		}
-		// Fail-closed: orchestrate is entrypoint-only even for unknown/custom roles.
+		// Fail-closed post-pass is the authority for unknown/custom roles.
 		if role != roleEntrypoint {
 			c.MustNot = uniqueStrings(append(c.MustNot, capOrchestrate))
 		}
-		// Fail-closed: exec_process only for exec_runner or imports_os_exec evidence.
 		if role != roleExecRunner && !evidenceHasAny(n.Evidence, "imports_os_exec") {
 			c.MustNot = uniqueStrings(append(c.MustNot, capExecProcess))
 		}
-		// Fail-closed: fill_dto only for adapter or outbound fills_dto edge.
 		if role != roleAdapter {
 			if _, ok := fillsDTOFrom[path]; !ok {
 				c.MustNot = uniqueStrings(append(c.MustNot, capFillDTO))
 			}
 		}
+		// own_domain_rules: aggregator-only (entrypoint/http already forbid in table).
+		if role != roleAggregator {
+			c.MustNot = uniqueStrings(append(c.MustNot, capOwnDomainRules))
+		}
+		if role != roleAdapter {
+			c.MustNot = uniqueStrings(append(c.MustNot, capAdaptExternal))
+		}
+		if role != roleAggregator {
+			c.MustNot = uniqueStrings(append(c.MustNot, capAggregateViews))
+		}
+		if role != roleDTO {
+			c.MustNot = uniqueStrings(append(c.MustNot, capDataShape))
+		}
+		if role != roleObservability &&
+			!evidenceHasAny(n.Evidence, "imports_otel", "imports_prometheus") {
+			c.MustNot = uniqueStrings(append(c.MustNot, capObservability))
+		}
+		allowHTTP := role == roleHTTPSurface ||
+			evidenceHasAny(n.Evidence, "delivery:http", "delivery:grpc") ||
+			evidenceHasAnyPrefix(n.Evidence, "imports_net_http", "imports_grpc")
+		if !allowHTTP {
+			c.MustNot = uniqueStrings(append(c.MustNot, capServeHTTP, capWireHandlers))
+		}
+		if role != roleEntrypoint && !evidenceHasAny(n.Evidence, "has_main") {
+			c.MustNot = uniqueStrings(append(c.MustNot, capRunCLI))
+		}
+		allowConfig := role == roleConfig
+		if !allowConfig &&
+			!evidenceHasAny(n.Evidence, "imports_otel", "imports_prometheus") &&
+			evidenceHasAny(n.Evidence, "config_keys", "env_config") {
+			allowConfig = true
+		}
+		if !allowConfig {
+			c.MustNot = uniqueStrings(append(c.MustNot, capConfig))
+		}
+		// No role puts these in is; entailment always rejects.
+		c.MustNot = uniqueStrings(append(c.MustNot, capSynchronizeState, capMergeAdapters))
 		if fillers := uniqueStrings(filledBy[path]); len(fillers) > 0 {
 			c.FilledBy = fillers
-			// Inbound fills_dto: the DTO package must not claim to merge adapters.
-			c.MustNot = uniqueStrings(append(c.MustNot, capMergeAdapters, capSynchronizeState))
 		}
+		// Evidence/role exceptions must clear table defaults, not only skip appends.
+		c.MustNot = dropAllowedCapabilityMustNot(c.MustNot, role, n.Evidence, path, fillsDTOFrom)
 		if n.Agreement == agreementMatch || n.Agreement == agreementDisagree {
 			c.Source = "role_rlm"
 		}
@@ -195,6 +264,67 @@ func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraint
 	sort.Slice(out.Packages, func(i, j int) bool {
 		return out.Packages[i].Path < out.Packages[j].Path
 	})
+	return out
+}
+
+// dropAllowedCapabilityMustNot removes codes that role or evidence explicitly allows,
+// so table defaults cannot override fail-closed exceptions.
+func dropAllowedCapabilityMustNot(
+	mustNot []string,
+	role string,
+	evidence []string,
+	path string,
+	fillsDTOFrom map[string]struct{},
+) []string {
+	drop := map[string]struct{}{}
+	if role == roleEntrypoint {
+		drop[capOrchestrate] = struct{}{}
+		drop[capRunCLI] = struct{}{}
+	}
+	if role == roleExecRunner || evidenceHasAny(evidence, "imports_os_exec") {
+		drop[capExecProcess] = struct{}{}
+	}
+	if role == roleAdapter {
+		drop[capFillDTO] = struct{}{}
+		drop[capAdaptExternal] = struct{}{}
+	}
+	if _, ok := fillsDTOFrom[path]; ok {
+		drop[capFillDTO] = struct{}{}
+	}
+	if role == roleAggregator {
+		drop[capOwnDomainRules] = struct{}{}
+		drop[capAggregateViews] = struct{}{}
+	}
+	if role == roleDTO {
+		drop[capDataShape] = struct{}{}
+	}
+	if role == roleObservability || evidenceHasAny(evidence, "imports_otel", "imports_prometheus") {
+		drop[capObservability] = struct{}{}
+	}
+	if role == roleHTTPSurface ||
+		evidenceHasAny(evidence, "delivery:http", "delivery:grpc") ||
+		evidenceHasAnyPrefix(evidence, "imports_net_http", "imports_grpc") {
+		drop[capServeHTTP] = struct{}{}
+		drop[capWireHandlers] = struct{}{}
+	}
+	if evidenceHasAny(evidence, "has_main") {
+		drop[capRunCLI] = struct{}{}
+	}
+	if role == roleConfig ||
+		(!evidenceHasAny(evidence, "imports_otel", "imports_prometheus") &&
+			evidenceHasAny(evidence, "config_keys", "env_config")) {
+		drop[capConfig] = struct{}{}
+	}
+	if len(drop) == 0 {
+		return mustNot
+	}
+	out := make([]string, 0, len(mustNot))
+	for _, code := range mustNot {
+		if _, ok := drop[code]; ok {
+			continue
+		}
+		out = append(out, code)
+	}
 	return out
 }
 
@@ -208,10 +338,13 @@ func claimPolicyPromptRules() string {
   - orchestrate: owned package role is entrypoint
   - exec_process: role is exec_runner OR evidence includes imports_os_exec
   - fill_dto: role is adapter OR an outbound fills_dto edge from an owned package
-  - serve_http / wire_handlers: delivery:http|grpc or imports_net_http / imports_grpc
-  - run_cli: evidence has_main
-  - observability: imports_otel or imports_prometheus
-  - own_domain_rules: role is entrypoint, http_surface, or aggregator
+  - serve_http / wire_handlers: role is http_surface OR delivery:http|grpc OR imports_net_http / imports_grpc
+  - run_cli: role is entrypoint OR evidence has_main
+  - observability: role is observability OR imports_otel / imports_prometheus
+  - config: role is config OR config_keys / env_config (without otel/prom-only packages)
+  - own_domain_rules: role is aggregator
+  - adapt_external / aggregate_views / data_shape: only when already in owned is=[]
+  - synchronize_state / merge_adapters: never (always must_not)
 - Prestige English ("orchestrates", "runs git via a helper", "builds a card DTO") is NOT a claim code.
 - When unsure, drop the claim or set verdict: overclaim.`
 }

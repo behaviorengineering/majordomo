@@ -108,9 +108,7 @@ func claimEntailed(
 			if !ok {
 				continue
 			}
-			role := strings.TrimSpace(n.Role)
-			switch role {
-			case roleEntrypoint, roleHTTPSurface, roleAggregator:
+			if strings.TrimSpace(n.Role) == roleAggregator {
 				return true
 			}
 		}
@@ -215,6 +213,22 @@ func evidenceHasAny(evidence []string, flags ...string) bool {
 	for _, e := range evidence {
 		if _, ok := want[strings.TrimSpace(e)]; ok {
 			return true
+		}
+	}
+	return false
+}
+
+func evidenceHasAnyPrefix(evidence []string, prefixes ...string) bool {
+	for _, e := range evidence {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		for _, prefix := range prefixes {
+			prefix = strings.TrimSpace(prefix)
+			if prefix != "" && strings.HasPrefix(e, prefix) {
+				return true
+			}
 		}
 	}
 	return false
