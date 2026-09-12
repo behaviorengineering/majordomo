@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
@@ -149,7 +150,7 @@ func normalizeObservedRole(s string) string {
 }
 
 // validatePackageRolesRLM runs RLM validation for every package and rewrites confidence.
-func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValidator, analysisDir, evidenceDir, rolesPath, rolesYAML string) (string, error) {
+func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValidator, analysisDir, evidenceDir, rolesPath, rolesYAML string, store *cache.DigestStore, skips bool, modelID string) (string, error) {
 	if validator == nil {
 		return rolesYAML, nil
 	}
@@ -191,6 +192,20 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 				results[i] = result{idx: i, node: markUnvalidated(n), err: fmt.Errorf("empty RLM context")}
 				return
 			}
+			fp := cache.InspectFingerprint{
+				PackagePath:   normalizeRolePath(n.Path),
+				ContextSHA:    cache.ContentSHA(ctxMD),
+				ModelID:       modelID,
+				PromptVersion: cache.DigestInspectPromptV1,
+				SchemaVersion: cache.DigestInspectSchemaV1,
+			}
+			if skips && store != nil {
+				if hit, ok, err := store.LookupInspect(fp); err == nil && ok {
+					logf("INFO", "digest cache hit inspect path=%s", n.Path)
+					results[i] = result{idx: i, node: packageRoleFromCached(hit), loggedRole: hit.LLMRole}
+					return
+				}
+			}
 			mechRole := n.Role
 			if mechRole == "" {
 				mechRole = roleUnknown
@@ -207,6 +222,9 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 				evidence = strings.TrimSpace(evidence + " contradiction_rejected")
 			}
 			updated := applyRLMAgreement(n, llmRole, evidence, iters)
+			if store != nil && updated.Agreement == agreementMatch {
+				_ = store.StoreInspect(fp, cachedFromPackageRole(updated))
+			}
 			results[i] = result{idx: i, node: updated, loggedRole: llmRole}
 		}(i, n)
 	}
@@ -242,6 +260,38 @@ func markUnvalidated(n packageRoleNode) packageRoleNode {
 	n.MechanicalRole = firstNonEmpty(n.MechanicalRole, n.Role)
 	n.Agreement = agreementUnvalidated
 	return n
+}
+
+func packageRoleFromCached(hit cache.InspectCachedRole) packageRoleNode {
+	return packageRoleNode{
+		Path:           hit.Path,
+		Role:           hit.Role,
+		Confidence:     hit.Confidence,
+		Evidence:       append([]string(nil), hit.Evidence...),
+		InspectedStage: hit.InspectedStage,
+		Language:       hit.Language,
+		CandidateRole:  hit.CandidateRole,
+		MechanicalRole: hit.MechanicalRole,
+		LLMRole:        hit.LLMRole,
+		Agreement:      hit.Agreement,
+		RLMIterations:  hit.RLMIterations,
+	}
+}
+
+func cachedFromPackageRole(n packageRoleNode) cache.InspectCachedRole {
+	return cache.InspectCachedRole{
+		Path:           n.Path,
+		Role:           n.Role,
+		Confidence:     n.Confidence,
+		Evidence:       append([]string(nil), n.Evidence...),
+		InspectedStage: n.InspectedStage,
+		Language:       n.Language,
+		CandidateRole:  n.CandidateRole,
+		MechanicalRole: n.MechanicalRole,
+		LLMRole:        n.LLMRole,
+		Agreement:      n.Agreement,
+		RLMIterations:  n.RLMIterations,
+	}
 }
 
 func applyRLMAgreement(n packageRoleNode, llmRole, evidence string, iterations int) packageRoleNode {

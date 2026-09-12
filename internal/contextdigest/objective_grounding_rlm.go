@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
@@ -35,11 +36,14 @@ type sliceObjectiveLedgerBuilder interface {
 }
 
 type sliceLedgerBuildRequest struct {
-	AnalysisDir string
-	EvidenceDir string
-	DraftTypo   catalog.Typology
-	Constraints packageCapabilityConstraintsDoc
-	ClusterMD   string
+	AnalysisDir   string
+	EvidenceDir   string
+	DraftTypo     catalog.Typology
+	Constraints   packageCapabilityConstraintsDoc
+	ClusterMD     string
+	DigestCache   *cache.DigestStore
+	DigestSkips   bool
+	DigestModelID string
 }
 
 type stropSliceObjectiveLedgerRLM struct {
@@ -225,9 +229,35 @@ func buildSliceObjectiveLedger(
 					return
 				}
 				constraintBlock := formatConstraintRowsForPaths(t.paths, byPath)
+				joinedCtx := strings.Join(parts, "\n\n")
+				fp := cache.LedgerFingerprint{
+					SliceID:         t.id,
+					OwnedPathsHash:  cache.OwnedPathsHash(t.paths),
+					ContextSHA:      cache.ContentSHA(joinedCtx),
+					ConstraintsHash: cache.ContentSHA(constraintBlock),
+					ClusterHash:     cache.ContentSHA(req.ClusterMD),
+					ModelID:         req.DigestModelID,
+					PromptVersion:   cache.DigestLedgerPromptV1,
+					SchemaVersion:   cache.DigestLedgerSchemaV1,
+				}
+				if req.DigestSkips && req.DigestCache != nil {
+					if hit, ok, err := req.DigestCache.LookupLedger(fp); err == nil && ok && hit.Verdict == ledgerVerdictGrounded {
+						logf("INFO", "digest cache hit ledger slice=%s", t.id)
+						results[i] = result{entry: sliceObjectiveLedgerEntry{
+							ID:         hit.ID,
+							OwnedPaths: append([]string(nil), hit.OwnedPaths...),
+							Evidence:   append([]string(nil), hit.Evidence...),
+							Claims:     append([]string(nil), hit.Claims...),
+							Objective:  hit.Objective,
+							Verdict:    hit.Verdict,
+							Source:     firstNonEmpty(hit.Source, "digest_cache"),
+						}}
+						return
+					}
+				}
 				sliceFeedback := filterIssuesForSlice(lastIssues, t.id)
 				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterMD, sliceFeedback)
-				answer, _, err := caller.Complete(ctx, strings.Join(parts, "\n\n"), query)
+				answer, _, err := caller.Complete(ctx, joinedCtx, query)
 				if err != nil {
 					if ctx.Err() != nil {
 						results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
@@ -275,6 +305,17 @@ func buildSliceObjectiveLedger(
 				if entailIssues := rejectUnentailedClaims(t.id, claims, t.paths, req.Constraints, rolesDoc); len(entailIssues) > 0 {
 					results[i] = result{issue: strings.Join(entailIssues, "\n")}
 					return
+				}
+				if req.DigestCache != nil && entry.Verdict == ledgerVerdictGrounded {
+					_ = req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
+						ID:         entry.ID,
+						OwnedPaths: append([]string(nil), entry.OwnedPaths...),
+						Evidence:   append([]string(nil), entry.Evidence...),
+						Claims:     append([]string(nil), entry.Claims...),
+						Objective:  entry.Objective,
+						Verdict:    entry.Verdict,
+						Source:     entry.Source,
+					})
 				}
 				results[i] = result{entry: entry}
 			}(i, t)

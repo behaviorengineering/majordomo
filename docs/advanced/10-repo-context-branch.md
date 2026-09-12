@@ -340,6 +340,21 @@ Selection MUST stay small. If an area pack does not match the task, it MUST NOT 
 
 `pipelines.*.agentContext` in central YAML is **legacy** (still materialized today). It is not a substitute for packs. Phase 6 grounding is `agenting/`.
 
+## Digest inference cache
+
+Teaching files live on `majordomo-context/<repo-id>`. A reseed may delete those
+refs. Package inspect and slice ledger RLM results live on a **separate** branch:
+
+- Branch: `majordomo-digest-cache/<repo-id>` (`config.DigestCacheBranch`)
+- Artifacts: JSON fingerprints under `inspect/` and `ledger/` (not teaching markdown)
+- Hit when package/slice evidence, model, and schema/prompt version match
+- Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
+- Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete
+  `majordomo-digest-cache/*`
+
+CLI helpers: `majordomo cache digest-lookup` / `digest-store` / `digest-push`.
+Operator rule: `ai-copilots/skills/majordomo-inference-cache/SKILL.md`.
+
 ## Poll exclusion
 
 Product poll ignores PRs whose base or head starts with:
@@ -347,6 +362,7 @@ Product poll ignores PRs whose base or head starts with:
 - `majordomo-context/` (covers durable base and `…-update` head)
 - `majordomo-pr-reviewer-cache/`
 - `majordomo-poll-cache/`
+- `majordomo-digest-cache/`
 
 Implemented in `internal/poll` (`isMajordomoInternalBranch`).
 

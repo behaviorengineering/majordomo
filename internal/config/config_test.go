@@ -18,6 +18,14 @@ func TestContextBranch(t *testing.T) {
 	}
 }
 
+func TestDigestCacheBranch(t *testing.T) {
+	got := DigestCacheBranch("payments-api")
+	want := "majordomo-digest-cache/payments-api"
+	if got != want {
+		t.Fatalf("DigestCacheBranch = %q, want %q", got, want)
+	}
+}
+
 func TestCacheSkipsDefaultOn(t *testing.T) {
 	c := Cache{}
 	if !c.SkipsEnabled() {
