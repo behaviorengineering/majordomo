@@ -25,8 +25,28 @@ func (f *flakyLLM) Generate(context.Context, string, ...core.GenerateOption) (*c
 	return &core.LLMResponse{Content: "ok"}, nil
 }
 
-func (f *flakyLLM) GenerateWithContent(context.Context, []core.ContentBlock, ...core.GenerateOption) (*core.LLMResponse, error) {
-	return f.Generate(context.Background(), "")
+func (f *flakyLLM) GenerateWithContent(ctx context.Context, _ []core.ContentBlock, opts ...core.GenerateOption) (*core.LLMResponse, error) {
+	return f.Generate(ctx, "", opts...)
+}
+
+func (f *flakyLLM) GenerateWithJSON(context.Context, string, ...core.GenerateOption) (map[string]any, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (f *flakyLLM) GenerateWithFunctions(context.Context, string, []map[string]any, ...core.GenerateOption) (map[string]any, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (f *flakyLLM) CreateEmbedding(context.Context, string, ...core.EmbeddingOption) (*core.EmbeddingResult, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (f *flakyLLM) CreateEmbeddings(context.Context, []string, ...core.EmbeddingOption) (*core.BatchEmbeddingResult, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (f *flakyLLM) StreamGenerate(context.Context, string, ...core.GenerateOption) (*core.StreamResponse, error) {
+	return nil, errors.New("not implemented")
 }
 
 func TestWrapLLMWithRetrySucceedsAfterTransientFailures(t *testing.T) {
