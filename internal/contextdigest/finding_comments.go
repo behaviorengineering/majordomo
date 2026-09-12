@@ -83,7 +83,9 @@ func saveFindingCommentBodies(evidenceDir string, comments []FindingCommentBody)
 	ctxDir := filepath.Dir(filepath.Dir(evidenceDir))
 	path := filepath.Join(ctxDir, findingCommentBodiesRel)
 	if len(comments) == 0 {
-		_ = os.Remove(path)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove finding comment bodies: %w", err)
+		}
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

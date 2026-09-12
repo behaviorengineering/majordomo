@@ -112,7 +112,10 @@ func reviewableFiles(m map[string]any) []string {
 	out := make([]string, 0, len(tasks))
 	seen := map[string]struct{}{}
 	for _, task := range tasks {
-		f, _ := task["file"].(string)
+		f, ok := task["file"].(string)
+		if !ok {
+			continue
+		}
 		if _, ok := seen[f]; ok {
 			continue
 		}
@@ -136,27 +139,42 @@ func readJSON(t *testing.T, path string) map[string]any {
 }
 
 func toStringSlice(v any) []string {
-	arr, _ := v.([]any)
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
 	out := make([]string, 0, len(arr))
 	for _, x := range arr {
-		s, _ := x.(string)
+		s, ok := x.(string)
+		if !ok {
+			continue
+		}
 		out = append(out, s)
 	}
 	return out
 }
 
 func toMapSlice(v any) []map[string]any {
-	arr, _ := v.([]any)
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
 	out := make([]map[string]any, 0, len(arr))
 	for _, x := range arr {
-		m, _ := x.(map[string]any)
+		m, ok := x.(map[string]any)
+		if !ok {
+			continue
+		}
 		out = append(out, m)
 	}
 	return out
 }
 
 func toStringMapLists(v any) map[string][]string {
-	m, _ := v.(map[string]any)
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
 	out := map[string][]string{}
 	for k, val := range m {
 		out[k] = toStringSlice(val)

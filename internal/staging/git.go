@@ -95,7 +95,9 @@ func SetupGit(baseBranch, stagingDir, workDir string) (*SetupGitResult, error) {
 		}
 	}
 	// Best-effort safe.directory (may fail without write access to global gitconfig).
-	_ = exec.Command("git", "config", "--global", "--add", "safe.directory", cwd).Run()
+	if err := exec.Command("git", "config", "--global", "--add", "safe.directory", cwd).Run(); err != nil {
+		logf("WARN", "could not configure git safe.directory for %s: %v", cwd, err)
+	}
 
 	refspec := fmt.Sprintf("origin/%s...HEAD", baseBranch)
 	logf("INFO", "%s", strings.Repeat("=", 50))
@@ -105,7 +107,10 @@ func SetupGit(baseBranch, stagingDir, workDir string) (*SetupGitResult, error) {
 	logf("INFO", "Refspec:      %s", refspec)
 	logf("INFO", "Staging dir:  %s", stagingDir)
 
-	shallowOut, _ := g.runAllowFail("rev-parse", "--is-shallow-repository")
+	shallowOut, shallowCode := g.runAllowFail("rev-parse", "--is-shallow-repository")
+	if shallowCode != 0 {
+		logf("WARN", "could not determine whether repository is shallow")
+	}
 	isShallow := strings.TrimSpace(shallowOut) == "true"
 	logf("INFO", "Shallow clone: %v", isShallow)
 

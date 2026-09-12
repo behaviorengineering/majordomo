@@ -231,7 +231,10 @@ func publishBitbucket(opts Options, summary string) error {
 		if err != nil {
 			return err
 		}
-		current, _ := prMeta["description"].(string)
+		current, ok := prMeta["description"].(string)
+		if !ok {
+			current = ""
+		}
 		if ownedByMajordomo(current) {
 			logf("INFO", "claiming/updating PR description")
 			if strings.Contains(current, legacyMarker) && !strings.Contains(current, Marker) {

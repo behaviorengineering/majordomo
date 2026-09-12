@@ -84,26 +84,33 @@ func writeRoutingJSON(path string, routing OrderedRouting) error {
 
 // ApplyPipelineModelEnv sets COPILOT_MODEL / COPILOT_SCORE_MODEL from pipeline config
 // when those env vars are not already set.
-func ApplyPipelineModelEnv(cfg RepoConfig, pipelineName string) {
+func ApplyPipelineModelEnv(cfg RepoConfig, pipelineName string) error {
 	pipe, ok := cfg.PipelineNamed(pipelineName)
 	if !ok {
-		return
+		return nil
 	}
-	setEnvIfEmpty("COPILOT_MODEL", pipe.Model)
-	setEnvIfEmpty("OPENCODE_MODEL", pipe.Model)
-	setEnvIfEmpty("COPILOT_SCORE_MODEL", pipe.ScoreModel)
-	setEnvIfEmpty("OPENCODE_SCORE_MODEL", pipe.ScoreModel)
+	for key, value := range map[string]string{
+		"COPILOT_MODEL":        pipe.Model,
+		"OPENCODE_MODEL":       pipe.Model,
+		"COPILOT_SCORE_MODEL":  pipe.ScoreModel,
+		"OPENCODE_SCORE_MODEL": pipe.ScoreModel,
+	} {
+		if err := setEnvIfEmpty(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func setEnvIfEmpty(key, val string) {
+func setEnvIfEmpty(key, val string) error {
 	val = strings.TrimSpace(val)
 	if val == "" {
-		return
+		return nil
 	}
 	if strings.TrimSpace(os.Getenv(key)) != "" {
-		return
+		return nil
 	}
-	_ = os.Setenv(key, val)
+	return os.Setenv(key, val)
 }
 
 // ResolveSAToolSlug returns the .sa output slug for a tool entry.

@@ -92,8 +92,8 @@ __BODY__
 `
 
 var (
-	h1Re      = regexp.MustCompile(`(?is)<h1[^>]*>(.*?)</h1>`)
-	tagStrip  = regexp.MustCompile(`<[^>]+>`)
+	h1Re       = regexp.MustCompile(`(?is)<h1[^>]*>(.*?)</h1>`)
+	tagStrip   = regexp.MustCompile(`<[^>]+>`)
 	mdRenderer = goldmark.New(
 		goldmark.WithExtensions(
 			extension.GFM,

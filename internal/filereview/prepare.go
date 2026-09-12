@@ -22,9 +22,9 @@ func LoadReviewables(manifestPath string) ([]Reviewable, error) {
 	out := make([]Reviewable, 0, len(raw.Reviewable))
 	seen := map[string]struct{}{}
 	for _, t := range raw.Reviewable {
-		file, _ := t["file"].(string)
-		slug, _ := t["slug"].(string)
-		if file == "" || slug == "" {
+		file, fileOK := t["file"].(string)
+		slug, slugOK := t["slug"].(string)
+		if !fileOK || !slugOK || file == "" || slug == "" {
 			continue
 		}
 		if _, ok := seen[slug]; ok {

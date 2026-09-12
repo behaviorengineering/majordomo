@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ const (
 
 // DispatchOptions configures a single Judge invocation.
 type DispatchOptions struct {
+	Context    context.Context
 	PRNumber   string
 	StagingDir string
 	OutputDir  string
@@ -100,6 +102,7 @@ func Dispatch(opts DispatchOptions) error {
 		return fmt.Errorf("dispatch requires pr, staging-dir, and output-dir")
 	}
 	return judge.Dispatch(judge.DispatchOptions{
+		Context:    opts.Context,
 		PRNumber:   opts.PRNumber,
 		StagingDir: opts.StagingDir,
 		OutputDir:  opts.OutputDir,

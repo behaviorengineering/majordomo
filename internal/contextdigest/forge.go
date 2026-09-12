@@ -291,7 +291,10 @@ func (f *Forge) openBitbucket(baseBranch, headBranch, title, body string) (strin
 		return "", err
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read bitbucket create PR response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return "", fmt.Errorf("bitbucket create PR HTTP %d: %s", resp.StatusCode, string(respBody))
 	}
@@ -319,7 +322,10 @@ func (f *Forge) findBitbucketOpen(baseBranch, headBranch string) (string, error)
 		return "", err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read bitbucket PR list response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return "", fmt.Errorf("bitbucket list PR HTTP %d: %s", resp.StatusCode, string(raw))
 	}
@@ -370,7 +376,10 @@ func (f *Forge) updateBitbucketPR(id, title, body string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read bitbucket update PR response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("bitbucket update PR HTTP %d: %s", resp.StatusCode, string(respBody))
 	}

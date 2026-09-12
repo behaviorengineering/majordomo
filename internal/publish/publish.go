@@ -301,7 +301,10 @@ func httpJSON(client *http.Client, method, url, token string, body any) (map[str
 		return nil, 0, err
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("read publish response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return nil, resp.StatusCode, fmt.Errorf("HTTP %d from %s: %s", resp.StatusCode, url, string(raw))
 	}

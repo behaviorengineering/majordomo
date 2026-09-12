@@ -202,8 +202,10 @@ func (f *Forge) listBitbucketCommentsWithIDs(prNumber string) ([]PRCommentWithID
 		if err != nil {
 			return nil, err
 		}
-		raw, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		raw, err := readResponseBody(resp)
+		if err != nil {
+			return nil, fmt.Errorf("read bitbucket activities response: %w", err)
+		}
 		if resp.StatusCode >= 300 {
 			return nil, fmt.Errorf("bitbucket list activities HTTP %d: %s", resp.StatusCode, string(raw))
 		}
@@ -262,8 +264,10 @@ func (f *Forge) postBitbucketComment(prNumber, body string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := readResponseBody(resp)
+	if err != nil {
+		return "", fmt.Errorf("read bitbucket comment response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return "", fmt.Errorf("bitbucket post comment HTTP %d: %s", resp.StatusCode, string(raw))
 	}
@@ -298,12 +302,19 @@ func (f *Forge) updateBitbucketComment(prNumber, commentID, body string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := readResponseBody(resp)
+	if err != nil {
+		return fmt.Errorf("read bitbucket comment update response: %w", err)
+	}
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("bitbucket update comment HTTP %d: %s", resp.StatusCode, string(raw))
 	}
 	return nil
+}
+
+func readResponseBody(resp *http.Response) ([]byte, error) {
+	defer resp.Body.Close()
+	return io.ReadAll(resp.Body)
 }
 
 func decodeCommentIDLines(out string) ([]PRCommentWithID, error) {

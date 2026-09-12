@@ -24,7 +24,8 @@ func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[strin
 	case jmodules.TaskTypologyCluster:
 		return map[string]interface{}{"cluster_proposal_md": s.clusterMD}, nil
 	case jmodules.TaskTypologyRefine:
-		if ledger, _ := fields["slice_objective_ledger_yaml"].(string); !strings.Contains(ledger, "Shared board payload shapes") {
+		ledger, ok := fields["slice_objective_ledger_yaml"].(string)
+		if !ok || !strings.Contains(ledger, "Shared board payload shapes") {
 			return nil, context.Canceled // force visible failure if ledger missing
 		}
 		return map[string]interface{}{

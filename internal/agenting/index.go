@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	ModeFiles      = "files"
-	ModeSummary    = "summary"
-	ModeTechnical  = "technical"
-	ModeDigest     = "digest"
-	IndexRelPath   = "agenting/index.yaml"
-	GroundingName  = "GROUNDING.md"
+	ModeFiles     = "files"
+	ModeSummary   = "summary"
+	ModeTechnical = "technical"
+	ModeDigest    = "digest"
+	IndexRelPath  = "agenting/index.yaml"
+	GroundingName = "GROUNDING.md"
 )
 
 // Index is agenting/index.yaml on the context branch.

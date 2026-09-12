@@ -25,8 +25,16 @@ func (f *flakyLLM) Generate(context.Context, string, ...core.GenerateOption) (*c
 	return &core.LLMResponse{Content: "ok"}, nil
 }
 
-func (f *flakyLLM) GenerateWithContent(context.Context, []core.ContentBlock, ...core.GenerateOption) (*core.LLMResponse, error) {
-	return f.Generate(context.Background(), "")
+func (f *flakyLLM) GenerateWithContent(ctx context.Context, _ []core.ContentBlock, _ ...core.GenerateOption) (*core.LLMResponse, error) {
+	return f.Generate(ctx, "")
+}
+
+func (f *flakyLLM) CreateEmbedding(context.Context, string, ...core.EmbeddingOption) (*core.EmbeddingResult, error) {
+	return nil, errors.New("embedding unsupported in flaky test LLM")
+}
+
+func (f *flakyLLM) CreateEmbeddings(context.Context, []string, ...core.EmbeddingOption) (*core.BatchEmbeddingResult, error) {
+	return nil, errors.New("embeddings unsupported in flaky test LLM")
 }
 
 func TestWrapLLMWithRetrySucceedsAfterTransientFailures(t *testing.T) {

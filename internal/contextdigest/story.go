@@ -28,7 +28,10 @@ func LoadCommitContext(g *Git, sha string) (CommitContext, error) {
 	if err != nil {
 		return CommitContext{}, err
 	}
-	body, _ := g.trim("show", "-s", "--format=%b", sha)
+	body, err := g.trim("show", "-s", "--format=%b", sha)
+	if err != nil {
+		return CommitContext{}, err
+	}
 	diff, err := g.trim("show", "--format=", "--no-color", "-U3", sha)
 	if err != nil {
 		return CommitContext{}, err

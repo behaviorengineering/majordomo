@@ -270,13 +270,13 @@ func stageDeepFile(a stageDeepArgs) ([]string, error) {
 			totalChunks = total
 		}
 		entry := map[string]any{
-			"file":       a.FilePath,
-			"slug":       slug,
-			"mode":       mode,
-			"chunk":      chunkVal,
+			"file":         a.FilePath,
+			"slug":         slug,
+			"mode":         mode,
+			"chunk":        chunkVal,
 			"total_chunks": totalChunks,
-			"input_file": inputFilename,
-			"agent":      "pr-review-technical-deep",
+			"input_file":   inputFilename,
+			"agent":        "pr-review-technical-deep",
 		}
 		if len(a.AgentContext) > 0 {
 			entry["agent_context"] = a.AgentContext

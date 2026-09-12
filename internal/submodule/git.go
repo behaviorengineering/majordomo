@@ -33,10 +33,10 @@ type Options struct {
 }
 
 type manager struct {
-	opts           Options
-	submoduleRoot  string
-	parentRoot     string // empty if none
-	submoduleName  string
+	opts          Options
+	submoduleRoot string
+	parentRoot    string // empty if none
+	submoduleName string
 }
 
 // Run launches the interactive submodule manager.

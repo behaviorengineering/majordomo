@@ -25,6 +25,9 @@ func Client(timeout time.Duration) *http.Client {
 
 // DoWithRetry performs req with exponential backoff on 429/5xx and transport errors.
 func DoWithRetry(client *http.Client, req *http.Request, maxAttempts int) (*http.Response, error) {
+	if req == nil {
+		return nil, fmt.Errorf("outbound: request is required")
+	}
 	if client == nil {
 		client = Client(DefaultTimeout)
 	}
@@ -53,8 +56,15 @@ func DoWithRetry(client *http.Client, req *http.Request, maxAttempts int) (*http
 			continue
 		}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
+			if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					return nil, fmt.Errorf("discard retry response body: %w; close body: %v", err, closeErr)
+				}
+				return nil, fmt.Errorf("discard retry response body: %w", err)
+			}
+			if err := resp.Body.Close(); err != nil {
+				return nil, fmt.Errorf("close retry response body: %w", err)
+			}
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
 			if attempt == maxAttempts {
 				return nil, lastErr

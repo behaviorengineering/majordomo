@@ -4,8 +4,8 @@ import "testing"
 
 func TestParseComment(t *testing.T) {
 	cases := []struct {
-		body   string
-		action Action
+		body    string
+		action  Action
 		payload string
 	}{
 		{"@majordomo reject bad chronology", ActionReject, "bad chronology"},

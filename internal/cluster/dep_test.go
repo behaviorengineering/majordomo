@@ -118,7 +118,10 @@ func TestDepClusterAwareBatches(t *testing.T) {
 		{"file": "c.py", "chunk": 0},
 	}
 
-	batches := DepClusterAwareBatches(tasks, 2, root)
+	batches, err := DepClusterAwareBatches(tasks, 2, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(batches) != 2 {
 		t.Fatalf("expected 2 batches, got %d", len(batches))
 	}

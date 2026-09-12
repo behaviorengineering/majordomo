@@ -52,14 +52,14 @@ type InspectFingerprint struct {
 
 // LedgerFingerprint keys one slice objective ledger RLM result.
 type LedgerFingerprint struct {
-	SliceID          string
-	OwnedPathsHash   string
-	ContextSHA       string
-	ConstraintsHash  string
-	ClusterHash      string
-	ModelID          string
-	PromptVersion    string
-	SchemaVersion    string
+	SliceID         string
+	OwnedPathsHash  string
+	ContextSHA      string
+	ConstraintsHash string
+	ClusterHash     string
+	ModelID         string
+	PromptVersion   string
+	SchemaVersion   string
 }
 
 // InspectCachedRole is the durable inspect payload.
@@ -99,8 +99,8 @@ type digestRecord struct {
 func HashDigestParts(parts ...string) string {
 	h := sha256.New()
 	for _, p := range parts {
-		_, _ = h.Write([]byte(p))
-		_, _ = h.Write([]byte{0})
+		h.Write([]byte(p))
+		h.Write([]byte{0})
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
