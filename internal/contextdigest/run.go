@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextgate"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
@@ -45,6 +46,9 @@ type Options struct {
 	SkipStory                  bool
 	SkipCompact                bool
 	ForceCompact               bool
+	DigestCache                *cache.DigestStore // optional; inspect/ledger fingerprint skips
+	DigestSkips                bool               // when true with DigestCache, skip LLM on hit
+	DigestModelID              string             // model id for fingerprints
 }
 
 func logf(level, format string, args ...any) {
@@ -119,6 +123,22 @@ func Run(opts Options) (res Result, err error) {
 	if err := FetchOrigin(servedGit); err != nil {
 		return Result{}, fmt.Errorf("fetch served repo: %w", err)
 	}
+
+	digestBranch := config.DigestCacheBranch(cfg.Repository.ID)
+	digestDir, err := os.MkdirTemp("", "majordomo-digest-cache-*")
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() { _ = os.RemoveAll(digestDir) }()
+	if err := materializeDigestCacheWorktree(digestDir, servedGit, digestBranch, token, scm); err != nil {
+		logf("WARN", "digest inference cache unavailable: %v", err)
+	} else {
+		opts.DigestCache = &cache.DigestStore{Dir: digestDir}
+		opts.DigestSkips = cfg.Cache.SkipsEnabled()
+		opts.DigestModelID = digestModelID(cfg)
+		logf("INFO", "digest inference cache ready branch=%s skips=%v model=%s", digestBranch, opts.DigestSkips, opts.DigestModelID)
+	}
+
 	defaultBranch, err := ResolveDefaultBranch(servedGit)
 	if err != nil {
 		return Result{}, err
@@ -239,6 +259,7 @@ func Run(opts Options) (res Result, err error) {
 								cursorBefore: cursorBefore, cursorAfter: cursorBefore, commits: commits, needsWrite: needsWrite,
 								gateSidecar: gateSidecar, openPRNum: openPRNum, cloneURL: cfg.Repository.CloneURL,
 								message: err.Error(),
+								digestDir: digestDir, digestBranch: digestBranch, servedGit: servedGit, digestReady: opts.DigestCache != nil,
 							})
 						}
 						return Result{}, err
@@ -378,6 +399,7 @@ func Run(opts Options) (res Result, err error) {
 		action: action, defaultBranch: defaultBranch, defaultHEAD: defaultHEAD,
 		cursorBefore: cursorBefore, cursorAfter: cursorAfter, commits: commits, needsWrite: needsWrite,
 		gateSidecar: gateSidecar, openPRNum: openPRNum, cloneURL: cfg.Repository.CloneURL,
+		digestDir: digestDir, digestBranch: digestBranch, servedGit: servedGit, digestReady: opts.DigestCache != nil,
 	})
 }
 
@@ -400,6 +422,10 @@ type finishParams struct {
 	openPRNum     string
 	cloneURL      string
 	message       string
+	digestDir     string
+	digestBranch  string
+	servedGit     *Git
+	digestReady   bool
 }
 
 func finishDigestRun(p finishParams) (Result, error) {
@@ -441,6 +467,13 @@ func finishDigestRun(p finishParams) (Result, error) {
 	msg := p.message
 	if msg == "" {
 		msg = "digest complete"
+	}
+	if p.digestReady && p.servedGit != nil && strings.TrimSpace(p.digestDir) != "" {
+		if err := pushDigestCacheWorktree(p.digestDir, p.digestBranch, p.token, p.scm, p.servedGit); err != nil {
+			logf("WARN", "digest inference cache push: %v", err)
+		} else {
+			logf("INFO", "digest inference cache pushed branch=%s", p.digestBranch)
+		}
 	}
 	return Result{
 		Action:        p.action,

@@ -52,6 +52,7 @@ var majordomoInternalBranchPrefixes = []string{
 	"majordomo-context/",
 	"majordomo-pr-reviewer-cache/",
 	"majordomo-poll-cache/",
+	"majordomo-digest-cache/",
 }
 
 // isMajordomoInternalBranch reports whether base or head is a Majordomo-owned branch

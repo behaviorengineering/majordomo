@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
@@ -47,6 +48,9 @@ type TypologyRefineInput struct {
 	AnalysisDir           string
 	EvidenceDir           string
 	LedgerBuilder         sliceObjectiveLedgerBuilder
+	DigestCache           *cache.DigestStore
+	DigestSkips           bool
+	DigestModelID         string
 }
 
 // TypologyRefineOutput is the refined catalog proposal and journey notes.
@@ -184,11 +188,14 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	var ledgerDoc sliceObjectiveLedgerDoc
 	if needsLedger {
 		built, issues, buildErr := input.LedgerBuilder.BuildSliceLedger(ctx, sliceLedgerBuildRequest{
-			AnalysisDir: input.AnalysisDir,
-			EvidenceDir: input.EvidenceDir,
-			DraftTypo:   draftTypo,
-			Constraints: constraintsDoc,
-			ClusterMD:   clusterMD,
+			AnalysisDir:   input.AnalysisDir,
+			EvidenceDir:   input.EvidenceDir,
+			DraftTypo:     draftTypo,
+			Constraints:   constraintsDoc,
+			ClusterMD:     clusterMD,
+			DigestCache:   input.DigestCache,
+			DigestSkips:   input.DigestSkips,
+			DigestModelID: input.DigestModelID,
 		})
 		if buildErr != nil {
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed: %w", buildErr)
@@ -1445,7 +1452,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	if validator, err := newRLMValidatorFromOpts(ctx, opts); err != nil {
 		logf("WARN", "typology RLM validator unavailable: %v", err)
 	} else if validator != nil {
-		updated, err := validatePackageRolesRLM(ctx, validator, analysisDir, evidenceDir, rolesPath, string(rolesText))
+		updated, err := validatePackageRolesRLM(ctx, validator, analysisDir, evidenceDir, rolesPath, string(rolesText), opts.DigestCache, opts.DigestSkips, opts.DigestModelID)
 		if err != nil {
 			return err
 		}
@@ -1486,6 +1493,9 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		AnalysisDir:           analysisDir,
 		EvidenceDir:           evidenceDir,
 		LedgerBuilder:         ledgerBuilder,
+		DigestCache:           opts.DigestCache,
+		DigestSkips:           opts.DigestSkips,
+		DigestModelID:         opts.DigestModelID,
 	})
 	if err != nil {
 		return err

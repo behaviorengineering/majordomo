@@ -46,7 +46,7 @@ type Cache struct {
 	DisableSkips bool `yaml:"disableSkips"`
 }
 
-// SkipsEnabled reports whether cluster analysis cache hits may skip re-analysis.
+// SkipsEnabled reports whether analysis / digest inference cache hits may skip LLM work.
 func (c Cache) SkipsEnabled() bool {
 	return !c.DisableSkips
 }
@@ -249,6 +249,11 @@ func PollCacheBranch(repoID string) string {
 // ContextBranch returns the repo-context git branch for repoID.
 func ContextBranch(repoID string) string {
 	return "majordomo-context/" + repoID
+}
+
+// DigestCacheBranch returns the digest inference-cache git branch for repoID.
+func DigestCacheBranch(repoID string) string {
+	return "majordomo-digest-cache/" + repoID
 }
 
 // ContextUpdateBranch returns the catch-up head branch for repoID.

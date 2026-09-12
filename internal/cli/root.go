@@ -425,7 +425,7 @@ func newStatusCmd() *cobra.Command {
 func newCacheCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cache",
-		Short: "Review and poll cache on served repo",
+		Short: "Review, poll, and digest inference cache on served repo",
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "validate-branch <branch>",
@@ -690,6 +690,149 @@ func newCacheCmd() *cobra.Command {
 	_ = restoreCmd.MarkFlagRequired("entry-file")
 	_ = restoreCmd.MarkFlagRequired("output-dir")
 	cmd.AddCommand(restoreCmd)
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "validate-digest-branch <branch>",
+		Short: "Validate majordomo-digest-cache branch name",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cache.ValidateDigestCacheBranch(args[0])
+		},
+	})
+
+	var (
+		digestDir         string
+		digestKind        string
+		digestPackage     string
+		digestSlice       string
+		digestContextSHA  string
+		digestModel       string
+		digestOwnedHash   string
+		digestConsHash    string
+		digestClusterHash string
+		digestPayloadFile string
+	)
+	digestLookup := &cobra.Command{
+		Use:   "digest-lookup",
+		Short: "Lookup digest inference cache entry (inspect|ledger)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			store := &cache.DigestStore{Dir: digestDir}
+			switch digestKind {
+			case "inspect":
+				hit, ok, err := store.LookupInspect(cache.InspectFingerprint{
+					PackagePath: digestPackage,
+					ContextSHA:  digestContextSHA,
+					ModelID:     digestModel,
+				})
+				if err != nil {
+					return err
+				}
+				return cache.PrintJSON(map[string]any{"hit": ok, "payload": hit})
+			case "ledger":
+				hit, ok, err := store.LookupLedger(cache.LedgerFingerprint{
+					SliceID:         digestSlice,
+					OwnedPathsHash:  digestOwnedHash,
+					ContextSHA:      digestContextSHA,
+					ConstraintsHash: digestConsHash,
+					ClusterHash:     digestClusterHash,
+					ModelID:         digestModel,
+				})
+				if err != nil {
+					return err
+				}
+				return cache.PrintJSON(map[string]any{"hit": ok, "payload": hit})
+			default:
+				return fmt.Errorf("kind must be inspect or ledger")
+			}
+		},
+	}
+	digestLookup.Flags().StringVar(&digestDir, "cache-dir", "", "digest cache directory")
+	digestLookup.Flags().StringVar(&digestKind, "kind", "", "inspect|ledger")
+	digestLookup.Flags().StringVar(&digestPackage, "package-path", "", "inspect package path")
+	digestLookup.Flags().StringVar(&digestSlice, "slice-id", "", "ledger slice id")
+	digestLookup.Flags().StringVar(&digestContextSHA, "context-sha", "", "RLM context sha256")
+	digestLookup.Flags().StringVar(&digestModel, "model-id", "", "model id")
+	digestLookup.Flags().StringVar(&digestOwnedHash, "owned-paths-hash", "", "ledger owned paths hash")
+	digestLookup.Flags().StringVar(&digestConsHash, "constraints-hash", "", "ledger constraints hash")
+	digestLookup.Flags().StringVar(&digestClusterHash, "cluster-hash", "", "ledger cluster proposal hash")
+	_ = digestLookup.MarkFlagRequired("cache-dir")
+	_ = digestLookup.MarkFlagRequired("kind")
+	_ = digestLookup.MarkFlagRequired("context-sha")
+	_ = digestLookup.MarkFlagRequired("model-id")
+	cmd.AddCommand(digestLookup)
+
+	digestStoreCmd := &cobra.Command{
+		Use:   "digest-store",
+		Short: "Store digest inference cache entry from JSON payload file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			raw, err := os.ReadFile(digestPayloadFile)
+			if err != nil {
+				return err
+			}
+			store := &cache.DigestStore{Dir: digestDir}
+			switch digestKind {
+			case "inspect":
+				var role cache.InspectCachedRole
+				if err := json.Unmarshal(raw, &role); err != nil {
+					return err
+				}
+				return store.StoreInspect(cache.InspectFingerprint{
+					PackagePath: digestPackage,
+					ContextSHA:  digestContextSHA,
+					ModelID:     digestModel,
+				}, role)
+			case "ledger":
+				var entry cache.LedgerCachedEntry
+				if err := json.Unmarshal(raw, &entry); err != nil {
+					return err
+				}
+				return store.StoreLedger(cache.LedgerFingerprint{
+					SliceID:         digestSlice,
+					OwnedPathsHash:  digestOwnedHash,
+					ContextSHA:      digestContextSHA,
+					ConstraintsHash: digestConsHash,
+					ClusterHash:     digestClusterHash,
+					ModelID:         digestModel,
+				}, entry)
+			default:
+				return fmt.Errorf("kind must be inspect or ledger")
+			}
+		},
+	}
+	digestStoreCmd.Flags().StringVar(&digestDir, "cache-dir", "", "digest cache directory")
+	digestStoreCmd.Flags().StringVar(&digestKind, "kind", "", "inspect|ledger")
+	digestStoreCmd.Flags().StringVar(&digestPackage, "package-path", "", "inspect package path")
+	digestStoreCmd.Flags().StringVar(&digestSlice, "slice-id", "", "ledger slice id")
+	digestStoreCmd.Flags().StringVar(&digestContextSHA, "context-sha", "", "RLM context sha256")
+	digestStoreCmd.Flags().StringVar(&digestModel, "model-id", "", "model id")
+	digestStoreCmd.Flags().StringVar(&digestOwnedHash, "owned-paths-hash", "", "ledger owned paths hash")
+	digestStoreCmd.Flags().StringVar(&digestConsHash, "constraints-hash", "", "ledger constraints hash")
+	digestStoreCmd.Flags().StringVar(&digestClusterHash, "cluster-hash", "", "ledger cluster proposal hash")
+	digestStoreCmd.Flags().StringVar(&digestPayloadFile, "payload-file", "", "JSON payload path")
+	_ = digestStoreCmd.MarkFlagRequired("cache-dir")
+	_ = digestStoreCmd.MarkFlagRequired("kind")
+	_ = digestStoreCmd.MarkFlagRequired("context-sha")
+	_ = digestStoreCmd.MarkFlagRequired("model-id")
+	_ = digestStoreCmd.MarkFlagRequired("payload-file")
+	cmd.AddCommand(digestStoreCmd)
+
+	var digestRemote, digestBranch, digestWorktree string
+	digestPush := &cobra.Command{
+		Use:   "digest-push",
+		Short: "Push majordomo-digest-cache branch",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cache.PushDigest(cache.DigestPushOptions{
+				Remote: digestRemote, Branch: digestBranch, Worktree: digestWorktree,
+			})
+		},
+	}
+	digestPush.Flags().StringVar(&digestRemote, "remote", "", "https remote URL")
+	digestPush.Flags().StringVar(&digestBranch, "branch", "", "digest cache branch")
+	digestPush.Flags().StringVar(&digestWorktree, "worktree", "", "digest cache worktree")
+	_ = digestPush.MarkFlagRequired("remote")
+	_ = digestPush.MarkFlagRequired("branch")
+	_ = digestPush.MarkFlagRequired("worktree")
+	cmd.AddCommand(digestPush)
 
 	return cmd
 }

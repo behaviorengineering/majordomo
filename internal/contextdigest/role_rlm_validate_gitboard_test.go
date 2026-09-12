@@ -74,7 +74,7 @@ func TestValidatePackageRolesRLMGitboardStyle(t *testing.T) {
 		"internal/triage":     {role: roleAdapter, evidence: "Analyze"},  // fill unknown
 		"internal/pruneagent": {role: roleAggregator, evidence: "Investigate"},
 	}
-	updated, err := validatePackageRolesRLM(context.Background(), stub, dir, evidence, rolesPath, rolesYAML)
+	updated, err := validatePackageRolesRLM(context.Background(), stub, dir, evidence, rolesPath, rolesYAML, nil, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
