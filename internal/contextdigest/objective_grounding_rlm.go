@@ -13,6 +13,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
+	"github.com/behaviorengineering/majordomo/internal/judge"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
@@ -70,6 +71,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig)
 	if err != nil {
 		return nil, fmt.Errorf("typology_objective_grounding RLM LLM: %w", err)
 	}
+	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	rlmCfg := stropdspy.RLMDefaults()
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	timeout := provider.GetTimeout(ledgerRLMTimeout)
