@@ -37,6 +37,10 @@ func (f *flakyLLM) CreateEmbeddings(context.Context, []string, ...core.Embedding
 	return nil, errors.New("embeddings unsupported in flaky test LLM")
 }
 
+func (f *flakyLLM) GenerateWithFunctions(context.Context, string, []map[string]any, ...core.GenerateOption) (map[string]any, error) {
+	return nil, errors.New("function calls unsupported in flaky test LLM")
+}
+
 func TestWrapLLMWithRetrySucceedsAfterTransientFailures(t *testing.T) {
 	t.Parallel()
 	inner := &flakyLLM{}
