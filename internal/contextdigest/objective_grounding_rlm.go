@@ -402,6 +402,7 @@ Owned package paths: %s
 
 %s
 %s
+%s
 Cluster proposal (membership hint only; MUST NOT invent prestige meaning from it):
 %s
 
@@ -415,7 +416,6 @@ verdict: grounded|overclaim
 
 If you cannot support a runtime claim with symbols, either drop that claim or set verdict: overclaim.
 Claims MUST NOT intersect owned must_not codes in the constraint rows.
-The code orchestrate is entrypoint-only: never claim it unless an owned package role is entrypoint.
 When validation_feedback is present, drop or replace every claim it rejects; do not repeat the same overclaim.`,
-		sliceID, strings.Join(paths, ", "), constraintBlock, feedbackBlock, clusterNote)
+		sliceID, strings.Join(paths, ", "), constraintBlock, feedbackBlock, claimPolicyPromptRules(), clusterNote)
 }

@@ -6,6 +6,7 @@ This module is the Majordomo control-plane library and CLI. Humans read [README.
 
 1. [ai-copilots/skills/README.md](ai-copilots/skills/README.md) (index)
 2. [ai-copilots/skills/majordomo-inference-cache/SKILL.md](ai-copilots/skills/majordomo-inference-cache/SKILL.md)
+3. [ai-copilots/skills/majordomo-capability-claims/SKILL.md](ai-copilots/skills/majordomo-capability-claims/SKILL.md)
 
 ## Wire host discovery
 
