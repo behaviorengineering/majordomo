@@ -25,8 +25,8 @@ func (f *flakyLLM) Generate(context.Context, string, ...core.GenerateOption) (*c
 	return &core.LLMResponse{Content: "ok"}, nil
 }
 
-func (f *flakyLLM) GenerateWithContent(ctx context.Context, _ []core.ContentBlock, _ ...core.GenerateOption) (*core.LLMResponse, error) {
-	return f.Generate(ctx, "")
+func (f *flakyLLM) GenerateWithContent(ctx context.Context, _ []core.ContentBlock, opts ...core.GenerateOption) (*core.LLMResponse, error) {
+	return f.Generate(ctx, "", opts...)
 }
 
 func (f *flakyLLM) CreateEmbedding(context.Context, string, ...core.EmbeddingOption) (*core.EmbeddingResult, error) {
