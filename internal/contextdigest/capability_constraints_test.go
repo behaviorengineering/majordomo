@@ -30,6 +30,36 @@ func TestBuildCapabilityConstraintsDTOAndFillsDTO(t *testing.T) {
 	if len(board.FilledBy) != 1 || board.FilledBy[0] != "internal/adapter" {
 		t.Fatalf("filled_by=%v", board.FilledBy)
 	}
+	adapter := by["internal/adapter"]
+	if !containsString(adapter.MustNot, capOrchestrate) {
+		t.Fatalf("adapter must_not missing orchestrate: %v", adapter.MustNot)
+	}
+}
+
+func TestBuildCapabilityConstraintsOrchestrateEntrypointOnly(t *testing.T) {
+	t.Parallel()
+	doc := packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/cli", Role: roleEntrypoint, Confidence: 0.9},
+			{Path: "internal/pruneagent", Role: roleAggregator, Confidence: 0.8},
+			{Path: "internal/mystery", Role: roleUnknown, Confidence: 0},
+		},
+	}
+	out := buildCapabilityConstraints(doc)
+	by := constraintsByPath(out)
+	cli := by["internal/cli"]
+	if !containsString(cli.Is, capOrchestrate) {
+		t.Fatalf("entrypoint is=%v want orchestrate", cli.Is)
+	}
+	if containsString(cli.MustNot, capOrchestrate) {
+		t.Fatalf("entrypoint must_not must not include orchestrate: %v", cli.MustNot)
+	}
+	for _, path := range []string{"internal/pruneagent", "internal/mystery"} {
+		c := by[path]
+		if !containsString(c.MustNot, capOrchestrate) {
+			t.Fatalf("%s must_not=%v want orchestrate", path, c.MustNot)
+		}
+	}
 }
 
 func TestAppendConstraintClaimIssuesRejectsSyncOnDTO(t *testing.T) {
