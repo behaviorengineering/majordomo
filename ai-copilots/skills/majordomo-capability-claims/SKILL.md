@@ -17,7 +17,7 @@ the gate will reject.
 | Piece | File |
 |-------|------|
 | Role → is/must_not table | `internal/contextdigest/capability_constraints.go` (`roleCapabilityTable`) |
-| Fail-closed post-pass | `buildCapabilityConstraints` |
+| Fail-closed post-pass | `buildCapabilityConstraints` + `dropAllowedCapabilityMustNot` |
 | Positive entailment | `internal/contextdigest/claim_entailment.go` (`claimEntailed`) |
 | Ledger instruction fragment | `claimPolicyPromptRules` (same package; wired into `formatSliceObjectiveLedgerQuery`) |
 
@@ -66,13 +66,18 @@ CORRECT:
 if role != roleExecRunner && !evidenceHasAny(n.Evidence, "imports_os_exec") {
   c.MustNot = uniqueStrings(append(c.MustNot, capExecProcess))
 }
-// ... and claimPolicyPromptRules lists the same exception
+if role != roleAggregator {
+  c.MustNot = uniqueStrings(append(c.MustNot, capOwnDomainRules))
+}
+// ... and claimPolicyPromptRules lists the same exceptions
 ```
 
 PROHIBITED:
 ```text
 Prompt: "you may claim exec_process when the package coordinates CLI work"
 // while claimEntailed still requires imports_os_exec
+Prompt: "own_domain_rules for entrypoint/http_surface"
+// while must_not and claimEntailed only allow aggregator
 ```
 
 ---
@@ -81,6 +86,7 @@ Prompt: "you may claim exec_process when the package coordinates CLI work"
 
 - [ ] Table defaults match intended role priors
 - [ ] Fail-closed post-pass covers unknown/custom roles
+- [ ] Evidence/role exceptions clear table defaults (`dropAllowedCapabilityMustNot`)
 - [ ] `claimEntailed` evidence flags match the prompt fragment
 - [ ] Unit tests cover must_not allow/deny cases
 - [ ] `formatSliceObjectiveLedgerQuery` still embeds constraint rows + policy

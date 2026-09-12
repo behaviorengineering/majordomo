@@ -250,7 +250,15 @@ type BoardPayload struct{}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(issues) == 0 || !strings.Contains(strings.Join(issues, "\n"), "not entailed") {
+	if len(issues) == 0 {
+		t.Fatal("expected fill_dto rejection")
+	}
+	joined := strings.Join(issues, "\n")
+	if !strings.Contains(joined, "fill_dto") {
+		t.Fatalf("issues=%v", issues)
+	}
+	// Fail-closed must_not may reject before positive entailment.
+	if !strings.Contains(joined, "not entailed") && !strings.Contains(joined, "intersect must_not") {
 		t.Fatalf("issues=%v", issues)
 	}
 }
