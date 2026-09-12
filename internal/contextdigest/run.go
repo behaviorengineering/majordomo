@@ -156,6 +156,7 @@ func Run(opts Options) (res Result, err error) {
 			if ferr := store.Flush(); ferr != nil {
 				logf("WARN", "digest inference cache final flush: %v", ferr)
 			}
+			logf("INFO", "%s", cache.FormatStatsLine(store.Stats()))
 		}()
 	}
 

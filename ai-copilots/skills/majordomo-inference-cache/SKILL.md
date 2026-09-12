@@ -67,6 +67,21 @@ failure MUST NOT discard already-earned inspect/ledger (or cluster) hits.
   materializing `majordomo-digest-cache/<repo-id>`; final Flush on exit
 - Violation: STOP, wire push-on-store (or phase flush), re-verify
 
+**CONSTRAINT:** Digest fingerprint inputs MUST be stable across reseeds of the
+same code. Prefer package source hashes (and owned-path / constraint facts) over
+ephemeral RLM markdown or LLM cluster proposal prose. Schema bumps (`inspect-v2`,
+`ledger-v2`) invalidate old keys intentionally.
+
+- Enforcement: `PackageSourceHash` / `OwnedPackagesSourceHash`; ledger omits cluster hash
+- Violation: STOP, remove ephemeral inputs from the fingerprint, bump schema
+
+**CONSTRAINT:** Digest runs MUST log cache hit/miss counts and estimated tokens
+saved (`digest cache summary … estimated_tokens_saved=`), using stored per-entry
+usage when present.
+
+- Enforcement: `DigestStore` stats + `FormatStatsLine` after inspect/ledger and on exit
+- Violation: STOP, wire Record*Hit/Miss and end-of-run summary
+
 **CONSTRAINT:** Digest teaching reseeds MUST NOT delete `majordomo-digest-cache/*`.
 Context wipe (`majordomo-context/*`) is allowed; inference reuse must survive it.
 
@@ -75,9 +90,11 @@ Context wipe (`majordomo-context/*`) is allowed; inference reuse must survive it
 
 CORRECT:
 ```go
-fp := cache.InspectFingerprint{PackagePath: path, ContextSHA: sha, ModelID: model, SchemaVersion: cache.DigestInspectSchemaV1}
+srcSHA, _ := cache.PackageSourceHash(analysisDir, path)
+fp := cache.InspectFingerprint{PackagePath: path, ContextSHA: srcSHA, ModelID: model, SchemaVersion: cache.DigestInspectSchemaV2}
 if skips && store != nil {
   if hit, ok, _ := store.LookupInspect(fp); ok {
+    store.RecordInspectHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
     return hit, nil // no provider call
   }
 }
@@ -90,8 +107,8 @@ if err == nil && out.Agreement == "match" {
 
 PROHIBITED:
 ```go
-// Always call the provider; no fingerprint; no store
-return rlm.Validate(...)
+// Fingerprint on ephemeral cluster markdown or regenerated RLM prose
+fp.ContextSHA = cache.ContentSHA(clusterProposalMD)
 
 // Persist only in memory until the whole digest finishes successfully
 if digestSucceeded {
@@ -108,6 +125,10 @@ if digestSucceeded {
       Method: fingerprint struct fields present
       Pass: all three categories covered
       Fail: STOP, add fields
+- [ ] Fingerprint stable across reseeds of the same sources
+      Method: PackageSourceHash / OwnedPackagesSourceHash; no cluster prose in key
+      Pass: second reseed logs hits for unchanged packages
+      Fail: STOP, remove ephemeral hash inputs
 - [ ] Lookup before provider when skips enabled
       Method: code path + unit test hit
       Pass: stub LLM not called on hit
@@ -120,6 +141,10 @@ if digestSucceeded {
       Method: Flush after Store*; failed digest still leaves remote hits
       Pass: push configured on digest materialize; test Flush called from Store
       Fail: STOP, wire ConfigurePush / Flush
+- [ ] Hit/miss + estimated_tokens_saved logged
+      Method: FormatStatsLine in inspect/ledger/exit logs
+      Pass: summary line present with counts
+      Fail: STOP, wire DigestStore stats
 - [ ] Branch / dir uses `internal/cache` helpers
       Method: `DigestCacheBranch` or review `CacheBranch`
       Pass: no ad-hoc branch string

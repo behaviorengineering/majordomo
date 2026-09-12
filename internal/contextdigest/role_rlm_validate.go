@@ -36,20 +36,20 @@ var roleTokenRE = regexp.MustCompile(`(?i)\b(role|final)\s*[:=]\s*([a-z_]+)`)
 
 // packageRoleRLMValidator classifies one package from AST context via RLM.
 type packageRoleRLMValidator interface {
-	Validate(ctx context.Context, pkgPath, contextMD, mechanicalRole, mechanicalEvidence string) (role, evidence string, iterations int, err error)
+	Validate(ctx context.Context, pkgPath, contextMD, mechanicalRole, mechanicalEvidence string) (role, evidence string, iterations, promptTokens, completionTokens, totalTokens int, err error)
 }
 
 type stropPackageRoleRLM struct {
 	module interface {
-		Complete(ctx context.Context, contextPayload any, query string) (response string, iterations int, err error)
+		Complete(ctx context.Context, contextPayload any, query string) (response string, iterations, promptTokens, completionTokens, totalTokens int, err error)
 	}
 }
 
 type rlmCompleteAdapter struct {
-	complete func(ctx context.Context, contextPayload any, query string) (string, int, error)
+	complete func(ctx context.Context, contextPayload any, query string) (string, int, int, int, int, error)
 }
 
-func (a rlmCompleteAdapter) Complete(ctx context.Context, contextPayload any, query string) (string, int, error) {
+func (a rlmCompleteAdapter) Complete(ctx context.Context, contextPayload any, query string) (string, int, int, int, int, error) {
 	return a.complete(ctx, contextPayload, query)
 }
 
@@ -76,24 +76,28 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig) (package
 		return nil, err
 	}
 	return stropPackageRoleRLM{
-		module: rlmCompleteAdapter{complete: func(ctx context.Context, contextPayload any, query string) (string, int, error) {
+		module: rlmCompleteAdapter{complete: func(ctx context.Context, contextPayload any, query string) (string, int, int, int, int, error) {
 			answer, result, err := stropdspy.RLMComplete(ctx, module, contextPayload, query)
 			if err != nil {
-				return "", 0, err
+				return "", 0, 0, 0, 0, err
 			}
 			iters := 0
+			prompt, completion, total := 0, 0, 0
 			if result != nil {
 				iters = result.Iterations
+				prompt = result.Usage.PromptTokens
+				completion = result.Usage.CompletionTokens
+				total = result.Usage.TotalTokens
 				llmusage.FromContext(ctx).AddTokenUsageValue(jmodules.TaskTypologyInspect, result.Usage)
 			} else {
 				llmusage.FromContext(ctx).Add(jmodules.TaskTypologyInspect, 0, 0, 0)
 			}
-			return answer, iters, nil
+			return answer, iters, prompt, completion, total, nil
 		}},
 	}, nil
 }
 
-func (v stropPackageRoleRLM) Validate(ctx context.Context, pkgPath, contextMD, mechanicalRole, mechanicalEvidence string) (string, string, int, error) {
+func (v stropPackageRoleRLM) Validate(ctx context.Context, pkgPath, contextMD, mechanicalRole, mechanicalEvidence string) (string, string, int, int, int, int, error) {
 	query := fmt.Sprintf(`Classify this Go package into exactly one role.
 Allowed roles: entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown.
 Mechanical prior: role=%s evidence=%s
@@ -103,12 +107,12 @@ End with lines:
 role: <one allowed role>
 evidence: <short symbol quotes>
 Package path (not evidence): %s`, mechanicalRole, mechanicalEvidence, pkgPath)
-	answer, iters, err := v.module.Complete(ctx, contextMD, query)
+	answer, iters, prompt, completion, total, err := v.module.Complete(ctx, contextMD, query)
 	if err != nil {
-		return "", "", iters, err
+		return "", "", iters, prompt, completion, total, err
 	}
 	role, evidence := parseRLMRoleAnswer(answer)
-	return role, evidence, iters, nil
+	return role, evidence, iters, prompt, completion, total, nil
 }
 
 func parseRLMRoleAnswer(text string) (role, evidence string) {
@@ -194,15 +198,21 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 				results[i] = result{idx: i, node: markUnvalidated(n), err: fmt.Errorf("empty RLM context")}
 				return
 			}
+			srcSHA, srcErr := cache.PackageSourceHash(analysisDir, n.Path)
+			if srcErr != nil {
+				results[i] = result{idx: i, node: markUnvalidated(n), err: fmt.Errorf("package source hash: %w", srcErr)}
+				return
+			}
 			fp := cache.InspectFingerprint{
 				PackagePath:   normalizeRolePath(n.Path),
-				ContextSHA:    cache.ContentSHA(ctxMD),
+				ContextSHA:    srcSHA,
 				ModelID:       modelID,
 				PromptVersion: cache.DigestInspectPromptV1,
-				SchemaVersion: cache.DigestInspectSchemaV1,
+				SchemaVersion: cache.DigestInspectSchemaV2,
 			}
 			if skips && store != nil {
 				if hit, ok, err := store.LookupInspect(fp); err == nil && ok {
+					store.RecordInspectHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
 					logf("INFO", "digest cache hit inspect path=%s", n.Path)
 					results[i] = result{idx: i, node: packageRoleFromCached(hit), loggedRole: hit.LLMRole}
 					return
@@ -212,7 +222,10 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 			if mechRole == "" {
 				mechRole = roleUnknown
 			}
-			llmRole, evidence, iters, err := validator.Validate(ctx, n.Path, ctxMD, mechRole, strings.Join(n.Evidence, ", "))
+			llmRole, evidence, iters, promptTok, completionTok, totalTok, err := validator.Validate(ctx, n.Path, ctxMD, mechRole, strings.Join(n.Evidence, ", "))
+			if store != nil {
+				store.RecordInspectMiss()
+			}
 			if err != nil {
 				node := markUnvalidated(n)
 				node.Evidence = appendUnique(node.Evidence, "rlm_error:"+truncateErr(err))
@@ -225,7 +238,11 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 			}
 			updated := applyRLMAgreement(n, llmRole, evidence, iters)
 			if store != nil && updated.Agreement == agreementMatch {
-				if err := store.StoreInspect(fp, cachedFromPackageRole(updated)); err != nil {
+				cached := cachedFromPackageRole(updated)
+				cached.PromptTokens = promptTok
+				cached.CompletionTokens = completionTok
+				cached.TotalTokens = totalTok
+				if err := store.StoreInspect(fp, cached); err != nil {
 					results[i] = result{
 						idx:  i,
 						node: updated,
@@ -261,6 +278,9 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 	data, err := os.ReadFile(rolesPath)
 	if err != nil {
 		return "", err
+	}
+	if store != nil {
+		logf("INFO", "%s", cache.FormatStatsLine(store.Stats()))
 	}
 	return string(data), nil
 }

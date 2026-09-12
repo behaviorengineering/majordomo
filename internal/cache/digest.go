@@ -17,10 +17,14 @@ import (
 )
 
 const (
-	// DigestInspectSchemaV1 is the inspect payload / fingerprint schema id.
+	// DigestInspectSchemaV1 is the legacy inspect schema (hashed RLM markdown).
 	DigestInspectSchemaV1 = "inspect-v1"
-	// DigestLedgerSchemaV1 is the ledger payload / fingerprint schema id.
+	// DigestInspectSchemaV2 keys inspect on stable package source hashes.
+	DigestInspectSchemaV2 = "inspect-v2"
+	// DigestLedgerSchemaV1 is the legacy ledger schema (included cluster markdown).
 	DigestLedgerSchemaV1 = "ledger-v1"
+	// DigestLedgerSchemaV2 keys ledger on owned-path source + constraints (no cluster prose).
+	DigestLedgerSchemaV2 = "ledger-v2"
 	// DigestInspectPromptV1 labels the inspect RLM prompt contract.
 	DigestInspectPromptV1 = "typology_inspect_rlm_v1"
 	// DigestLedgerPromptV1 labels the objective-ledger RLM prompt contract.
@@ -37,6 +41,21 @@ func ValidateDigestCacheBranch(branch string) error {
 	return nil
 }
 
+// DigestRunStats counts cache hits/misses and estimated tokens avoided this run.
+type DigestRunStats struct {
+	InspectHits           int
+	InspectMisses         int
+	LedgerHits            int
+	LedgerMisses          int
+	TokensSavedPrompt     int
+	TokensSavedCompletion int
+	TokensSavedTotal      int
+	inspectStoredTotalSum int
+	inspectStoredTotalN   int
+	ledgerStoredTotalSum  int
+	ledgerStoredTotalN    int
+}
+
 // DigestStore is a local worktree (or plain directory) of digest inference JSON.
 //
 // When push is configured, every successful Store* MUST Flush (commit+push) before
@@ -50,6 +69,9 @@ type DigestStore struct {
 	pushOpts     *DigestPushOptions
 	PushFn       func() error // optional test seam; overrides PushDigest when set
 	OnFlushError func(error)
+
+	statsMu sync.Mutex
+	stats   DigestRunStats
 }
 
 // ConfigurePush enables push-on-the-go after each successful Store*.
@@ -90,6 +112,110 @@ func (s *DigestStore) flushAfterStore() {
 	_ = s.Flush()
 }
 
+// Stats returns a copy of hit/miss and estimated token-savings counters for this run.
+func (s *DigestStore) Stats() DigestRunStats {
+	if s == nil {
+		return DigestRunStats{}
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	return s.stats
+}
+
+// RecordInspectHit notes an inspect skip and estimated tokens avoided.
+func (s *DigestStore) RecordInspectHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.InspectHits++
+	if total <= 0 {
+		total = s.avgLocked(s.stats.inspectStoredTotalSum, s.stats.inspectStoredTotalN)
+	}
+	if total <= 0 && prompt+completion > 0 {
+		total = prompt + completion
+	}
+	s.stats.TokensSavedPrompt += prompt
+	s.stats.TokensSavedCompletion += completion
+	s.stats.TokensSavedTotal += total
+}
+
+// RecordInspectMiss notes an inspect provider call.
+func (s *DigestStore) RecordInspectMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.InspectMisses++
+}
+
+// RecordLedgerHit notes a ledger skip and estimated tokens avoided.
+func (s *DigestStore) RecordLedgerHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.LedgerHits++
+	if total <= 0 {
+		total = s.avgLocked(s.stats.ledgerStoredTotalSum, s.stats.ledgerStoredTotalN)
+	}
+	if total <= 0 && prompt+completion > 0 {
+		total = prompt + completion
+	}
+	s.stats.TokensSavedPrompt += prompt
+	s.stats.TokensSavedCompletion += completion
+	s.stats.TokensSavedTotal += total
+}
+
+// RecordLedgerMiss notes a ledger provider call.
+func (s *DigestStore) RecordLedgerMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.LedgerMisses++
+}
+
+func (s *DigestStore) noteInspectStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.inspectStoredTotalSum += total
+	s.stats.inspectStoredTotalN++
+}
+
+func (s *DigestStore) noteLedgerStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.ledgerStoredTotalSum += total
+	s.stats.ledgerStoredTotalN++
+}
+
+func (s *DigestStore) avgLocked(sum, n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return sum / n
+}
+
+// FormatStatsLine returns a one-line operator summary of digest cache reuse.
+func FormatStatsLine(st DigestRunStats) string {
+	return fmt.Sprintf(
+		"digest cache summary inspect_hits=%d inspect_misses=%d ledger_hits=%d ledger_misses=%d estimated_tokens_saved=%d (prompt=%d completion=%d)",
+		st.InspectHits, st.InspectMisses, st.LedgerHits, st.LedgerMisses,
+		st.TokensSavedTotal, st.TokensSavedPrompt, st.TokensSavedCompletion,
+	)
+}
+
 // InspectFingerprint keys one package role RLM result.
 type InspectFingerprint struct {
 	PackagePath   string
@@ -113,28 +239,34 @@ type LedgerFingerprint struct {
 
 // InspectCachedRole is the durable inspect payload.
 type InspectCachedRole struct {
-	Path           string   `json:"path"`
-	Role           string   `json:"role"`
-	Confidence     float64  `json:"confidence"`
-	Evidence       []string `json:"evidence"`
-	InspectedStage int      `json:"inspected_stage"`
-	Language       string   `json:"language,omitempty"`
-	CandidateRole  string   `json:"candidate_role,omitempty"`
-	MechanicalRole string   `json:"mechanical_role,omitempty"`
-	LLMRole        string   `json:"llm_role,omitempty"`
-	Agreement      string   `json:"agreement,omitempty"`
-	RLMIterations  int      `json:"rlm_iterations,omitempty"`
+	Path              string   `json:"path"`
+	Role              string   `json:"role"`
+	Confidence        float64  `json:"confidence"`
+	Evidence          []string `json:"evidence"`
+	InspectedStage    int      `json:"inspected_stage"`
+	Language          string   `json:"language,omitempty"`
+	CandidateRole     string   `json:"candidate_role,omitempty"`
+	MechanicalRole    string   `json:"mechanical_role,omitempty"`
+	LLMRole           string   `json:"llm_role,omitempty"`
+	Agreement         string   `json:"agreement,omitempty"`
+	RLMIterations     int      `json:"rlm_iterations,omitempty"`
+	PromptTokens      int      `json:"prompt_tokens,omitempty"`
+	CompletionTokens  int      `json:"completion_tokens,omitempty"`
+	TotalTokens       int      `json:"total_tokens,omitempty"`
 }
 
 // LedgerCachedEntry is the durable grounded ledger payload.
 type LedgerCachedEntry struct {
-	ID         string   `json:"id"`
-	OwnedPaths []string `json:"owned_paths,omitempty"`
-	Evidence   []string `json:"evidence"`
-	Claims     []string `json:"claims"`
-	Objective  string   `json:"objective"`
-	Verdict    string   `json:"verdict"`
-	Source     string   `json:"source,omitempty"`
+	ID               string   `json:"id"`
+	OwnedPaths       []string `json:"owned_paths,omitempty"`
+	Evidence         []string `json:"evidence"`
+	Claims           []string `json:"claims"`
+	Objective        string   `json:"objective"`
+	Verdict          string   `json:"verdict"`
+	Source           string   `json:"source,omitempty"`
+	PromptTokens     int      `json:"prompt_tokens,omitempty"`
+	CompletionTokens int      `json:"completion_tokens,omitempty"`
+	TotalTokens      int      `json:"total_tokens,omitempty"`
 }
 
 type digestRecord struct {
@@ -172,7 +304,7 @@ func (fp InspectFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestInspectSchemaV1
+		schema = DigestInspectSchemaV2
 	}
 	return HashDigestParts("inspect", fp.PackagePath, fp.ContextSHA, fp.ModelID, prompt, schema)
 }
@@ -184,11 +316,18 @@ func (fp LedgerFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestLedgerSchemaV1
+		schema = DigestLedgerSchemaV2
 	}
+	if schema == DigestLedgerSchemaV1 {
+		return HashDigestParts(
+			"ledger", fp.SliceID, fp.OwnedPathsHash, fp.ContextSHA, fp.ConstraintsHash,
+			fp.ClusterHash, fp.ModelID, prompt, schema,
+		)
+	}
+	// v2+: cluster proposal prose is not an invalidation input.
 	return HashDigestParts(
 		"ledger", fp.SliceID, fp.OwnedPathsHash, fp.ContextSHA, fp.ConstraintsHash,
-		fp.ClusterHash, fp.ModelID, prompt, schema,
+		fp.ModelID, prompt, schema,
 	)
 }
 
@@ -235,6 +374,7 @@ func (s *DigestStore) StoreInspect(fp InspectFingerprint, role InspectCachedRole
 	}); err != nil {
 		return err
 	}
+	s.noteInspectStoredUsage(role.TotalTokens)
 	s.flushAfterStore()
 	return nil
 }
@@ -277,6 +417,7 @@ func (s *DigestStore) StoreLedger(fp LedgerFingerprint, entry LedgerCachedEntry)
 	}); err != nil {
 		return err
 	}
+	s.noteLedgerStoredUsage(entry.TotalTokens)
 	s.flushAfterStore()
 	return nil
 }

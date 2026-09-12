@@ -16,16 +16,28 @@ type countingInspectValidator struct {
 	calls int
 }
 
-func (c *countingInspectValidator) Validate(_ context.Context, _, _, _, _ string) (string, string, int, error) {
+func (c *countingInspectValidator) Validate(_ context.Context, _, _, _, _ string) (string, string, int, int, int, int, error) {
 	c.mu.Lock()
 	c.calls++
 	c.mu.Unlock()
-	return roleDTO, "json tags", 1, nil
+	return roleDTO, "json tags", 1, 100, 20, 120, nil
+}
+
+func writeBoardPkg(t *testing.T, analysisDir string) {
+	t.Helper()
+	pkg := filepath.Join(analysisDir, "internal", "board")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "board.go"), []byte("package board\n\ntype Payload struct{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestValidatePackageRolesRLM_cacheHitSkipsLLM(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	writeBoardPkg(t, dir)
 	evidence := filepath.Join(dir, "evidence")
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatal(err)
@@ -50,32 +62,38 @@ edges: []
 	if err := os.WriteFile(filepath.Join(evidence, "package_rlm_context.md"), []byte(ctxFile), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ctxMD := packageRLMContextSnippet(ctxFile, "internal/board")
+	srcSHA, err := cache.PackageSourceHash(dir, "internal/board")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	store := &cache.DigestStore{Dir: filepath.Join(dir, "digest-cache")}
 	fp := cache.InspectFingerprint{
 		PackagePath:   "internal/board",
-		ContextSHA:    cache.ContentSHA(ctxMD),
+		ContextSHA:    srcSHA,
 		ModelID:       "test-model",
 		PromptVersion: cache.DigestInspectPromptV1,
-		SchemaVersion: cache.DigestInspectSchemaV1,
+		SchemaVersion: cache.DigestInspectSchemaV2,
 	}
 	if err := store.StoreInspect(fp, cache.InspectCachedRole{
-		Path:           "internal/board",
-		Role:           roleDTO,
-		Confidence:     confidenceAgreeMatch,
-		Evidence:       []string{"json_tags", "rlm:cached"},
-		InspectedStage: 1,
-		MechanicalRole: roleDTO,
-		LLMRole:        roleDTO,
-		Agreement:      agreementMatch,
-		RLMIterations:  0,
+		Path:             "internal/board",
+		Role:             roleDTO,
+		Confidence:       confidenceAgreeMatch,
+		Evidence:         []string{"json_tags", "rlm:cached"},
+		InspectedStage:   1,
+		MechanicalRole:   roleDTO,
+		LLMRole:          roleDTO,
+		Agreement:        agreementMatch,
+		RLMIterations:    0,
+		PromptTokens:     100,
+		CompletionTokens: 20,
+		TotalTokens:      120,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
 	validator := &countingInspectValidator{}
-	_, err := validatePackageRolesRLM(context.Background(), validator, dir, evidence, rolesPath, rolesYAML, store, true, "test-model")
+	_, err = validatePackageRolesRLM(context.Background(), validator, dir, evidence, rolesPath, rolesYAML, store, true, "test-model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,11 +103,16 @@ edges: []
 	if calls != 0 {
 		t.Fatalf("Validate calls=%d want 0 on cache hit", calls)
 	}
+	st := store.Stats()
+	if st.InspectHits != 1 || st.TokensSavedTotal != 120 {
+		t.Fatalf("stats=%+v want inspect_hits=1 tokens_saved=120", st)
+	}
 }
 
 func TestValidatePackageRolesRLM_missCallsLLMAndStoresMatch(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	writeBoardPkg(t, dir)
 	evidence := filepath.Join(dir, "evidence")
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatal(err)
@@ -126,16 +149,23 @@ edges: []
 	if calls != 1 {
 		t.Fatalf("Validate calls=%d want 1 on miss", calls)
 	}
-	ctxMD := packageRLMContextSnippet(ctxFile, "internal/board")
+	srcSHA, err := cache.PackageSourceHash(dir, "internal/board")
+	if err != nil {
+		t.Fatal(err)
+	}
 	fp := cache.InspectFingerprint{
 		PackagePath:   "internal/board",
-		ContextSHA:    cache.ContentSHA(ctxMD),
+		ContextSHA:    srcSHA,
 		ModelID:       "test-model",
 		PromptVersion: cache.DigestInspectPromptV1,
-		SchemaVersion: cache.DigestInspectSchemaV1,
+		SchemaVersion: cache.DigestInspectSchemaV2,
 	}
-	if _, ok, err := store.LookupInspect(fp); err != nil || !ok {
+	hit, ok, err := store.LookupInspect(fp)
+	if err != nil || !ok {
 		t.Fatalf("expected inspect store after match, ok=%v err=%v", ok, err)
+	}
+	if hit.TotalTokens != 120 {
+		t.Fatalf("stored usage total=%d want 120", hit.TotalTokens)
 	}
 }
 
@@ -144,16 +174,17 @@ type overclaimLedgerCaller struct {
 	calls int
 }
 
-func (c *overclaimLedgerCaller) Complete(_ context.Context, _ any, _ string) (string, int, error) {
+func (c *overclaimLedgerCaller) Complete(_ context.Context, _ any, _ string) (string, int, int, int, int, error) {
 	c.mu.Lock()
 	c.calls++
 	c.mu.Unlock()
-	return "evidence: x\nclaims: orchestrate\nobjective: does everything\nverdict: overclaim\n", 1, nil
+	return "evidence: x\nclaims: orchestrate\nobjective: does everything\nverdict: overclaim\n", 1, 0, 0, 0, nil
 }
 
 func TestBuildSliceObjectiveLedger_cacheHitSkipsLLM(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	writeBoardPkg(t, dir)
 	evidence := filepath.Join(dir, "evidence")
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatal(err)
@@ -192,27 +223,32 @@ edges: []
 		byPath[normalizeRolePath(row.Path)] = row
 	}
 	constraintBlock := formatConstraintRowsForPaths([]string{"internal/board"}, byPath)
-	joinedCtx := packageRLMContextSnippet(ctxMD, "internal/board")
+	ownedSrc, err := cache.OwnedPackagesSourceHash(dir, []string{"internal/board"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	clusterMD := "# cluster\n"
 	store := &cache.DigestStore{Dir: filepath.Join(dir, "digest-cache")}
 	fp := cache.LedgerFingerprint{
 		SliceID:         "board",
 		OwnedPathsHash:  cache.OwnedPathsHash([]string{"internal/board"}),
-		ContextSHA:      cache.ContentSHA(joinedCtx),
+		ContextSHA:      ownedSrc,
 		ConstraintsHash: cache.ContentSHA(constraintBlock),
-		ClusterHash:     cache.ContentSHA(clusterMD),
 		ModelID:         "test-model",
 		PromptVersion:   cache.DigestLedgerPromptV1,
-		SchemaVersion:   cache.DigestLedgerSchemaV1,
+		SchemaVersion:   cache.DigestLedgerSchemaV2,
 	}
 	if err := store.StoreLedger(fp, cache.LedgerCachedEntry{
-		ID:         "board",
-		OwnedPaths: []string{"internal/board"},
-		Evidence:   []string{"json_tags"},
-		Claims:     []string{"data_shape"},
-		Objective:  "Shared board payload shapes.",
-		Verdict:    ledgerVerdictGrounded,
-		Source:     "digest_cache",
+		ID:               "board",
+		OwnedPaths:       []string{"internal/board"},
+		Evidence:         []string{"json_tags"},
+		Claims:           []string{"data_shape"},
+		Objective:        "Shared board payload shapes.",
+		Verdict:          ledgerVerdictGrounded,
+		Source:           "digest_cache",
+		PromptTokens:     200,
+		CompletionTokens: 40,
+		TotalTokens:      240,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -243,11 +279,16 @@ edges: []
 	if len(doc.Slices) != 1 || doc.Slices[0].Source != "digest_cache" {
 		t.Fatalf("unexpected doc: %+v", doc)
 	}
+	st := store.Stats()
+	if st.LedgerHits != 1 || st.TokensSavedTotal != 240 {
+		t.Fatalf("stats=%+v want ledger_hits=1 tokens_saved=240", st)
+	}
 }
 
 func TestBuildSliceObjectiveLedger_overclaimNotStored(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
+	writeBoardPkg(t, dir)
 	evidence := filepath.Join(dir, "evidence")
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatal(err)

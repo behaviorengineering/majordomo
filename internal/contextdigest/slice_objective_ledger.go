@@ -273,9 +273,11 @@ func claimsImplyRuntimeWork(claims []string) bool {
 }
 
 func formatConstraintRowsForPaths(paths []string, byPath map[string]packageCapabilityConstraint) string {
+	norm := append([]string(nil), paths...)
+	sort.Strings(norm)
 	var b strings.Builder
 	b.WriteString("Capability constraints for owned packages:\n")
-	for _, p := range paths {
+	for _, p := range norm {
 		c, ok := byPath[normalizeRolePath(p)]
 		if !ok {
 			fmt.Fprintf(&b, "- `%s` (no constraint row)\n", p)

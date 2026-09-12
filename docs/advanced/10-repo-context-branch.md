@@ -347,7 +347,9 @@ refs. Package inspect and slice ledger RLM results live on a **separate** branch
 
 - Branch: `majordomo-digest-cache/<repo-id>` (`config.DigestCacheBranch`)
 - Artifacts: JSON fingerprints under `inspect/` and `ledger/` (not teaching markdown)
-- Hit when package/slice evidence, model, and schema/prompt version match
+- Hit when package source (and for ledger: owned paths + constraints) match the
+  same model/prompt/schema; cluster proposal prose is **not** an invalidation input
+- End-of-run log line reports hit/miss counts and `estimated_tokens_saved`
 - **Push on the go:** each successful inspect/ledger Store commits and pushes the
   cache branch immediately (same rule as PR review cache store+push). Do not wait
   for refine/eval/job success; a failed reseed must still leave durable hits.

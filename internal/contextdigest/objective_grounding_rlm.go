@@ -49,7 +49,7 @@ type sliceLedgerBuildRequest struct {
 
 type stropSliceObjectiveLedgerRLM struct {
 	module interface {
-		Complete(ctx context.Context, contextPayload any, query string) (response string, iterations int, err error)
+		Complete(ctx context.Context, contextPayload any, query string) (response string, iterations, promptTokens, completionTokens, totalTokens int, err error)
 	}
 }
 
@@ -84,19 +84,23 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig)
 		return nil, err
 	}
 	return stropSliceObjectiveLedgerRLM{
-		module: rlmCompleteAdapter{complete: func(ctx context.Context, contextPayload any, query string) (string, int, error) {
+		module: rlmCompleteAdapter{complete: func(ctx context.Context, contextPayload any, query string) (string, int, int, int, int, error) {
 			answer, result, err := stropdspy.RLMComplete(ctx, module, contextPayload, query)
 			if err != nil {
-				return "", 0, err
+				return "", 0, 0, 0, 0, err
 			}
 			iters := 0
+			prompt, completion, total := 0, 0, 0
 			if result != nil {
 				iters = result.Iterations
+				prompt = result.Usage.PromptTokens
+				completion = result.Usage.CompletionTokens
+				total = result.Usage.TotalTokens
 				llmusage.FromContext(ctx).AddTokenUsageValue(jmodules.TaskTypologyObjectiveGrounding, result.Usage)
 			} else {
 				llmusage.FromContext(ctx).Add(jmodules.TaskTypologyObjectiveGrounding, 0, 0, 0)
 			}
-			return answer, iters, nil
+			return answer, iters, prompt, completion, total, nil
 		}},
 	}, nil
 }
@@ -106,10 +110,10 @@ func (v stropSliceObjectiveLedgerRLM) BuildSliceLedger(ctx context.Context, req 
 }
 
 type sliceLedgerRLMCaller interface {
-	Complete(ctx context.Context, contextPayload any, query string) (response string, iterations int, err error)
+	Complete(ctx context.Context, contextPayload any, query string) (response string, iterations, promptTokens, completionTokens, totalTokens int, err error)
 }
 
-func (v stropSliceObjectiveLedgerRLM) Complete(ctx context.Context, contextPayload any, query string) (string, int, error) {
+func (v stropSliceObjectiveLedgerRLM) Complete(ctx context.Context, contextPayload any, query string) (string, int, int, int, int, error) {
 	return v.module.Complete(ctx, contextPayload, query)
 }
 
@@ -133,8 +137,8 @@ type stubSliceLedgerCaller struct {
 	err    error
 }
 
-func (s stubSliceLedgerCaller) Complete(context.Context, any, string) (string, int, error) {
-	return s.answer, 1, s.err
+func (s stubSliceLedgerCaller) Complete(context.Context, any, string) (string, int, int, int, int, error) {
+	return s.answer, 1, 0, 0, 0, s.err
 }
 
 func buildSliceObjectiveLedger(
@@ -231,19 +235,26 @@ func buildSliceObjectiveLedger(
 					return
 				}
 				constraintBlock := formatConstraintRowsForPaths(t.paths, byPath)
-				joinedCtx := strings.Join(parts, "\n\n")
+				ownedSrc, srcErr := cache.OwnedPackagesSourceHash(req.AnalysisDir, t.paths)
+				if srcErr != nil {
+					results[i] = result{issue: fmt.Sprintf(
+						"%s: slice %q owned package source hash failed: %v",
+						typologypack.CriterionIDRoleGrounding, t.id, srcErr,
+					)}
+					return
+				}
 				fp := cache.LedgerFingerprint{
 					SliceID:         t.id,
 					OwnedPathsHash:  cache.OwnedPathsHash(t.paths),
-					ContextSHA:      cache.ContentSHA(joinedCtx),
+					ContextSHA:      ownedSrc,
 					ConstraintsHash: cache.ContentSHA(constraintBlock),
-					ClusterHash:     cache.ContentSHA(req.ClusterMD),
 					ModelID:         req.DigestModelID,
 					PromptVersion:   cache.DigestLedgerPromptV1,
-					SchemaVersion:   cache.DigestLedgerSchemaV1,
+					SchemaVersion:   cache.DigestLedgerSchemaV2,
 				}
 				if req.DigestSkips && req.DigestCache != nil {
 					if hit, ok, err := req.DigestCache.LookupLedger(fp); err == nil && ok && hit.Verdict == ledgerVerdictGrounded {
+						req.DigestCache.RecordLedgerHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
 						logf("INFO", "digest cache hit ledger slice=%s", t.id)
 						results[i] = result{entry: sliceObjectiveLedgerEntry{
 							ID:         hit.ID,
@@ -258,8 +269,12 @@ func buildSliceObjectiveLedger(
 					}
 				}
 				sliceFeedback := filterIssuesForSlice(lastIssues, t.id)
+				joinedCtx := strings.Join(parts, "\n\n")
 				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterMD, sliceFeedback)
-				answer, _, err := caller.Complete(ctx, joinedCtx, query)
+				answer, _, promptTok, completionTok, totalTok, err := caller.Complete(ctx, joinedCtx, query)
+				if req.DigestCache != nil {
+					req.DigestCache.RecordLedgerMiss()
+				}
 				if err != nil {
 					if ctx.Err() != nil {
 						results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
@@ -337,13 +352,16 @@ func buildSliceObjectiveLedger(
 				}
 				if req.DigestCache != nil && entry.Verdict == ledgerVerdictGrounded {
 					if err := req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
-						ID:         entry.ID,
-						OwnedPaths: append([]string(nil), entry.OwnedPaths...),
-						Evidence:   append([]string(nil), entry.Evidence...),
-						Claims:     append([]string(nil), entry.Claims...),
-						Objective:  entry.Objective,
-						Verdict:    entry.Verdict,
-						Source:     entry.Source,
+						ID:               entry.ID,
+						OwnedPaths:       append([]string(nil), entry.OwnedPaths...),
+						Evidence:         append([]string(nil), entry.Evidence...),
+						Claims:           append([]string(nil), entry.Claims...),
+						Objective:        entry.Objective,
+						Verdict:          entry.Verdict,
+						Source:           entry.Source,
+						PromptTokens:     promptTok,
+						CompletionTokens: completionTok,
+						TotalTokens:      totalTok,
 					}); err != nil {
 						results[i] = result{err: fmt.Errorf("store slice %q objective ledger cache: %w", t.id, err)}
 						return
@@ -388,6 +406,9 @@ func buildSliceObjectiveLedger(
 	}
 	if consIssues := validateLedgerAgainstConstraints(doc, req.Constraints, rolesDoc); len(consIssues) > 0 {
 		return sliceObjectiveLedgerDoc{}, consIssues, nil
+	}
+	if req.DigestCache != nil {
+		logf("INFO", "%s", cache.FormatStatsLine(req.DigestCache.Stats()))
 	}
 	return doc, nil, nil
 }

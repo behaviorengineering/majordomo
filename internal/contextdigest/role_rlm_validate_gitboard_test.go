@@ -2,6 +2,8 @@ package contextdigest
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -9,15 +11,20 @@ type stubRLMValidator map[string]struct {
 	role, evidence string
 }
 
-func (s stubRLMValidator) Validate(_ context.Context, pkgPath, _, _, _ string) (string, string, int, error) {
+func (s stubRLMValidator) Validate(_ context.Context, pkgPath, _, _, _ string) (string, string, int, int, int, int, error) {
 	if v, ok := s[pkgPath]; ok {
-		return v.role, v.evidence, 1, nil
+		return v.role, v.evidence, 1, 0, 0, 0, nil
 	}
-	return roleUnknown, "", 1, nil
+	return roleUnknown, "", 1, 0, 0, 0, nil
 }
 
 func TestValidatePackageRolesRLMGitboardStyle(t *testing.T) {
 	dir := t.TempDir()
+	for _, p := range []string{"internal/board", "internal/server", "internal/triage", "internal/pruneagent"} {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.FromSlash(p)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
 	rolesPath := dir + "/package_roles.yaml"
 	rolesYAML := `packages:
   - path: internal/board
