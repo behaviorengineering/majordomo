@@ -157,3 +157,22 @@ func TestFilterIssuesForSlice(t *testing.T) {
 		t.Fatalf("got=%q", got)
 	}
 }
+
+func TestFormatSliceObjectiveLedgerQueryIncludesClaimPolicy(t *testing.T) {
+	t.Parallel()
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{{Path: "internal/pruneagent", Role: roleAggregator}},
+	})
+	byPath := constraintsByPath(constraints)
+	block := formatConstraintRowsForPaths([]string{"internal/pruneagent"}, byPath)
+	q := formatSliceObjectiveLedgerQuery("pruneagent", []string{"internal/pruneagent"}, block, "# cluster\n", "")
+	if !strings.Contains(q, "Claim policy (deterministic; MUST follow)") {
+		t.Fatalf("missing claim policy fragment:\n%s", q)
+	}
+	if !strings.Contains(q, "imports_os_exec") || !strings.Contains(q, "fills_dto") {
+		t.Fatalf("policy missing entailment hints:\n%s", q)
+	}
+	if !strings.Contains(q, "internal/pruneagent") || !strings.Contains(q, "must_not=") {
+		t.Fatalf("missing constraint rows:\n%s", q)
+	}
+}

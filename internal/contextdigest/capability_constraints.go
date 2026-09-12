@@ -75,40 +75,41 @@ func roleCapabilityTable() map[string]roleCapabilityDefaults {
 			MustNot: []string{
 				capSynchronizeState, capMergeAdapters, capServeHTTP,
 				capOrchestrate, capOwnDomainRules, capRunCLI, capWireHandlers,
+				capExecProcess, capFillDTO,
 			},
 		},
 		roleHTTPSurface: {
 			Is:      []string{capServeHTTP, capWireHandlers},
-			MustNot: []string{capOwnDomainRules, capOrchestrate},
+			MustNot: []string{capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO},
 		},
 		roleEntrypoint: {
 			// orchestrate is entrypoint-only; kept in is so constraint rows show the prior.
 			Is:      []string{capRunCLI, capOrchestrate},
-			MustNot: []string{capOwnDomainRules, capServeHTTP},
+			MustNot: []string{capOwnDomainRules, capServeHTTP, capExecProcess, capFillDTO},
 		},
 		roleAggregator: {
 			Is:      []string{capAggregateViews},
-			MustNot: []string{capServeHTTP, capRunCLI, capOrchestrate},
+			MustNot: []string{capServeHTTP, capRunCLI, capOrchestrate, capExecProcess, capFillDTO},
 		},
 		roleExecRunner: {
 			Is:      []string{capExecProcess},
-			MustNot: []string{capRunCLI, capOwnDomainRules, capOrchestrate},
+			MustNot: []string{capRunCLI, capOwnDomainRules, capOrchestrate, capFillDTO},
 		},
 		roleAdapter: {
 			Is:      []string{capAdaptExternal, capFillDTO},
-			MustNot: []string{capOrchestrate},
+			MustNot: []string{capOrchestrate, capExecProcess},
 		},
 		roleConfig: {
 			Is:      []string{capConfig},
-			MustNot: []string{capOwnDomainRules, capOrchestrate},
+			MustNot: []string{capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO},
 		},
 		roleObservability: {
 			Is:      []string{capObservability},
-			MustNot: []string{capConfig, capOwnDomainRules, capOrchestrate},
+			MustNot: []string{capConfig, capOwnDomainRules, capOrchestrate, capExecProcess, capFillDTO},
 		},
 		roleUnknown: {
 			Is:      []string{},
-			MustNot: []string{capOrchestrate},
+			MustNot: []string{capOrchestrate, capExecProcess, capFillDTO},
 		},
 	}
 }
@@ -131,6 +132,7 @@ func knownCapabilityCodes() map[string]struct{} {
 func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraintsDoc {
 	table := roleCapabilityTable()
 	filledBy := map[string][]string{}
+	fillsDTOFrom := map[string]struct{}{}
 	for _, e := range doc.Edges {
 		kind := strings.ToLower(strings.TrimSpace(e.Kind))
 		from := normalizeRolePath(e.From)
@@ -141,6 +143,7 @@ func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraint
 		switch kind {
 		case edgeFillsDTO:
 			filledBy[to] = append(filledBy[to], from)
+			fillsDTOFrom[from] = struct{}{}
 		}
 	}
 
@@ -169,6 +172,16 @@ func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraint
 		if role != roleEntrypoint {
 			c.MustNot = uniqueStrings(append(c.MustNot, capOrchestrate))
 		}
+		// Fail-closed: exec_process only for exec_runner or imports_os_exec evidence.
+		if role != roleExecRunner && !evidenceHasAny(n.Evidence, "imports_os_exec") {
+			c.MustNot = uniqueStrings(append(c.MustNot, capExecProcess))
+		}
+		// Fail-closed: fill_dto only for adapter or outbound fills_dto edge.
+		if role != roleAdapter {
+			if _, ok := fillsDTOFrom[path]; !ok {
+				c.MustNot = uniqueStrings(append(c.MustNot, capFillDTO))
+			}
+		}
 		if fillers := uniqueStrings(filledBy[path]); len(fillers) > 0 {
 			c.FilledBy = fillers
 			// Inbound fills_dto: the DTO package must not claim to merge adapters.
@@ -183,6 +196,24 @@ func buildCapabilityConstraints(doc packageRolesDoc) packageCapabilityConstraint
 		return out.Packages[i].Path < out.Packages[j].Path
 	})
 	return out
+}
+
+// claimPolicyPromptRules is the ledger RLM instruction block that mirrors Go gates.
+// Keep aligned with buildCapabilityConstraints fail-closed passes and claimEntailed.
+func claimPolicyPromptRules() string {
+	return `Claim policy (deterministic; MUST follow):
+- Prefer claim codes that already appear in owned package is=[] rows.
+- NEVER emit a code listed in owned must_not=[].
+- Codes outside is=[] are allowed ONLY with matching entailment evidence:
+  - orchestrate: owned package role is entrypoint
+  - exec_process: role is exec_runner OR evidence includes imports_os_exec
+  - fill_dto: role is adapter OR an outbound fills_dto edge from an owned package
+  - serve_http / wire_handlers: delivery:http|grpc or imports_net_http / imports_grpc
+  - run_cli: evidence has_main
+  - observability: imports_otel or imports_prometheus
+  - own_domain_rules: role is entrypoint, http_surface, or aggregator
+- Prestige English ("orchestrates", "runs git via a helper", "builds a card DTO") is NOT a claim code.
+- When unsure, drop the claim or set verdict: overclaim.`
 }
 
 func writeCapabilityConstraints(path string, doc packageCapabilityConstraintsDoc) error {

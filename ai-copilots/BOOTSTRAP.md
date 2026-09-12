@@ -57,6 +57,7 @@ when authoring skills.
 | Host skill name | Path under `$MOD` |
 |-----------------|-------------------|
 | `majordomo-inference-cache` | `ai-copilots/skills/majordomo-inference-cache/` |
+| `majordomo-capability-claims` | `ai-copilots/skills/majordomo-capability-claims/` |
 
 | IDE | Skills |
 |-----|--------|
@@ -71,6 +72,7 @@ when authoring skills.
 MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/majordomo)"
 mkdir -p .cursor/skills
 ln -snf "$MOD/ai-copilots/skills/majordomo-inference-cache" .cursor/skills/majordomo-inference-cache
+ln -snf "$MOD/ai-copilots/skills/majordomo-capability-claims" .cursor/skills/majordomo-capability-claims
 ```
 
 When the workspace root is this module:
@@ -78,6 +80,7 @@ When the workspace root is this module:
 ```bash
 mkdir -p .cursor/skills
 ln -snf ../ai-copilots/skills/majordomo-inference-cache .cursor/skills/majordomo-inference-cache
+ln -snf ../ai-copilots/skills/majordomo-capability-claims .cursor/skills/majordomo-capability-claims
 ```
 
 **Windows:** junction or developer-mode symlink; copy only with user approval.
@@ -89,7 +92,9 @@ ln -snf ../ai-copilots/skills/majordomo-inference-cache .cursor/skills/majordomo
 ```bash
 MOD="$(go list -m -f '{{.Dir}}' github.com/behaviorengineering/majordomo)"
 ls -la .cursor/skills/majordomo-inference-cache
+ls -la .cursor/skills/majordomo-capability-claims
 test -f .cursor/skills/majordomo-inference-cache/SKILL.md
+test -f .cursor/skills/majordomo-capability-claims/SKILL.md
 test -f "$MOD/ai-copilots/BOOTSTRAP.md"
 ```
 

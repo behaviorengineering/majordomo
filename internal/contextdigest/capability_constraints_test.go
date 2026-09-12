@@ -62,6 +62,48 @@ func TestBuildCapabilityConstraintsOrchestrateEntrypointOnly(t *testing.T) {
 	}
 }
 
+func TestBuildCapabilityConstraintsExecProcessAndFillDTO(t *testing.T) {
+	t.Parallel()
+	doc := packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/pruneagent", Role: roleAggregator, Confidence: 0.8},
+			{Path: "internal/cliexec", Role: roleExecRunner, Confidence: 0.9, Evidence: []string{"imports_os_exec"}},
+			{Path: "internal/wrapper", Role: roleAggregator, Confidence: 0.7, Evidence: []string{"imports_os_exec"}},
+			{Path: "internal/writer", Role: roleUnknown, Confidence: 0},
+			{Path: "internal/adapter", Role: roleAdapter, Confidence: 0.9},
+		},
+		Edges: []packageRoleEdge{
+			{From: "internal/writer", To: "internal/board", Kind: edgeFillsDTO},
+		},
+	}
+	out := buildCapabilityConstraints(doc)
+	by := constraintsByPath(out)
+
+	prune := by["internal/pruneagent"]
+	if !containsString(prune.MustNot, capExecProcess) || !containsString(prune.MustNot, capFillDTO) {
+		t.Fatalf("pruneagent must_not=%v want exec_process and fill_dto", prune.MustNot)
+	}
+	cli := by["internal/cliexec"]
+	if containsString(cli.MustNot, capExecProcess) {
+		t.Fatalf("exec_runner must_not must not include exec_process: %v", cli.MustNot)
+	}
+	wrap := by["internal/wrapper"]
+	if containsString(wrap.MustNot, capExecProcess) {
+		t.Fatalf("imports_os_exec aggregator must allow exec_process; must_not=%v", wrap.MustNot)
+	}
+	writer := by["internal/writer"]
+	if containsString(writer.MustNot, capFillDTO) {
+		t.Fatalf("fills_dto from-edge must allow fill_dto; must_not=%v", writer.MustNot)
+	}
+	adapter := by["internal/adapter"]
+	if containsString(adapter.MustNot, capFillDTO) {
+		t.Fatalf("adapter must allow fill_dto; must_not=%v", adapter.MustNot)
+	}
+	if !containsString(adapter.MustNot, capExecProcess) {
+		t.Fatalf("adapter must_not missing exec_process: %v", adapter.MustNot)
+	}
+}
+
 func TestAppendConstraintClaimIssuesRejectsSyncOnDTO(t *testing.T) {
 	t.Parallel()
 	typo := catalog.Typology{
