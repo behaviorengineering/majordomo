@@ -348,6 +348,9 @@ refs. Package inspect and slice ledger RLM results live on a **separate** branch
 - Branch: `majordomo-digest-cache/<repo-id>` (`config.DigestCacheBranch`)
 - Artifacts: JSON fingerprints under `inspect/` and `ledger/` (not teaching markdown)
 - Hit when package/slice evidence, model, and schema/prompt version match
+- **Push on the go:** each successful inspect/ledger Store commits and pushes the
+  cache branch immediately (same rule as PR review cache store+push). Do not wait
+  for refine/eval/job success; a failed reseed must still leave durable hits.
 - Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
 - Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete
   `majordomo-digest-cache/*`
