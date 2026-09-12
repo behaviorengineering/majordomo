@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
 	"github.com/behaviorengineering/strop/dspy/factory"
