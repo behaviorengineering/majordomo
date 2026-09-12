@@ -2,6 +2,7 @@ package contextdigest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -152,6 +153,29 @@ slices:
 `
 	if _, err := validateRefinedCatalogYAML(raw, "", "demo", ""); err == nil {
 		t.Fatal("expected structure validation error")
+	}
+}
+
+func TestAnnotateCatalogYAMLErrorIncludesSnippetAndDump(t *testing.T) {
+	raw := "id: demo\nslices:\n  id: broken\n"
+	err := annotateCatalogYAMLError("typology refine load catalog", raw, fmt.Errorf("parse catalog: yaml: line 3: did not find expected '-' indicator"))
+	if err == nil {
+		t.Fatal("expected annotated error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "dump=") {
+		t.Fatalf("expected dump path, got %q", msg)
+	}
+	if !strings.Contains(msg, ">    3 |") || !strings.Contains(msg, "id: broken") {
+		t.Fatalf("expected line-3 snippet, got %q", msg)
+	}
+	dump := strings.TrimSpace(strings.Split(strings.Split(msg, "dump=")[1], "\n")[0])
+	data, readErr := os.ReadFile(dump)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(data) != raw {
+		t.Fatalf("dump mismatch: %q", data)
 	}
 }
 

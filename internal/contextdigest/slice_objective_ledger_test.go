@@ -56,7 +56,10 @@ func TestValidateLedgerRejectsSyncOnDTO(t *testing.T) {
 	}
 	issues := validateLedgerAgainstConstraints(ledger, constraints, roles)
 	if len(issues) == 0 {
-		t.Fatal("expected must_not intersection")
+		t.Fatal("expected disallowed claim against owned is=[]")
+	}
+	if !strings.Contains(issues[0], "not allowed by owned package is=") {
+		t.Fatalf("issues=%v", issues)
 	}
 }
 
@@ -75,7 +78,7 @@ func TestAppendLedgerObjectiveIssuesMismatch(t *testing.T) {
 			Evidence:  []string{"BoardPayload"}, Claims: []string{capDataShape}, Verdict: "grounded",
 		}},
 	}
-	_, _, issues := alignLedgerToRefinedCatalog(typo, ledger)
+	_, _, issues := alignLedgerToRefinedCatalog(typo, ledger, packageCapabilityConstraintsDoc{})
 	if len(issues) != 1 || !strings.Contains(issues[0], "does not match any contributing ledger objective") {
 		t.Fatalf("issues=%v", issues)
 	}
@@ -107,7 +110,17 @@ func TestAlignLedgerToRefinedCatalogMergesByPackagePath(t *testing.T) {
 			},
 		},
 	}
-	aligned, claims, issues := alignLedgerToRefinedCatalog(typo, ledger)
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/localgit", Role: roleAdapter},
+			{Path: "internal/remotegit", Role: roleAdapter},
+		},
+		Edges: []packageRoleEdge{
+			{From: "internal/localgit", To: "internal/board", Kind: edgeFillsDTO},
+			{From: "internal/remotegit", To: "internal/board", Kind: edgeFillsDTO},
+		},
+	})
+	aligned, claims, issues := alignLedgerToRefinedCatalog(typo, ledger, constraints)
 	if len(issues) != 0 {
 		t.Fatalf("issues=%v", issues)
 	}
@@ -116,6 +129,86 @@ func TestAlignLedgerToRefinedCatalogMergesByPackagePath(t *testing.T) {
 	}
 	if !containsString(claims.Slices[0].Claims, capFillDTO) || !containsString(claims.Slices[0].Claims, capAdaptExternal) {
 		t.Fatalf("claims=%v", claims.Slices[0].Claims)
+	}
+}
+
+func TestAlignLedgerToRefinedCatalogDropsClaimsForbiddenByRefinedOwns(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{
+			{
+				ID:        "board",
+				Objective: "Provide JSON data types shared across the dashboard UI.",
+				Owns:      []catalog.Component{{ID: "board", Path: "internal/board"}},
+			},
+			{
+				ID:        "dashboard",
+				Objective: "Provide JSON data types shared across the dashboard UI.",
+				Owns:      []catalog.Component{{ID: "dashboard", Path: "internal/dashboard"}},
+			},
+		},
+	}
+	// Wide draft ledger entry covers both paths; after refine split, each slice
+	// keeps only claims allowed by its owned package is=[] priors.
+	ledger := sliceObjectiveLedgerDoc{
+		Slices: []sliceObjectiveLedgerEntry{{
+			ID:         "ui",
+			OwnedPaths: []string{"internal/board", "internal/dashboard"},
+			Evidence:   []string{"BoardPayload", "Service.Collect"},
+			Claims:     []string{capDataShape, capAggregateViews},
+			Objective:  "Provide JSON data types shared across the dashboard UI.",
+			Verdict:    "grounded",
+		}},
+	}
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/board", Role: roleDTO},
+			{Path: "internal/dashboard", Role: roleAggregator},
+		},
+	})
+	aligned, claims, issues := alignLedgerToRefinedCatalog(typo, ledger, constraints)
+	if len(issues) != 0 {
+		t.Fatalf("issues=%v", issues)
+	}
+	byID := map[string][]string{}
+	for _, c := range claims.Slices {
+		byID[c.ID] = c.Claims
+	}
+	if got := byID["board"]; len(got) != 1 || got[0] != capDataShape {
+		t.Fatalf("board claims=%v want [data_shape]; aligned=%+v", got, aligned)
+	}
+	if got := byID["dashboard"]; len(got) != 1 || got[0] != capAggregateViews {
+		t.Fatalf("dashboard claims=%v want [aggregate_views]; aligned=%+v", got, aligned)
+	}
+	claimIssues := appendConstraintClaimIssues(typo, constraints, claims, nil)
+	if len(claimIssues) != 0 {
+		t.Fatalf("claim issues after filter: %v", claimIssues)
+	}
+}
+
+func TestAppendConstraintClaimIssuesAllowsMixedOwnedIs(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{{
+			ID:        "ui",
+			Objective: "Shared shapes and aggregated dashboard views.",
+			Owns: []catalog.Component{
+				{ID: "board", Path: "internal/board"},
+				{ID: "dashboard", Path: "internal/dashboard"},
+			},
+		}},
+	}
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/board", Role: roleDTO},
+			{Path: "internal/dashboard", Role: roleAggregator},
+		},
+	})
+	claims := sliceObjectiveClaimsDoc{
+		Slices: []sliceObjectiveClaim{{ID: "ui", Claims: []string{capDataShape, capAggregateViews}}},
+	}
+	if issues := appendConstraintClaimIssues(typo, constraints, claims, nil); len(issues) != 0 {
+		t.Fatalf("mixed owns should allow each package is=[] claim, got %v", issues)
 	}
 }
 
@@ -301,8 +394,10 @@ type BoardPayload struct{}
 	if !strings.Contains(joined, "fill_dto") {
 		t.Fatalf("issues=%v", issues)
 	}
-	// Fail-closed must_not may reject before positive entailment.
-	if !strings.Contains(joined, "not entailed") && !strings.Contains(joined, "intersect must_not") {
+	// Fail-closed is=[] / must_not may reject before positive entailment.
+	if !strings.Contains(joined, "not entailed") &&
+		!strings.Contains(joined, "intersect must_not") &&
+		!strings.Contains(joined, "not allowed by owned package is=") {
 		t.Fatalf("issues=%v", issues)
 	}
 }

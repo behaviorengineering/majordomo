@@ -18,8 +18,9 @@ func appendEvidenceGroundingIssues(typo catalog.Typology, issues []string) []str
 	return issues
 }
 
-// appendConstraintClaimIssues fail-closes when structured objective claims intersect
-// the slice must_not union from capability constraints.
+// appendConstraintClaimIssues fail-closes when structured objective claims are
+// not allowed by any owned package is=[] prior (must_not-union is not used here
+// so multi-package slices may keep each package's allowed codes).
 func appendConstraintClaimIssues(
 	typo catalog.Typology,
 	constraints packageCapabilityConstraintsDoc,
@@ -36,7 +37,6 @@ func appendConstraintClaimIssues(
 		}
 		knownSlices[id] = struct{}{}
 		paths := slicePackagePaths(s)
-		mustNot := sliceMustNotUnion(paths, byPath)
 		claimed, ok := bySlice[id]
 		if !ok || len(claimed) == 0 {
 			// Require claims whenever owned packages carry constraints.
@@ -55,9 +55,9 @@ func appendConstraintClaimIssues(
 			}
 			continue
 		}
-		if hit := intersectStrings(claimed, mustNot); len(hit) > 0 {
+		if hit := claimsNotAllowedByOwnedIs(claimed, paths, byPath); len(hit) > 0 {
 			issues = append(issues, fmt.Sprintf(
-				"%s: slice %q objective_claims %v intersect must_not %v; rewrite the objective and claims to match owned package capabilities (name who fills DTOs; do not assign sync/merge to data_shape packages)",
+				"%s: slice %q objective_claims %v are not allowed by owned package is=[] priors (disallowed=%v); rewrite the objective and claims to match owned package capabilities (name who fills DTOs; do not assign sync/merge to data_shape packages)",
 				typologypack.CriterionIDRoleGrounding, id, claimed, hit,
 			))
 		}

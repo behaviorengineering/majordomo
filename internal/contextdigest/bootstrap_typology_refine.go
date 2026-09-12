@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
@@ -268,7 +269,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			continue
 		}
 		if needsLedger {
-			aligned, alignedClaims, alignIssues := alignLedgerToRefinedCatalog(typo, ledgerDoc)
+			aligned, alignedClaims, alignIssues := alignLedgerToRefinedCatalog(typo, ledgerDoc, constraintsDoc)
 			if len(alignIssues) > 0 {
 				fb := strings.Join(alignIssues, "\n")
 				if attempt == maxTypologyRefineAttempts {
@@ -632,7 +633,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 	}
 	typo, err := catalog.LoadYAML(path)
 	if err != nil {
-		return "", fmt.Errorf("typology refine load catalog: %w", err)
+		return "", annotateCatalogYAMLError("typology refine load catalog", raw, err)
 	}
 	draft, allowed, err := loadDraftCatalog(draftYAML)
 	if err != nil {
@@ -1400,6 +1401,79 @@ func stripCodeFence(s string) string {
 		lines = lines[:len(lines)-1]
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func annotateCatalogYAMLError(prefix, raw string, err error) error {
+	if err == nil {
+		return nil
+	}
+	dumpPath := dumpRefinedCatalogFailure(raw)
+	snippet := yamlLineSnippet(raw, yamlErrorLine(err.Error()), 2)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: %v", prefix, err)
+	if dumpPath != "" {
+		fmt.Fprintf(&b, "\ndump=%s", dumpPath)
+	}
+	if snippet != "" {
+		fmt.Fprintf(&b, "\n--- yaml context ---\n%s", snippet)
+	}
+	return fmt.Errorf("%s", b.String())
+}
+
+func yamlErrorLine(msg string) int {
+	const marker = "yaml: line "
+	i := strings.Index(msg, marker)
+	if i < 0 {
+		return 0
+	}
+	rest := msg[i+len(marker):]
+	n := 0
+	for _, r := range rest {
+		if r < '0' || r > '9' {
+			break
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
+}
+
+func yamlLineSnippet(raw string, line, radius int) string {
+	lines := strings.Split(raw, "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	if line <= 0 {
+		line = 1
+	}
+	start := line - radius
+	if start < 1 {
+		start = 1
+	}
+	end := line + radius
+	if end > len(lines) {
+		end = len(lines)
+	}
+	var b strings.Builder
+	for i := start; i <= end; i++ {
+		mark := " "
+		if i == line {
+			mark = ">"
+		}
+		fmt.Fprintf(&b, "%s %4d | %s\n", mark, i, lines[i-1])
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func dumpRefinedCatalogFailure(raw string) string {
+	dir := filepath.Join("tmp", "logs", "refined-catalog-failures")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return ""
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%d.yaml", time.Now().UnixNano()))
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		return ""
+	}
+	return path
 }
 
 // scrubForbiddenHTTPEntrypointMerges rewrites cluster proposals that fold server
