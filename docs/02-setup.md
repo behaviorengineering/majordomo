@@ -79,13 +79,17 @@ Provider retries and Anthropic→OpenAI→Gemini failover live in Bifrost.
 
 ## Observability and failure dumps
 
-Tracing is on by default (Phoenix optional). On a failed `run review` / `orchestrate`, the full OpenInference trace is written to:
+Three different libraries own three different dumps. Do not invent a fourth.
 
-```
-{output-dir}/logs/inference-failures/<trace_id>.json
-```
+| Switch | What it is | When it fires |
+|--------|------------|---------------|
+| OTEL / olly-style failure dump | JSON span tree under `{output-dir}/logs/inference-failures/` (or `tmp/logs/inference-failures/`) | Process envelope ends with **ERROR** only |
+| strop `runreport` | JSON timeline of Judge module/eval steps under analysis `tmp/logs/runs/` | Digest Judge work (success or fail); not committed to the teaching branch |
+| strop `RLMConfig.TraceDir` | Full RLM REPL JSONL for `rlm-viewer` under analysis `tmp/rlm-traces/<task>/` | Inspect, ledger, and cluster-audit RLM Completes |
 
-or `tmp/logs/inference-failures/` when no output dir is set. Attach that JSON to an AI for debug. Set `MAJORDOMO_OTEL_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to `localhost:4317` when Phoenix is running. Disable with `MAJORDOMO_OTEL_ENABLED=0`.
+Tracing is on by default (Phoenix optional). On a failed `run review` / `orchestrate`, the full OpenInference trace is written to the failure-dump path above. Attach that JSON to an AI for debug. Digest nests its CHAIN span into Judge/RLM work so Phoenix and failure dumps see one tree when something fails. Set `MAJORDOMO_OTEL_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to `localhost:4317` when Phoenix is running. Disable with `MAJORDOMO_OTEL_ENABLED=0`.
+
+Provider allow-list: `typology_cluster_audit` is an RLM Complete path (like objective grounding). Configure it under job providers or fall back to `typology_inspect`. Do not register a dummy CoT ctor for it. Token totals appear in the digest `llm_usage` summary under `typology_cluster_audit`.
 
 ## Local image builds
 

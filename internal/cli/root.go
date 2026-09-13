@@ -867,7 +867,7 @@ func newContextCmd() *cobra.Command {
 				_ = observability.Flush(flushCtx)
 				_ = observability.Shutdown(flushCtx)
 			}()
-			_, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.context.digest")
+			ctx, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.context.digest")
 			defer observability.EndSpanWithStatus(span, &err)
 
 			res, err := contextdigest.Run(contextdigest.Options{
@@ -880,6 +880,7 @@ func newContextCmd() *cobra.Command {
 				SkipStory:             skipStory,
 				SkipCompact:           skipCompact,
 				ForceCompact:          forceCompact,
+				Context:               ctx,
 			})
 			if err != nil {
 				return err

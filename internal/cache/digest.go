@@ -28,6 +28,10 @@ const (
 	DigestInspectPromptV1 = "typology_inspect_rlm_v1"
 	// DigestLedgerPromptV1 labels the objective-ledger RLM prompt contract.
 	DigestLedgerPromptV1 = "typology_objective_ledger_rlm_v1"
+	// DigestClusterAuditSchemaV1 keys full-list cluster merge audits.
+	DigestClusterAuditSchemaV1 = "cluster-audit-v1"
+	// DigestClusterAuditPromptV1 labels the cluster audit RLM prompt contract.
+	DigestClusterAuditPromptV1 = "typology_cluster_audit_rlm_v1"
 )
 
 // ValidateDigestCacheBranch is an alias for ValidateInferenceCacheBranch.
@@ -41,6 +45,8 @@ type DigestRunStats struct {
 	InspectMisses         int
 	LedgerHits            int
 	LedgerMisses          int
+	ClusterAuditHits      int
+	ClusterAuditMisses    int
 	TokensSavedPrompt     int
 	TokensSavedCompletion int
 	TokensSavedTotal      int
@@ -48,6 +54,8 @@ type DigestRunStats struct {
 	inspectStoredTotalN   int
 	ledgerStoredTotalSum  int
 	ledgerStoredTotalN    int
+	clusterStoredTotalSum int
+	clusterStoredTotalN   int
 }
 
 // DigestStore is a local worktree (or plain directory) of digest inference JSON.
@@ -174,6 +182,45 @@ func (s *DigestStore) RecordLedgerMiss() {
 	s.stats.LedgerMisses++
 }
 
+// RecordClusterAuditHit notes a cluster-audit skip and estimated tokens avoided.
+func (s *DigestStore) RecordClusterAuditHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.ClusterAuditHits++
+	if total <= 0 {
+		total = s.avgLocked(s.stats.clusterStoredTotalSum, s.stats.clusterStoredTotalN)
+	}
+	if total <= 0 && prompt+completion > 0 {
+		total = prompt + completion
+	}
+	s.stats.TokensSavedPrompt += prompt
+	s.stats.TokensSavedCompletion += completion
+	s.stats.TokensSavedTotal += total
+}
+
+// RecordClusterAuditMiss notes a cluster-audit provider call.
+func (s *DigestStore) RecordClusterAuditMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.ClusterAuditMisses++
+}
+
+func (s *DigestStore) noteClusterAuditStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.clusterStoredTotalSum += total
+	s.stats.clusterStoredTotalN++
+}
+
 func (s *DigestStore) noteInspectStoredUsage(total int) {
 	if s == nil || total <= 0 {
 		return
@@ -204,8 +251,9 @@ func (s *DigestStore) avgLocked(sum, n int) int {
 // FormatStatsLine returns a one-line operator summary of digest cache reuse.
 func FormatStatsLine(st DigestRunStats) string {
 	return fmt.Sprintf(
-		"digest cache summary inspect_hits=%d inspect_misses=%d ledger_hits=%d ledger_misses=%d estimated_tokens_saved=%d (prompt=%d completion=%d)",
+		"digest cache summary inspect_hits=%d inspect_misses=%d ledger_hits=%d ledger_misses=%d cluster_audit_hits=%d cluster_audit_misses=%d estimated_tokens_saved=%d (prompt=%d completion=%d)",
 		st.InspectHits, st.InspectMisses, st.LedgerHits, st.LedgerMisses,
+		st.ClusterAuditHits, st.ClusterAuditMisses,
 		st.TokensSavedTotal, st.TokensSavedPrompt, st.TokensSavedCompletion,
 	)
 }
@@ -261,6 +309,35 @@ type LedgerCachedEntry struct {
 	PromptTokens     int      `json:"prompt_tokens,omitempty"`
 	CompletionTokens int      `json:"completion_tokens,omitempty"`
 	TotalTokens      int      `json:"total_tokens,omitempty"`
+}
+
+// ClusterAuditFingerprint keys one full-list cluster merge audit.
+type ClusterAuditFingerprint struct {
+	MergesHash      string
+	RolesHash       string
+	ConstraintsHash string
+	MechanicalHash  string
+	ModelID         string
+	PromptVersion   string
+	SchemaVersion   string
+}
+
+// ClusterAuditCachedMerge is one cached merge verdict.
+type ClusterAuditCachedMerge struct {
+	ID       string   `json:"id"`
+	Packages []string `json:"packages"`
+	Verdict  string   `json:"verdict"`
+	Reason   string   `json:"reason,omitempty"`
+	Evidence []string `json:"evidence,omitempty"`
+}
+
+// ClusterAuditCached is the durable cluster-audit payload.
+type ClusterAuditCached struct {
+	Merges           []ClusterAuditCachedMerge `json:"merges"`
+	RLMIterations    int                       `json:"rlm_iterations,omitempty"`
+	PromptTokens     int                       `json:"prompt_tokens,omitempty"`
+	CompletionTokens int                       `json:"completion_tokens,omitempty"`
+	TotalTokens      int                       `json:"total_tokens,omitempty"`
 }
 
 type digestRecord struct {
@@ -325,12 +402,31 @@ func (fp LedgerFingerprint) key() string {
 	)
 }
 
+func (fp ClusterAuditFingerprint) key() string {
+	prompt := fp.PromptVersion
+	if prompt == "" {
+		prompt = DigestClusterAuditPromptV1
+	}
+	schema := fp.SchemaVersion
+	if schema == "" {
+		schema = DigestClusterAuditSchemaV1
+	}
+	return HashDigestParts(
+		"cluster_audit", fp.MergesHash, fp.RolesHash, fp.ConstraintsHash, fp.MechanicalHash,
+		fp.ModelID, prompt, schema,
+	)
+}
+
 func (s *DigestStore) inspectPath(key string) string {
 	return filepath.Join(s.Dir, DigestCachePrefix, "inspect", key+".json")
 }
 
 func (s *DigestStore) ledgerPath(key string) string {
 	return filepath.Join(s.Dir, DigestCachePrefix, "ledger", key+".json")
+}
+
+func (s *DigestStore) clusterAuditPath(key string) string {
+	return filepath.Join(s.Dir, "cluster_audit", key+".json")
 }
 
 // LookupInspect returns a cached inspect role when the fingerprint matches.
@@ -412,6 +508,46 @@ func (s *DigestStore) StoreLedger(fp LedgerFingerprint, entry LedgerCachedEntry)
 		return err
 	}
 	s.noteLedgerStoredUsage(entry.TotalTokens)
+	s.flushAfterStore()
+	return nil
+}
+
+// LookupClusterAudit returns a cached full-list cluster audit when the fingerprint matches.
+func (s *DigestStore) LookupClusterAudit(fp ClusterAuditFingerprint) (ClusterAuditCached, bool, error) {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return ClusterAuditCached{}, false, nil
+	}
+	key := fp.key()
+	rec, ok, err := readDigestRecord(s.clusterAuditPath(key), key)
+	if err != nil || !ok {
+		return ClusterAuditCached{}, false, err
+	}
+	var out ClusterAuditCached
+	if err := json.Unmarshal(rec.Payload, &out); err != nil {
+		return ClusterAuditCached{}, false, fmt.Errorf("digest cluster_audit payload: %w", err)
+	}
+	return out, true, nil
+}
+
+// StoreClusterAudit writes a successful cluster-audit result.
+func (s *DigestStore) StoreClusterAudit(fp ClusterAuditFingerprint, entry ClusterAuditCached) error {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return nil
+	}
+	key := fp.key()
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if err := writeDigestRecord(s.clusterAuditPath(key), digestRecord{
+		Kind:        "cluster_audit",
+		Fingerprint: key,
+		CreatedAt:   time.Now().UTC().Format(timestampFmt),
+		Payload:     payload,
+	}); err != nil {
+		return err
+	}
+	s.noteClusterAuditStoredUsage(entry.TotalTokens)
 	s.flushAfterStore()
 	return nil
 }

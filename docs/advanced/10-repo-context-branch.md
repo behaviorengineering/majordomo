@@ -123,7 +123,7 @@ flowchart TB
 
 *Cold-reader takeaway:* “We already know what each folder actually is, in machine terms.”
 
-**2. Grouping.** Next we infer teaching units: which packages belong in the same slice so a newcomer is not drowned in one-package-per-page noise. Cluster CoT proposes the map (including a machine merge list). One Cluster RLM pass then audits the **full** list: lifecycle-same vs theme-only, with evidence quotes. Rejects revise; overlays become teaching nicknames; only `accept` may fold the catalog. This step is allowed to be wrong about membership and get corrected by that audit. It is not allowed to invent a glamorous purpose for the group.
+**2. Grouping.** Next we infer teaching units: which packages belong in the same slice so a newcomer is not drowned in one-package-per-page noise. Cluster CoT proposes the map (including structured `proposed_merges_yaml`). One Cluster RLM pass then audits the **full** list: lifecycle-same vs theme-only, with evidence quotes. Rejects revise; overlays become teaching nicknames; only `accept` may fold the catalog. This step is allowed to be wrong about membership and get corrected by that audit. It is not allowed to invent a glamorous purpose for the group.
 
 *Cold-reader takeaway:* “Here is a proposed map of neighborhoods that survived evidence pushback, not the speech about what each neighborhood means.”
 

@@ -78,7 +78,9 @@ func TestAppendLedgerObjectiveIssuesMismatch(t *testing.T) {
 			Evidence:  []string{"BoardPayload"}, Claims: []string{capDataShape}, Verdict: "grounded",
 		}},
 	}
-	_, _, issues := alignLedgerToRefinedCatalog(typo, ledger, packageCapabilityConstraintsDoc{})
+	_, _, issues := alignLedgerToRefinedCatalog(typo, ledger, buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{{Path: "internal/board", Role: roleDTO}},
+	}))
 	if len(issues) != 1 || !strings.Contains(issues[0], "does not match any contributing ledger objective") {
 		t.Fatalf("issues=%v", issues)
 	}
@@ -183,6 +185,47 @@ func TestAlignLedgerToRefinedCatalogDropsClaimsForbiddenByRefinedOwns(t *testing
 	claimIssues := appendConstraintClaimIssues(typo, constraints, claims, nil)
 	if len(claimIssues) != 0 {
 		t.Fatalf("claim issues after filter: %v", claimIssues)
+	}
+}
+
+func TestAlignLedgerToRefinedCatalogMarksUnclaimedWhenIsEmpty(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{{
+			ID:        "prune-analyzer",
+			Objective: "Investigates local-only branches.",
+			Owns:      []catalog.Component{{ID: "p", Path: "internal/pruneagent"}},
+		}},
+	}
+	ledger := sliceObjectiveLedgerDoc{
+		Slices: []sliceObjectiveLedgerEntry{{
+			ID:         "pruneagent",
+			OwnedPaths: []string{"internal/pruneagent"},
+			Evidence:   []string{"Service.Investigate"},
+			Claims:     []string{capAdaptExternal},
+			Objective:  "Investigates local-only branches.",
+			Verdict:    "grounded",
+			Source:     ledgerSourceRLM,
+		}},
+	}
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{{Path: "internal/pruneagent", Role: roleUnknown}},
+	})
+	aligned, claims, issues := alignLedgerToRefinedCatalog(typo, ledger, constraints)
+	if len(issues) != 0 {
+		t.Fatalf("issues=%v", issues)
+	}
+	if len(aligned.Slices) != 1 || aligned.Slices[0].ID != "prune-analyzer" {
+		t.Fatalf("aligned=%+v", aligned)
+	}
+	if len(aligned.Slices[0].Claims) != 0 || aligned.Slices[0].Source != ledgerSourceUnclaimed {
+		t.Fatalf("want unclaimed empty claims, got %+v", aligned.Slices[0])
+	}
+	if len(claims.Slices) != 1 || len(claims.Slices[0].Claims) != 0 {
+		t.Fatalf("claims=%+v", claims)
+	}
+	if err := validateObjectiveLedgerDoc(aligned); err != nil {
+		t.Fatal(err)
 	}
 }
 

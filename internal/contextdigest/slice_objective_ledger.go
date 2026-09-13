@@ -218,6 +218,17 @@ func alignLedgerToRefinedCatalog(
 		// Contributor ledgers may cover wider draft ownership. Keep only claims
 		// allowed by at least one refined owned package's is=[] prior.
 		claimCodes = filterClaimsToOwnedIs(uniqueStrings(claimCodes), paths, constraintByPath)
+		source := "slice_objective_rlm_aligned"
+		if len(claimCodes) == 0 {
+			if !sliceAllCapabilityCodesMustNot(paths, constraintByPath) {
+				issues = append(issues, fmt.Sprintf(
+					"%s: slice %q has empty claims after aligning to owned is=[] priors; keep a claim allowed by owned packages or leave the slice unclaimed only when every portable code is in must_not",
+					typologypack.CriterionIDRoleGrounding, id,
+				))
+				continue
+			}
+			source = ledgerSourceUnclaimed
+		}
 		entry := sliceObjectiveLedgerEntry{
 			ID:         id,
 			OwnedPaths: append([]string(nil), paths...),
@@ -225,10 +236,13 @@ func alignLedgerToRefinedCatalog(
 			Claims:     claimCodes,
 			Objective:  s.Objective,
 			Verdict:    ledgerVerdictGrounded,
-			Source:     "slice_objective_rlm_aligned",
+			Source:     source,
 		}
 		if entry.Objective == "" {
 			entry.Objective = contributors[0].Objective
+		}
+		if source == ledgerSourceUnclaimed && strings.TrimSpace(entry.Objective) == "" {
+			entry.Objective = ledgerUnclaimedObjective
 		}
 		aligned.Slices = append(aligned.Slices, entry)
 		claims.Slices = append(claims.Slices, sliceObjectiveClaim{

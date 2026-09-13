@@ -15,6 +15,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
+	"github.com/behaviorengineering/majordomo/internal/observability"
 	stropdspy "github.com/behaviorengineering/strop/dspy"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	typroles "github.com/behaviorengineering/typology/roles"
@@ -53,7 +54,7 @@ func (a rlmCompleteAdapter) Complete(ctx context.Context, contextPayload any, qu
 	return a.complete(ctx, contextPayload, query)
 }
 
-func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig) (packageRoleRLMValidator, error) {
+func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig, analysisDir string) (packageRoleRLMValidator, error) {
 	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyInspect)
 	if err != nil {
 		return nil, err
@@ -63,6 +64,7 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig) (package
 	}
 	stropProvider := provider.ToStrop()
 	llmFactory := factory.NewLLMFactory(nil, 3*time.Minute)
+	llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
 	llm, err := llmFactory.CreateLLM(ctx, stropProvider)
 	if err != nil {
 		return nil, fmt.Errorf("typology_inspect RLM LLM: %w", err)
@@ -71,6 +73,7 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig) (package
 	rlmCfg := stropdspy.RLMDefaults()
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	rlmCfg.Timeout = provider.GetTimeout(3 * time.Minute)
+	rlmCfg.TraceDir = rlmTraceDir(analysisDir, jmodules.TaskTypologyInspect)
 	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
 	if err != nil {
 		return nil, err

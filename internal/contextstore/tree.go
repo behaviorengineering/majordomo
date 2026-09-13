@@ -115,6 +115,11 @@ func validateTypologyEvidence(dir string) error {
 				return err
 			}
 		}
+		if p := strings.TrimSpace(manifest.ClusterMergeVerdictsPath); p != "" {
+			if err := validateTypologyEvidenceFile(evidenceDir, p); err != nil {
+				return err
+			}
+		}
 		if err := validateTypologySnapshot(filepath.Join(evidenceDir, manifest.RefinedSnapshotPath)); err != nil {
 			return err
 		}

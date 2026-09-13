@@ -21,7 +21,12 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 		runner = LocalBootstrapSurveyRunner{}
 	}
 
-	analysisDir, err := cloneAnalysisRepo(context.Background(), opts.WorkDir)
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	analysisDir, err := cloneAnalysisRepo(ctx, opts.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -37,10 +42,10 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 		ModuleScope:    opts.ModuleScope,
 		GeneratedAt:    at,
 	}
-	if err := runner.Survey(context.Background(), input); err != nil {
+	if err := runner.Survey(ctx, input); err != nil {
 		return err
 	}
-	if err := refineTypologyEvidence(context.Background(), opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, opts.Judge); err != nil {
+	if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, opts.Judge); err != nil {
 		return err
 	}
 	if err := writeBootstrapStory(ctxDir, analysisDir, at, sourceSHA, opts.BootstrapStoryGenerator, opts.Judge); err != nil {

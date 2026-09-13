@@ -1,8 +1,10 @@
 package contextdigest
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
+	"github.com/behaviorengineering/strop/runreport"
 )
 
 // Result describes one digest run outcome.
@@ -49,6 +52,9 @@ type Options struct {
 	DigestCache                *cache.DigestStore // optional; inspect/ledger fingerprint skips
 	DigestSkips                bool               // when true with DigestCache, skip LLM on hit
 	DigestModelID              string             // model id for fingerprints
+	// Context nests OTEL chain spans and runreport into digest Judge/RLM work.
+	// When nil, Background is used.
+	Context context.Context
 }
 
 func logf(level, format string, args ...any) {
@@ -58,6 +64,11 @@ func logf(level, format string, args ...any) {
 
 // Run executes the context digest catch-up job for one served repo.
 func Run(opts Options) (res Result, err error) {
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	opts.Context = ctx
 	usage := llmusage.New()
 	llmusage.Push(usage)
 	defer func() {
@@ -541,8 +552,17 @@ func ensureDigestJudge(opts *Options, cfg config.RepoConfig) error {
 	if opts == nil || opts.Judge != nil || opts.SkipStory {
 		return nil
 	}
+	rrDir := "tmp/logs/runs"
+	if opts.WorkDir != "" {
+		rrDir = filepath.Join(opts.WorkDir, "tmp", "logs", "runs")
+	}
 	rt, err := judge.EnsureRuntimeFromConfig(cfg, judge.RuntimeOptions{
 		Tasks: judge.DigestTasks(),
+		RunReport: runreport.Config{
+			Enabled:           true,
+			RecordModuleCalls: true,
+			Dir:               rrDir,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("judge runtime: %w", err)

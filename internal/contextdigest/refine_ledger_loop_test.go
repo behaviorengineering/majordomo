@@ -12,21 +12,32 @@ import (
 )
 
 type stubJudgeGen struct {
-	clusterMD string
-	refined   string
-	journey   string
-	calls     int
+	clusterMD           string
+	proposedMergesYAML  string
+	refined             string
+	journey             string
+	ledgerNeedle        string // when set, refine Generate requires this substring in the ledger field
+	calls               int
 }
 
 func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[string]interface{}, _ int) (map[string]interface{}, error) {
 	s.calls++
 	switch task {
 	case jmodules.TaskTypologyCluster:
-		return map[string]interface{}{"cluster_proposal_md": s.clusterMD}, nil
+		mergesYAML := strings.TrimSpace(s.proposedMergesYAML)
+		if mergesYAML == "" {
+			mergesYAML = "[]"
+		}
+		return map[string]interface{}{
+			"cluster_proposal_md":  s.clusterMD,
+			"proposed_merges_yaml": mergesYAML,
+		}, nil
 	case jmodules.TaskTypologyRefine:
-		ledger, ok := fields["slice_objective_ledger_yaml"].(string)
-		if !ok || !strings.Contains(ledger, "Shared board payload shapes") {
-			return nil, context.Canceled // force visible failure if ledger missing
+		if needle := strings.TrimSpace(s.ledgerNeedle); needle != "" {
+			ledger, ok := fields["slice_objective_ledger_yaml"].(string)
+			if !ok || !strings.Contains(ledger, needle) {
+				return nil, context.Canceled // force visible failure if ledger missing
+			}
 		}
 		return map[string]interface{}{
 			"refined_catalog_yaml": s.refined,
@@ -86,9 +97,10 @@ edges:
 		t.Fatal(err)
 	}
 	stub := &stubJudgeGen{
-		clusterMD: "# Cluster\n\nKeep board.\n\n## Capability constraints (is / is-not)\n\n- `internal/board` role=dto is=[data_shape] must_not=[synchronize_state]\n",
+		clusterMD: "# Cluster\n\nKeep board.\n\n## Proposed merges (machine)\n[]\n\n## Capability constraints (is / is-not)\n\n- `internal/board` role=dto is=[data_shape] must_not=[synchronize_state]\n",
 		refined:   refined,
 		journey:   "# Journey\n\n## Status\n\nDraft.\n\n## Technical debt and boundary violations\n\nNone.\n",
+		ledgerNeedle: "Shared board payload shapes",
 	}
 	ledger := stubLedgerBuilder{
 		doc: sliceObjectiveLedgerDoc{Slices: []sliceObjectiveLedgerEntry{{
@@ -148,7 +160,7 @@ slices:
 `
 	once := &flippingLedgerBuilder{}
 	stub := &stubJudgeGen{
-		clusterMD: "# Cluster\n\nKeep board.\n\n## Capability constraints (is / is-not)\n\n- `internal/board`\n",
+		clusterMD: "# Cluster\n\nKeep board.\n\n## Proposed merges (machine)\n[]\n\n## Capability constraints (is / is-not)\n\n- `internal/board`\n",
 		refined: `id: demo
 slices:
   - id: board
