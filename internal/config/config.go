@@ -236,9 +236,15 @@ func (c RepoConfig) PipelineNamed(name string) (Pipeline, bool) {
 	return p, ok
 }
 
-// CacheBranch returns the review-cache git branch for projectID.
+// InferenceCacheBranch returns the unified inference-cache git branch for repoID.
+// Review cluster artifacts live under review/; digest RLM fingerprints under digest/.
+func InferenceCacheBranch(repoID string) string {
+	return "majordomo-inference-cache/" + repoID
+}
+
+// CacheBranch is an alias for InferenceCacheBranch (legacy name).
 func CacheBranch(projectID string) string {
-	return "majordomo-pr-reviewer-cache/" + projectID
+	return InferenceCacheBranch(projectID)
 }
 
 // PollCacheBranch returns the poll-cursor git branch for repoID.
@@ -251,9 +257,9 @@ func ContextBranch(repoID string) string {
 	return "majordomo-context/" + repoID
 }
 
-// DigestCacheBranch returns the digest inference-cache git branch for repoID.
+// DigestCacheBranch is an alias for InferenceCacheBranch (legacy name).
 func DigestCacheBranch(repoID string) string {
-	return "majordomo-digest-cache/" + repoID
+	return InferenceCacheBranch(repoID)
 }
 
 // ContextUpdateBranch returns the catch-up head branch for repoID.

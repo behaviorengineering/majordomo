@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -31,14 +30,9 @@ const (
 	DigestLedgerPromptV1 = "typology_objective_ledger_rlm_v1"
 )
 
-var digestBranchRE = regexp.MustCompile(`^majordomo-digest-cache/[a-z0-9][a-z0-9._/-]*$`)
-
-// ValidateDigestCacheBranch returns nil if branch name is allowed.
+// ValidateDigestCacheBranch is an alias for ValidateInferenceCacheBranch.
 func ValidateDigestCacheBranch(branch string) error {
-	if !digestBranchRE.MatchString(branch) {
-		return fmt.Errorf("digest cache branch %q does not match majordomo-digest-cache/<repo-id>", branch)
-	}
-	return nil
+	return ValidateInferenceCacheBranch(branch)
 }
 
 // DigestRunStats counts cache hits/misses and estimated tokens avoided this run.
@@ -332,11 +326,11 @@ func (fp LedgerFingerprint) key() string {
 }
 
 func (s *DigestStore) inspectPath(key string) string {
-	return filepath.Join(s.Dir, "inspect", key+".json")
+	return filepath.Join(s.Dir, DigestCachePrefix, "inspect", key+".json")
 }
 
 func (s *DigestStore) ledgerPath(key string) string {
-	return filepath.Join(s.Dir, "ledger", key+".json")
+	return filepath.Join(s.Dir, DigestCachePrefix, "ledger", key+".json")
 }
 
 // LookupInspect returns a cached inspect role when the fingerprint matches.
@@ -458,7 +452,7 @@ type DigestPushOptions struct {
 
 // PushDigest pushes the digest-cache branch (orphan-friendly first push).
 func PushDigest(opts DigestPushOptions) error {
-	if err := ValidateDigestCacheBranch(opts.Branch); err != nil {
+	if err := ValidateInferenceCacheBranch(opts.Branch); err != nil {
 		return err
 	}
 	if opts.Remote == "" || opts.Worktree == "" {

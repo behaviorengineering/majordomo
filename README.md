@@ -148,7 +148,7 @@ majordomo orchestrate \
 majordomo dispatch <pr> <staging-dir> <output-dir> [--summary|--finalize|--prose|...]
 majordomo publish --scm github|gitlab|bitbucket <pr> <summary.md> auto|comment|description
 majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFUL|FAILED
-majordomo cache validate-branch majordomo-pr-reviewer-cache/<id>
+majordomo cache validate-branch majordomo-inference-cache/<id>
 majordomo cache push --remote <url> --branch <name> --worktree <dir>
 majordomo cache precheck|lookup|store|restore ...
 majordomo context validate --dir <worktree>

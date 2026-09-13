@@ -124,18 +124,18 @@ func Run(opts Options) (res Result, err error) {
 		return Result{}, fmt.Errorf("fetch served repo: %w", err)
 	}
 
-	digestBranch := config.DigestCacheBranch(cfg.Repository.ID)
-	digestDir, err := os.MkdirTemp("", "majordomo-digest-cache-*")
+	digestBranch := config.InferenceCacheBranch(cfg.Repository.ID)
+	digestDir, err := os.MkdirTemp("", "majordomo-inference-cache-*")
 	if err != nil {
 		return Result{}, err
 	}
 	defer func() { _ = os.RemoveAll(digestDir) }()
 	if err := materializeDigestCacheWorktree(digestDir, servedGit, digestBranch, token, scm); err != nil {
-		logf("WARN", "digest inference cache unavailable: %v", err)
+		logf("WARN", "inference cache unavailable: %v", err)
 	} else {
 		store := &cache.DigestStore{Dir: digestDir}
 		if remote, rerr := servedGit.trim("remote", "get-url", "origin"); rerr != nil {
-			logf("WARN", "digest inference cache push disabled: remote URL: %v", rerr)
+			logf("WARN", "inference cache push disabled: remote URL: %v", rerr)
 		} else {
 			store.ConfigurePush(cache.DigestPushOptions{
 				Remote:   remote,
@@ -145,16 +145,16 @@ func Run(opts Options) (res Result, err error) {
 				SCM:      scm,
 			})
 			store.OnFlushError = func(err error) {
-				logf("WARN", "digest inference cache push: %v", err)
+				logf("WARN", "inference cache push: %v", err)
 			}
 		}
 		opts.DigestCache = store
 		opts.DigestSkips = cfg.Cache.SkipsEnabled()
 		opts.DigestModelID = digestModelID(cfg)
-		logf("INFO", "digest inference cache ready branch=%s skips=%v model=%s", digestBranch, opts.DigestSkips, opts.DigestModelID)
+		logf("INFO", "inference cache ready branch=%s skips=%v model=%s", digestBranch, opts.DigestSkips, opts.DigestModelID)
 		defer func() {
 			if ferr := store.Flush(); ferr != nil {
-				logf("WARN", "digest inference cache final flush: %v", ferr)
+				logf("WARN", "inference cache final flush: %v", ferr)
 			}
 			logf("INFO", "%s", cache.FormatStatsLine(store.Stats()))
 		}()
@@ -493,9 +493,9 @@ func finishDigestRun(p finishParams) (Result, error) {
 	}
 	if p.digestReady && p.servedGit != nil && strings.TrimSpace(p.digestDir) != "" {
 		if err := pushDigestCacheWorktree(p.digestDir, p.digestBranch, p.token, p.scm, p.servedGit); err != nil {
-			logf("WARN", "digest inference cache push: %v", err)
+			logf("WARN", "inference cache push: %v", err)
 		} else {
-			logf("INFO", "digest inference cache pushed branch=%s", p.digestBranch)
+			logf("INFO", "inference cache pushed branch=%s", p.digestBranch)
 		}
 	}
 	return Result{

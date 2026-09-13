@@ -436,16 +436,16 @@ func newCacheCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "validate-branch <branch>",
-		Short: "Validate majordomo-pr-reviewer-cache branch name",
+		Short: "Validate majordomo-inference-cache branch name",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cache.ValidateReviewCacheBranch(args[0])
+			return cache.ValidateInferenceCacheBranch(args[0])
 		},
 	})
 	var remote, branch, worktree string
 	pushCmd := &cobra.Command{
 		Use:   "push",
-		Short: "Push review-cache branch with constrained auth",
+		Short: "Push inference-cache branch with constrained auth",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cache.Push(cache.PushOptions{Remote: remote, Branch: branch, Worktree: worktree})
 		},
@@ -698,15 +698,6 @@ func newCacheCmd() *cobra.Command {
 	mustMarkFlagRequired(restoreCmd, "output-dir")
 	cmd.AddCommand(restoreCmd)
 
-	cmd.AddCommand(&cobra.Command{
-		Use:   "validate-digest-branch <branch>",
-		Short: "Validate majordomo-digest-cache branch name",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return cache.ValidateDigestCacheBranch(args[0])
-		},
-	})
-
 	var (
 		digestDir         string
 		digestKind        string
@@ -826,7 +817,7 @@ func newCacheCmd() *cobra.Command {
 	var digestRemote, digestBranch, digestWorktree string
 	digestPush := &cobra.Command{
 		Use:   "digest-push",
-		Short: "Push majordomo-digest-cache branch",
+		Short: "Push majordomo-inference-cache branch (digest artifacts)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cache.PushDigest(cache.DigestPushOptions{
 				Remote: digestRemote, Branch: digestBranch, Worktree: digestWorktree,
@@ -834,8 +825,8 @@ func newCacheCmd() *cobra.Command {
 		},
 	}
 	digestPush.Flags().StringVar(&digestRemote, "remote", "", "https remote URL")
-	digestPush.Flags().StringVar(&digestBranch, "branch", "", "digest cache branch")
-	digestPush.Flags().StringVar(&digestWorktree, "worktree", "", "digest cache worktree")
+	digestPush.Flags().StringVar(&digestBranch, "branch", "", "inference cache branch")
+	digestPush.Flags().StringVar(&digestWorktree, "worktree", "", "inference cache worktree")
 	mustMarkFlagRequired(digestPush, "remote")
 	mustMarkFlagRequired(digestPush, "branch")
 	mustMarkFlagRequired(digestPush, "worktree")
