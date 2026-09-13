@@ -137,7 +137,8 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("validation_feedback", "Optional prior structure-validation feedback to fix"),
 		},
 		[]core.OutputField{
-			out("cluster_proposal_md", "Markdown proposal of merges, renames, anti-pattern findings, boundary debt, and capability constraints"),
+			out("cluster_proposal_md", "Markdown counsel only: proposed merges narrative, renames, anti-pattern findings, boundary debt, rationale, capability constraints"),
+			out("proposed_merges_yaml", "YAML list of proposed merge rows (id, packages, intent), or [] when proposing no folds"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
 A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
@@ -164,10 +165,11 @@ Hard rules from observed roles and the door-walk seed:
 - uses_runner edges mean a package shells out through a runner; they are NOT "depends on the CLI domain".
 
 Grouping is optional and only when both sides are high-confidence and an evidenced import exists. Prefer recording wiring notes over inventing ownership.
+Propose companion-adapter folds when useful; folding into the refined catalog requires a later cluster_merge accept verdict. Mechanical product clumps in mechanical_grouping_md are seed hints only, not earned catalog slices.
 ` + consultantCounselContract + `
 
 Apply these merge heuristics only after honoring package_roles:
-1. Same job family companions (for example two forge adapters) may share a slice when both are adapters.
+1. Same job family companions (for example two forge adapters) may be proposed when both are adapters.
 2. Split companion packages that share a stem (sa + satools -> sa).
 3. Sole importer: wiring note only; never merge-into-caller against observed roles.
 
@@ -179,7 +181,15 @@ Enforce anti-patterns:
 
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
 Record boundary debt with smell, alternatives, and lean. MUST NOT use hollow mitigations such as "Approve binding or refactor".
-Output markdown only with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale, Capability constraints (is / is-not).
+Output cluster_proposal_md as markdown counsel with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale, Capability constraints (is / is-not).
+MUST NOT bury machine merge rows inside cluster_proposal_md.
+Output proposed_merges_yaml as YAML only (no markdown fences): a list of rows, or [].
+Each row:
+- id: <nickname>
+  packages: [<repo-relative paths>]
+  intent: slice | nickname
+Use intent: slice only when arguing a catalog fold. Use intent: nickname for teaching overlays that MUST NOT become owns[].
+Empty list [] is valid when proposing no folds.
 The Capability constraints (is / is-not) section MUST quote package paths from package_capability_constraints with their is and must_not codes.
 Do not emit catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)
@@ -191,7 +201,8 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			in("repo_id", "Served repository id"),
 			in("module_scope", "Typology module scope"),
 			in("draft_catalog_yaml", "Raw Typology discover draft YAML"),
-			in("cluster_proposal_md", "Approved cluster-pass proposal markdown"),
+			in("cluster_proposal_md", "Approved cluster-pass proposal markdown (after merge audit demote)"),
+			in("cluster_merge_verdicts_yaml", "Durable cluster merge audit verdicts: accept|overlay|reject per proposed package set"),
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges"),
 			in("package_capability_constraints", "Durable is/must_not capability codes per package; factual; MUST NOT contradict"),
@@ -207,7 +218,7 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 		},
 	).WithInstruction(`You are the unattended Typology refine human-writer for Majordomo context digest.
 Apply the cluster proposal to the draft catalog and emit a complete refined typology.yaml.
-package_roles, package_capability_constraints, and slice_objective_ledger_yaml are factual. MUST NOT contradict them.
+package_roles, package_capability_constraints, cluster_merge_verdicts_yaml, and slice_objective_ledger_yaml are factual. MUST NOT contradict them.
 Folder names are never evidence.
 
 slice_objective_ledger_yaml already settled each owned slice's meaning (evidence, claims, objective).
@@ -225,7 +236,9 @@ Placement from roles:
 - observability -> owns[] or libraries[]; NEVER config
 - adapter / config -> owns[] or libraries[] as fits
 
-Catalog MAY group companion adapters when both are high-confidence. MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from false ownership.
+Fold packages into one slice or libraries[].owns[] ONLY when cluster_merge_verdicts_yaml marks that package set verdict: accept.
+overlay and reject rows stay separate package owners; nicknames live in cluster/journey notes only and MUST NOT disguise as libraries[].owns[].
+MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from false ownership.
 ` + consultantCounselContract + `
 
 Catalog rules:

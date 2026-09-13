@@ -101,6 +101,8 @@ type RuntimeOptions struct {
 	Tasks []string
 	// FallbackModel overrides MAJORDOMO_MODEL for embedded-gateway fallback.
 	FallbackModel string
+	// RunReport configures strop runreport for Judge Generate/Evaluate (digest turns this on).
+	RunReport runreport.Config
 }
 
 // NewRuntime builds a Judge runtime from central-config AI providers and job_configs.
@@ -139,7 +141,7 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 		reg.GetModuleModel,
 		func(moduleName, modelID string) { reg.RegisterModuleModel(moduleName, modelID) },
 		nil,
-		runreport.Config{},
+		opts.RunReport,
 	)
 	configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
 	genFactory := factory.NewGeneratorFactory(configurator)

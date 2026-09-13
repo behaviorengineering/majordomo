@@ -46,6 +46,7 @@ type TypologyManifest struct {
 	SliceObjectiveClaimsPath         string `yaml:"slice_objective_claims_path,omitempty"`
 	SliceObjectiveLedgerPath         string `yaml:"slice_objective_ledger_path,omitempty"`
 	ClusterProposalPath              string `yaml:"cluster_proposal_path,omitempty"`
+	ClusterMergeVerdictsPath         string `yaml:"cluster_merge_verdicts_path,omitempty"`
 	RefinedSnapshotPath              string `yaml:"refined_snapshot_path,omitempty"`
 	JourneyPath                      string `yaml:"journey_path,omitempty"`
 	HumanInterventionPath            string `yaml:"human_intervention_path,omitempty"`
@@ -130,6 +131,11 @@ func ValidateTypologyManifest(m TypologyManifest) error {
 			{m.HumanInterventionPath, "human_intervention_path"},
 		} {
 			if err := validateRelativeEvidencePath(pair.path, pair.field); err != nil {
+				return err
+			}
+		}
+		if p := strings.TrimSpace(m.ClusterMergeVerdictsPath); p != "" {
+			if err := validateRelativeEvidencePath(p, "cluster_merge_verdicts_path"); err != nil {
 				return err
 			}
 		}

@@ -17,6 +17,7 @@ import (
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
+	"github.com/behaviorengineering/majordomo/internal/observability"
 	stropdspy "github.com/behaviorengineering/strop/dspy"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	"github.com/behaviorengineering/typology/catalog"
@@ -53,7 +54,7 @@ type stropSliceObjectiveLedgerRLM struct {
 	}
 }
 
-func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig) (sliceObjectiveLedgerBuilder, error) {
+func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig, analysisDir string) (sliceObjectiveLedgerBuilder, error) {
 	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyObjectiveGrounding)
 	if err != nil || !ok {
 		// Fall back to typology_inspect when the dedicated task is unset or unknown.
@@ -67,6 +68,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig)
 	}
 	stropProvider := provider.ToStrop()
 	llmFactory := factory.NewLLMFactory(nil, ledgerRLMTimeout)
+	llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
 	llm, err := llmFactory.CreateLLM(ctx, stropProvider)
 	if err != nil {
 		return nil, fmt.Errorf("typology_objective_grounding RLM LLM: %w", err)
@@ -79,6 +81,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig)
 		timeout = ledgerRLMTimeout
 	}
 	rlmCfg.Timeout = timeout
+	rlmCfg.TraceDir = rlmTraceDir(analysisDir, jmodules.TaskTypologyObjectiveGrounding)
 	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
 	if err != nil {
 		return nil, err
@@ -117,7 +120,7 @@ func (v stropSliceObjectiveLedgerRLM) Complete(ctx context.Context, contextPaylo
 	return v.module.Complete(ctx, contextPayload, query)
 }
 
-func newLedgerBuilderFromOpts(ctx context.Context, opts Options) (sliceObjectiveLedgerBuilder, error) {
+func newLedgerBuilderFromOpts(ctx context.Context, opts Options, analysisDir string) (sliceObjectiveLedgerBuilder, error) {
 	if strings.TrimSpace(opts.ConfigDir) == "" || strings.TrimSpace(opts.RepoID) == "" {
 		return nil, fmt.Errorf("config-dir and repo-id required for objective ledger RLM")
 	}
@@ -129,7 +132,7 @@ func newLedgerBuilderFromOpts(ctx context.Context, opts Options) (sliceObjective
 	if err != nil {
 		return nil, err
 	}
-	return newStropSliceObjectiveLedgerRLM(ctx, cfg)
+	return newStropSliceObjectiveLedgerRLM(ctx, cfg, analysisDir)
 }
 
 type stubSliceLedgerCaller struct {
