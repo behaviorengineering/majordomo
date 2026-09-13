@@ -9,6 +9,7 @@ const (
 	TaskTypologyRefine                 = "typology_refine"
 	TaskTypologyInspect                = "typology_inspect"
 	TaskTypologyObjectiveGrounding     = "typology_objective_grounding"
+	TaskTypologyClusterAudit           = "typology_cluster_audit"
 	TaskTypologyHumanIntervention      = "typology_human_intervention" // legacy alias for brief module
 	TaskTypologyInterventionJourney    = "typology_intervention_journey"
 	TaskTypologyInterventionBrief      = "typology_intervention_brief"
