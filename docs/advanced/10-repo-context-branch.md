@@ -343,24 +343,28 @@ Selection MUST stay small. If an area pack does not match the task, it MUST NOT 
 
 `pipelines.*.agentContext` in central YAML is **legacy** (still materialized today). It is not a substitute for packs. Phase 6 grounding is `agenting/`.
 
-## Digest inference cache
+## Inference cache (review + digest)
 
 Teaching files live on `majordomo-context/<repo-id>`. A reseed may delete those
-refs. Package inspect and slice ledger RLM results live on a **separate** branch:
+refs. Review cluster analysis and digest RLM fingerprints live on one **separate**
+branch with path prefixes:
 
-- Branch: `majordomo-digest-cache/<repo-id>` (`config.DigestCacheBranch`)
-- Artifacts: JSON fingerprints under `inspect/` and `ledger/` (not teaching markdown)
+- Branch: `majordomo-inference-cache/<repo-id>` (`config.InferenceCacheBranch`)
+- Review artifacts: `review/<skill>/analysis-*.json` (+ optional markdown)
+- Digest artifacts: JSON fingerprints under `digest/inspect/` and `digest/ledger/`
+  (not teaching markdown)
 - Hit when package source (and for ledger: owned paths + constraints) match the
   same model/prompt/schema; cluster proposal prose is **not** an invalidation input
 - End-of-run log line reports hit/miss counts and `estimated_tokens_saved`
 - **Push on the go:** each successful inspect/ledger Store commits and pushes the
   cache branch immediately (same rule as PR review cache store+push). Do not wait
   for refine/eval/job success; a failed reseed must still leave durable hits.
-- Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
+- Opt out with `cache.disableSkips: true` (same flag for review analysis and digest)
 - Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete
-  `majordomo-digest-cache/*`
+  `majordomo-inference-cache/*`
 
-CLI helpers: `majordomo cache digest-lookup` / `digest-store` / `digest-push`.
+CLI helpers: `majordomo cache` (`validate-branch`, `push`, `digest-lookup` /
+`digest-store` / `digest-push`).
 Operator rule: `ai-copilots/skills/majordomo-inference-cache/SKILL.md`.
 
 ## Poll exclusion
@@ -368,9 +372,10 @@ Operator rule: `ai-copilots/skills/majordomo-inference-cache/SKILL.md`.
 Product poll ignores PRs whose base or head starts with:
 
 - `majordomo-context/` (covers durable base and `…-update` head)
-- `majordomo-pr-reviewer-cache/`
+- `majordomo-inference-cache/`
 - `majordomo-poll-cache/`
-- `majordomo-digest-cache/`
+- `majordomo-pr-reviewer-cache/` (legacy)
+- `majordomo-digest-cache/` (legacy)
 
 Implemented in `internal/poll` (`isMajordomoInternalBranch`).
 

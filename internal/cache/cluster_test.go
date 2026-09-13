@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,6 +43,10 @@ func TestClusterCacheRoundTrip(t *testing.T) {
 	}
 	if storeOut["written"] != true {
 		t.Fatalf("store: %+v", storeOut)
+	}
+	fileRel, _ := storeOut["file"].(string)
+	if !strings.HasPrefix(fileRel, ReviewCachePrefix+"/") {
+		t.Fatalf("store file path %q missing review/ prefix", fileRel)
 	}
 
 	pre, err := Precheck(PrecheckOptions{

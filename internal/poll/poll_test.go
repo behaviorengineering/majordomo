@@ -154,6 +154,8 @@ func TestIsMajordomoInternalBranch(t *testing.T) {
 		{"main", "feature/x", false},
 		{"majordomo-context/demo", "majordomo-context/demo-update", true},
 		{"main", "majordomo-context/demo-update", true},
+		{"majordomo-inference-cache/demo", "bot/cache", true},
+		{"main", "majordomo-inference-cache/demo", true},
 		{"majordomo-pr-reviewer-cache/demo", "bot/cache", true},
 		{"main", "majordomo-poll-cache/demo", true},
 		{"main", "majordomo-digest-cache/demo", true},

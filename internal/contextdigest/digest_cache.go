@@ -11,9 +11,9 @@ import (
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 )
 
-// materializeDigestCacheWorktree checks out or seeds majordomo-digest-cache/<repo-id>.
+// materializeDigestCacheWorktree checks out or seeds majordomo-inference-cache/<repo-id>.
 func materializeDigestCacheWorktree(dir string, served *Git, branch, token, scm string) error {
-	if err := cache.ValidateDigestCacheBranch(branch); err != nil {
+	if err := cache.ValidateInferenceCacheBranch(branch); err != nil {
 		return err
 	}
 	g := &Git{Dir: dir, Token: token, SCM: scm}
@@ -36,7 +36,7 @@ func materializeDigestCacheWorktree(dir string, served *Git, branch, token, scm 
 	}
 	if exists {
 		if err := FetchOrigin(g, branch+":"+branch); err != nil {
-			return fmt.Errorf("fetch digest cache branch: %w", err)
+			return fmt.Errorf("fetch inference cache branch: %w", err)
 		}
 		if err := CheckoutBranch(g, branch); err != nil {
 			return err
@@ -47,13 +47,15 @@ func materializeDigestCacheWorktree(dir string, served *Git, branch, token, scm 
 		return err
 	}
 	readme := filepath.Join(dir, "README.md")
-	if err := os.WriteFile(readme, []byte("# Digest inference cache\n\nKeyed inspect/ledger RLM results. Not teaching content.\n"), 0o644); err != nil {
+	body := "# Majordomo inference cache\n\n" +
+		"Keyed review (`review/`) and digest (`digest/`) artifacts. Not teaching content.\n"
+	if err := os.WriteFile(readme, []byte(body), 0o644); err != nil {
 		return err
 	}
 	if _, err := g.run("add", "-A"); err != nil {
 		return err
 	}
-	if _, err := g.run("commit", "-m", "seed digest inference cache"); err != nil {
+	if _, err := g.run("commit", "-m", "seed inference cache"); err != nil {
 		return err
 	}
 	return nil

@@ -9,7 +9,7 @@ import (
 )
 
 func TestValidateDigestCacheBranch(t *testing.T) {
-	if err := ValidateDigestCacheBranch("majordomo-digest-cache/gitboard"); err != nil {
+	if err := ValidateDigestCacheBranch("majordomo-inference-cache/gitboard"); err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateDigestCacheBranch("majordomo-context/gitboard"); err == nil {
@@ -43,6 +43,11 @@ func TestDigestInspectRoundTrip(t *testing.T) {
 	}
 	if got.Role != "dto" || got.Agreement != "match" {
 		t.Fatalf("got %+v", got)
+	}
+	wantPath := filepath.Join(dir, DigestCachePrefix, "inspect")
+	entries, err := os.ReadDir(wantPath)
+	if err != nil || len(entries) == 0 {
+		t.Fatalf("expected files under %s: %v", wantPath, err)
 	}
 	// Drifted context must miss.
 	fp2 := fp
@@ -84,7 +89,7 @@ func TestDigestLedgerRoundTripAndRefuseOverclaim(t *testing.T) {
 		t.Fatal("expected refuse overclaim store")
 	}
 	// Ensure file still grounded.
-	path := filepath.Join(dir, "ledger", fp.key()+".json")
+	path := filepath.Join(dir, DigestCachePrefix, "ledger", fp.key()+".json")
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
