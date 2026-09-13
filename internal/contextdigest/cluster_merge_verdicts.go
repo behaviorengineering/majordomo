@@ -87,49 +87,46 @@ func normalizePackageList(packages []string) []string {
 	return out
 }
 
-// parseProposedMergesMachine extracts the machine merge block.
-// Missing section returns an error. Empty list is valid.
-func parseProposedMergesMachine(proposalMD string) ([]proposedMerge, error) {
-	body, ok := extractProposedMergesMachineBody(proposalMD)
-	if !ok {
-		return nil, fmt.Errorf("cluster proposal missing %q section", proposedMergesMachineSection)
+// parseProposedMergesYAML decodes the structured typology_cluster output field.
+// Empty list is valid. Missing/blank input is an error (field is mandatory).
+func parseProposedMergesYAML(raw string) ([]proposedMerge, error) {
+	body := strings.TrimSpace(stripCodeFence(raw))
+	if body == "" {
+		return nil, fmt.Errorf("proposed_merges_yaml is required")
 	}
-	body = strings.TrimSpace(body)
-	if body == "" || body == "[]" || strings.EqualFold(body, "none") || strings.EqualFold(body, "- []") {
+	if body == "[]" || strings.EqualFold(body, "none") || strings.EqualFold(body, "- []") {
 		return nil, nil
 	}
-	// Allow a fenced yaml block or raw yaml list.
-	body = stripCodeFence(body)
 	var merges []proposedMerge
 	if err := yaml.Unmarshal([]byte(body), &merges); err != nil {
-		return nil, fmt.Errorf("cluster proposal machine merges decode: %w", err)
+		return nil, fmt.Errorf("proposed_merges_yaml decode: %w", err)
 	}
 	out := make([]proposedMerge, 0, len(merges))
 	seenIDs := make(map[string]struct{}, len(merges))
 	for i, row := range merges {
 		id := strings.TrimSpace(row.ID)
 		if id == "" {
-			return nil, fmt.Errorf("cluster proposal machine merges[%d] missing id", i)
+			return nil, fmt.Errorf("proposed_merges_yaml[%d] missing id", i)
 		}
 		if _, ok := seenIDs[id]; ok {
-			return nil, fmt.Errorf("cluster proposal machine merges duplicate id %q", id)
+			return nil, fmt.Errorf("proposed_merges_yaml duplicate id %q", id)
 		}
 		seenIDs[id] = struct{}{}
 		pkgs := normalizePackageList(row.Packages)
 		if len(pkgs) == 0 {
-			return nil, fmt.Errorf("cluster proposal machine merge %q has no packages", id)
+			return nil, fmt.Errorf("proposed_merges_yaml %q has no packages", id)
 		}
 		intent := strings.ToLower(strings.TrimSpace(row.Intent))
 		if intent == "" {
 			intent = mergeIntentSlice
 		}
 		if intent != mergeIntentSlice && intent != mergeIntentNickname {
-			return nil, fmt.Errorf("cluster proposal machine merge %q intent %q must be slice or nickname", id, row.Intent)
+			return nil, fmt.Errorf("proposed_merges_yaml %q intent %q must be slice or nickname", id, row.Intent)
 		}
 		out = append(out, proposedMerge{ID: id, Packages: pkgs, Intent: intent})
 	}
 	if len(out) > maxClusterAuditMerges {
-		return nil, fmt.Errorf("cluster proposal machine merges has %d rows; max is %d", len(out), maxClusterAuditMerges)
+		return nil, fmt.Errorf("proposed_merges_yaml has %d rows; max is %d", len(out), maxClusterAuditMerges)
 	}
 	return out, nil
 }
@@ -194,29 +191,31 @@ func (m stickyVerdictMap) applySticky(proposed []proposedMerge) (pending []propo
 	return pending, frozen
 }
 
-// demoteRejectedMerges rewrites machine merges so reject/overlay rows become nickname intent,
-// and appends a short Teaching nicknames note when needed.
-func demoteRejectedMerges(proposalMD string, verdicts []clusterMergeVerdict) string {
+// demoteRejectedMergesList rewrites reject/overlay rows to nickname intent.
+func demoteRejectedMergesList(merges []proposedMerge, verdicts []clusterMergeVerdict) ([]proposedMerge, []string) {
 	byID := make(map[string]clusterMergeVerdict, len(verdicts))
 	for _, v := range verdicts {
 		byID[v.ID] = v
 	}
-	merges, err := parseProposedMergesMachine(proposalMD)
-	if err != nil {
-		return proposalMD
-	}
+	out := append([]proposedMerge(nil), merges...)
 	var nicknames []string
-	for i := range merges {
-		v, ok := byID[merges[i].ID]
+	for i := range out {
+		v, ok := byID[out[i].ID]
 		if !ok {
 			continue
 		}
 		switch v.Verdict {
 		case verdictReject, verdictOverlay:
-			merges[i].Intent = mergeIntentNickname
-			nicknames = append(nicknames, fmt.Sprintf("- `%s` (%s): %s", merges[i].ID, v.Verdict, strings.TrimSpace(v.Reason)))
+			out[i].Intent = mergeIntentNickname
+			nicknames = append(nicknames, fmt.Sprintf("- `%s` (%s): %s", out[i].ID, v.Verdict, strings.TrimSpace(v.Reason)))
 		}
 	}
+	return out, nicknames
+}
+
+// syncDemotedMergesIntoTeachingMD writes audited merges into the counsel artifact for cold readers.
+// Gates MUST read proposed_merges_yaml, not this markdown sync.
+func syncDemotedMergesIntoTeachingMD(proposalMD string, merges []proposedMerge, nicknames []string) string {
 	proposalMD = replaceProposedMergesMachine(proposalMD, merges)
 	if len(nicknames) == 0 {
 		return proposalMD
@@ -249,13 +248,6 @@ func replaceProposedMergesMachine(proposalMD string, merges []proposedMerge) str
 		return proposalMD[:loc[0]] + replacement
 	}
 	return proposalMD[:loc[0]] + replacement + "\n" + rest[next[0]:]
-}
-
-func ensureProposedMergesMachineSection(proposalMD string) string {
-	if strings.Contains(proposalMD, "Proposed merges (machine)") {
-		return proposalMD
-	}
-	return strings.TrimSpace(proposalMD) + "\n\n" + proposedMergesMachineSection + "\n[]\n"
 }
 
 func formatClusterAuditRejectFeedback(verdicts []clusterMergeVerdict) string {

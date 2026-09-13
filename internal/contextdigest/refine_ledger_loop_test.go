@@ -12,18 +12,26 @@ import (
 )
 
 type stubJudgeGen struct {
-	clusterMD    string
-	refined      string
-	journey      string
-	ledgerNeedle string // when set, refine Generate requires this substring in the ledger field
-	calls        int
+	clusterMD           string
+	proposedMergesYAML  string
+	refined             string
+	journey             string
+	ledgerNeedle        string // when set, refine Generate requires this substring in the ledger field
+	calls               int
 }
 
 func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[string]interface{}, _ int) (map[string]interface{}, error) {
 	s.calls++
 	switch task {
 	case jmodules.TaskTypologyCluster:
-		return map[string]interface{}{"cluster_proposal_md": s.clusterMD}, nil
+		mergesYAML := strings.TrimSpace(s.proposedMergesYAML)
+		if mergesYAML == "" {
+			mergesYAML = "[]"
+		}
+		return map[string]interface{}{
+			"cluster_proposal_md":  s.clusterMD,
+			"proposed_merges_yaml": mergesYAML,
+		}, nil
 	case jmodules.TaskTypologyRefine:
 		if needle := strings.TrimSpace(s.ledgerNeedle); needle != "" {
 			ledger, ok := fields["slice_objective_ledger_yaml"].(string)

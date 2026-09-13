@@ -125,15 +125,14 @@ slices:
 	stub := &stubJudgeGen{
 		clusterMD: `# Cluster
 
-## Proposed merges (machine)
-- id: git
-  packages: [internal/localgit, internal/remotegit]
-  intent: slice
-
 ## Capability constraints (is / is-not)
 
 - ` + "`internal/localgit`" + ` role=adapter is=[] must_not=[]
 - ` + "`internal/remotegit`" + ` role=adapter is=[] must_not=[]
+`,
+		proposedMergesYAML: `- id: git
+  packages: [internal/localgit, internal/remotegit]
+  intent: slice
 `,
 		refined: refined,
 		journey: "# Journey\n\n## Status\n\nDraft.\n\n## Technical debt and boundary violations\n\nNone.\n",
@@ -157,7 +156,11 @@ slices:
 	if auditor.calls != 1 {
 		t.Fatalf("auditor calls=%d", auditor.calls)
 	}
-	merges, err := parseProposedMergesMachine(out.ClusterProposalMD)
+	body, ok := extractProposedMergesMachineBody(out.ClusterProposalMD)
+	if !ok {
+		t.Fatalf("teaching machine section missing:\n%s", out.ClusterProposalMD)
+	}
+	merges, err := parseProposedMergesYAML(body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,28 +201,28 @@ slices:
     owns: [{path: internal/c}]
 `
 	flip := &flippingClusterJudge{
-		first: `# Cluster
-## Proposed merges (machine)
-- id: git
-  packages: [internal/a, internal/b]
-  intent: slice
+		firstMD: `# Cluster
 ## Capability constraints (is / is-not)
 - ` + "`internal/a`" + `
 - ` + "`internal/b`" + `
 - ` + "`internal/c`" + `
 `,
-		second: `# Cluster
-## Proposed merges (machine)
-- id: forge
+		firstYAML: `- id: git
+  packages: [internal/a, internal/b]
+  intent: slice
+`,
+		secondMD: `# Cluster
+## Capability constraints (is / is-not)
+- ` + "`internal/a`" + `
+- ` + "`internal/b`" + `
+- ` + "`internal/c`" + `
+`,
+		secondYAML: `- id: forge
   packages: [internal/b, internal/a]
   intent: slice
 - id: keep
   packages: [internal/c]
   intent: nickname
-## Capability constraints (is / is-not)
-- ` + "`internal/a`" + `
-- ` + "`internal/b`" + `
-- ` + "`internal/c`" + `
 `,
 		refined: draft,
 		journey: "# Journey\n\n## Status\n\nDraft.\n\n## Technical debt and boundary violations\n\nNone.\n",
@@ -247,19 +250,22 @@ slices:
 }
 
 type flippingClusterJudge struct {
-	first, second, refined, journey string
-	clusterCalls                    int
+	firstMD, firstYAML, secondMD, secondYAML, refined, journey string
+	clusterCalls                                               int
 }
 
 func (s *flippingClusterJudge) Generate(_ context.Context, task string, _ map[string]interface{}, _ int) (map[string]interface{}, error) {
 	switch task {
 	case jmodules.TaskTypologyCluster:
 		s.clusterCalls++
-		md := s.first
+		md, yaml := s.firstMD, s.firstYAML
 		if s.clusterCalls > 1 {
-			md = s.second
+			md, yaml = s.secondMD, s.secondYAML
 		}
-		return map[string]interface{}{"cluster_proposal_md": md}, nil
+		return map[string]interface{}{
+			"cluster_proposal_md":  md,
+			"proposed_merges_yaml": yaml,
+		}, nil
 	case jmodules.TaskTypologyRefine:
 		return map[string]interface{}{"refined_catalog_yaml": s.refined, "journey_md": s.journey}, nil
 	default:

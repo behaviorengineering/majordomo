@@ -112,6 +112,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		clusterFields["package_capability_constraints"] = encoded
 	}
 	var clusterMD string
+	var proposedMerges []proposedMerge
 	clusterFeedback := input.ValidationFeedback
 	sticky := stickyVerdictMap{}
 	var mergeVerdicts []clusterMergeVerdict
@@ -131,7 +132,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		clusterMD = ensureClusterCapabilityConstraintsSection(clusterMD, constraintsDoc)
 		if fixed, note := scrubForbiddenHTTPEntrypointMerges(clusterMD, input.PackageRoles); note != "" {
-			// Deterministic role gate: scrub sole-importer folds, then continue to machine parse + audit.
+			// Deterministic role gate: scrub sole-importer folds, then continue to structured merges + audit.
 			clusterMD = ensureClusterCapabilityConstraintsSection(fixed, constraintsDoc)
 			_ = note
 		}
@@ -142,10 +143,10 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			clusterFeedback = fb
 			continue
 		}
-		merges, parseErr := parseProposedMergesMachine(clusterMD)
+		merges, parseErr := parseProposedMergesYAML(stringField(clusterOut, "proposed_merges_yaml"))
 		if parseErr != nil {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology cluster machine merges failed after %d attempts: %w", maxTypologyRefineAttempts, parseErr)
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster proposed_merges_yaml failed after %d attempts: %w", maxTypologyRefineAttempts, parseErr)
 			}
 			clusterFeedback = parseErr.Error()
 			continue
@@ -187,13 +188,15 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		mergeVerdicts = audited.Verdicts
 		auditMeta = audited
+		proposedMerges = merges
 		if hasOpenClusterRejects(mergeVerdicts) && attempt < maxTypologyRefineAttempts {
 			clusterFeedback = formatClusterAuditRejectFeedback(mergeVerdicts)
 			continue
 		}
 		break
 	}
-	clusterMD = demoteRejectedMerges(clusterMD, mergeVerdicts)
+	demoted, nicknames := demoteRejectedMergesList(proposedMerges, mergeVerdicts)
+	clusterMD = syncDemotedMergesIntoTeachingMD(clusterMD, demoted, nicknames)
 	verdictsDoc := clusterMergeVerdictsDoc{
 		Attempt:       maxTypologyRefineAttempts,
 		RLMIterations: auditMeta.RLMIterations,

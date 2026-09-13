@@ -137,7 +137,8 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("validation_feedback", "Optional prior structure-validation feedback to fix"),
 		},
 		[]core.OutputField{
-			out("cluster_proposal_md", "Markdown proposal of merges, renames, anti-pattern findings, boundary debt, and capability constraints"),
+			out("cluster_proposal_md", "Markdown counsel only: proposed merges narrative, renames, anti-pattern findings, boundary debt, rationale, capability constraints"),
+			out("proposed_merges_yaml", "YAML list of proposed merge rows (id, packages, intent), or [] when proposing no folds"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
 A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
@@ -180,8 +181,10 @@ Enforce anti-patterns:
 
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
 Record boundary debt with smell, alternatives, and lean. MUST NOT use hollow mitigations such as "Approve binding or refactor".
-Output markdown only with sections: Proposed merges, Proposed merges (machine), Proposed renames, Anti-pattern findings, Boundary debt, Rationale, Capability constraints (is / is-not).
-The Proposed merges (machine) section is REQUIRED and MUST be a YAML list (or []) of rows:
+Output cluster_proposal_md as markdown counsel with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale, Capability constraints (is / is-not).
+MUST NOT bury machine merge rows inside cluster_proposal_md.
+Output proposed_merges_yaml as YAML only (no markdown fences): a list of rows, or [].
+Each row:
 - id: <nickname>
   packages: [<repo-relative paths>]
   intent: slice | nickname
