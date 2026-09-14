@@ -1,6 +1,7 @@
 package contextdigest
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -111,13 +112,16 @@ func WalkCommits(ctxDir string, g *Git, commits []string, at time.Time, regenFee
 }
 
 // walkCommitContexts applies story updates for pre-loaded commit contexts.
-func walkCommitContexts(ctxDir string, commits []CommitContext, at time.Time, regenFeedback string, gen judge.Generator) error {
+func walkCommitContexts(ctx context.Context, ctxDir string, commits []CommitContext, at time.Time, regenFeedback string, gen judge.Generator) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	for _, cc := range commits {
 		if err := ProcessCommit(ctxDir, cc, at); err != nil {
 			return err
 		}
 	}
-	if err := applyStoryLLM(ctxDir, commits, regenFeedback, gen); err != nil {
+	if err := applyStoryLLM(ctx, ctxDir, commits, regenFeedback, gen); err != nil {
 		return fmt.Errorf("LLM story digest: %w", err)
 	}
 	return nil
