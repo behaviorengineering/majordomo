@@ -178,6 +178,27 @@ func mergeConfig(base, over RepoConfig) RepoConfig {
 	out.Pipelines = mergePipelines(base.Pipelines, over.Pipelines)
 	out.AIProviders = mergeAIProviders(base.AIProviders, over.AIProviders)
 	out.JobConfigs = mergeJobConfigs(base.JobConfigs, over.JobConfigs)
+	out.Observability = mergeObservability(base.Observability, over.Observability)
+	return out
+}
+
+func mergeObservability(base, over Observability) Observability {
+	out := base
+	if over.Enabled != nil {
+		out.Enabled = over.Enabled
+	}
+	if strings.TrimSpace(over.Endpoint) != "" {
+		out.Endpoint = over.Endpoint
+	}
+	if strings.TrimSpace(over.APIKey) != "" {
+		out.APIKey = over.APIKey
+	}
+	if strings.TrimSpace(over.ServiceName) != "" {
+		out.ServiceName = over.ServiceName
+	}
+	if over.Insecure != nil {
+		out.Insecure = over.Insecure
+	}
 	return out
 }
 

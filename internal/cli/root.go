@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/agent"
@@ -68,6 +69,35 @@ func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 	if err := cmd.MarkFlagRequired(name); err != nil {
 		panic(fmt.Errorf("mark flag %q required: %w", name, err))
 	}
+}
+
+// resolveOTELConfig loads observability from central-config when available, then applies env overrides.
+func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config {
+	var settings observability.Settings
+	configDir = strings.TrimSpace(configDir)
+	repoID = strings.TrimSpace(repoID)
+	if configDir != "" {
+		var cfg config.RepoConfig
+		var err error
+		if repoID != "" {
+			cfg, err = config.LoadMerged(configDir, repoID)
+		} else {
+			cfg, err = config.LoadDefaults(configDir)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "otel config load: %v\n", err)
+		} else {
+			obs := cfg.Observability.Expand()
+			settings = observability.Settings{
+				Enabled:     obs.Enabled,
+				Endpoint:    obs.Endpoint,
+				APIKey:      obs.APIKey,
+				ServiceName: obs.ServiceName,
+				Insecure:    obs.Insecure,
+			}
+		}
+	}
+	return observability.ResolveConfig(outputDir, settings)
 }
 
 func newVersionCmd() *cobra.Command {
@@ -232,13 +262,14 @@ func newOrchestrateCmd() *cobra.Command {
 			if timeoutMin > 0 {
 				timeout = time.Duration(timeoutMin) * time.Minute
 			}
-			otelCfg := observability.ResolveConfig(outputDir)
+			otelCfg := resolveOTELConfig(outputDir, configDir, repoID)
 			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
 				fmt.Fprintf(os.Stderr, "otel init: %v\n", otelErr)
 			}
-			_, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.orchestrate")
+			ctx, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.orchestrate")
 			defer observability.EndSpanWithStatus(span, &err)
 			return orchestrate.Run(orchestrate.Options{
+				Context:           ctx,
 				PRNumber:          pr,
 				BaseBranch:        baseBranch,
 				StagingDir:        stagingDir,
@@ -857,7 +888,7 @@ func newContextCmd() *cobra.Command {
 		Use:   "digest",
 		Short: "Catch up the served-repo context branch when the cursor is behind default HEAD",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
-			otelCfg := observability.ResolveConfig("")
+			otelCfg := resolveOTELConfig("", digestConfigDir, digestRepoID)
 			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
 				fmt.Fprintf(os.Stderr, "otel init: %v\n", otelErr)
 			}

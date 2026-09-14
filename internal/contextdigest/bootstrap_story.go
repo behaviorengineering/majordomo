@@ -168,7 +168,10 @@ func (packageJudgeGenerator) Ready() bool { return judge.StoryLLMAvailable() }
 
 func (packageJudgeGenerator) TaskModel(string) string { return "" }
 
-func writeBootstrapStory(ctxDir, analysisDir string, at time.Time, sourceSHA string, gen BootstrapStoryGenerator, judgeGen judge.Generator) error {
+func writeBootstrapStory(ctx context.Context, ctxDir, analysisDir string, at time.Time, sourceSHA string, gen BootstrapStoryGenerator, judgeGen judge.Generator) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := assertEvidenceGroundingBeforeStory(ctxDir); err != nil {
 		return err
 	}
@@ -179,7 +182,7 @@ func writeBootstrapStory(ctxDir, analysisDir string, at time.Time, sourceSHA str
 	if gen == nil {
 		gen = JudgeBootstrapStoryGenerator{Gen: judgeGen}
 	}
-	out, err := gen.Generate(context.Background(), input)
+	out, err := gen.Generate(ctx, input)
 	if err != nil {
 		return err
 	}
