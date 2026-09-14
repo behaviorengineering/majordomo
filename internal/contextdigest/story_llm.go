@@ -71,7 +71,10 @@ func (r *digestSectionRunner) Run(ctx context.Context, req orchestration.Section
 	}, nil
 }
 
-func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string, gen judge.Generator) error {
+func applyStoryLLM(ctx context.Context, ctxDir string, commits []CommitContext, regenFeedback string, gen judge.Generator) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if gen == nil {
 		if !judge.StoryLLMAvailable() {
 			return fmt.Errorf("LLM story digest unavailable")
@@ -130,7 +133,6 @@ func applyStoryLLM(ctxDir string, commits []CommitContext, regenFeedback string,
 			Runner:   runner,
 			Codec:    codec,
 		})
-		ctx := context.Background()
 		for _, phase := range strat.Phases() {
 			if _, err := strat.RunPhase(ctx, phase, regenFeedback, nil); err != nil {
 				return fmt.Errorf("story section-walk %s: %w", shortSHA(cc.SHA), err)

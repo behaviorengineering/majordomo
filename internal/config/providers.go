@@ -201,6 +201,14 @@ func expandProvider(p AIProviderConfig) AIProviderConfig {
 	return p
 }
 
+// Expand resolves ${ENV} placeholders on observability fields.
+func (o Observability) Expand() Observability {
+	o.Endpoint = expandEnvVars(o.Endpoint)
+	o.APIKey = expandEnvVars(o.APIKey)
+	o.ServiceName = expandEnvVars(o.ServiceName)
+	return o
+}
+
 func expandEnvVars(s string) string {
 	return strings.TrimSpace(envPlaceholderRE.ReplaceAllStringFunc(s, func(match string) string {
 		name := match[2 : len(match)-1]

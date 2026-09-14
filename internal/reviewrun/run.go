@@ -76,7 +76,19 @@ func Run(opts Options) (err error) {
 	if opts.OutputDir == "" {
 		opts.OutputDir = filepath.Join("review-output", opts.RepoID, "pr-review")
 	}
-	otelCfg := observability.ResolveConfig(opts.OutputDir)
+
+	cfg, err := config.LoadMerged(opts.ConfigDir, opts.RepoID)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	obs := cfg.Observability.Expand()
+	otelCfg := observability.ResolveConfig(opts.OutputDir, observability.Settings{
+		Enabled:     obs.Enabled,
+		Endpoint:    obs.Endpoint,
+		APIKey:      obs.APIKey,
+		ServiceName: obs.ServiceName,
+		Insecure:    obs.Insecure,
+	})
 	if _, otelErr := observability.Init(otelCfg); otelErr != nil {
 		logf("WARN", "otel init: %v", otelErr)
 	}
@@ -96,10 +108,6 @@ func Run(opts Options) (err error) {
 	}
 	opts.Until = until
 
-	cfg, err := config.LoadMerged(opts.ConfigDir, opts.RepoID)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
 	scm := strings.ToLower(strings.TrimSpace(cfg.SCM))
 	if scm == "" {
 		scm = "github"

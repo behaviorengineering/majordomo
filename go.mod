@@ -124,3 +124,5 @@ require (
 )
 
 tool github.com/behaviorengineering/typology/cmd/typology
+
+replace github.com/behaviorengineering/strop => ../tmp/strop

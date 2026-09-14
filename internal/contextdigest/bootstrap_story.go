@@ -153,6 +153,9 @@ func (packageJudgeGenerator) Ready() bool { return judge.StoryLLMAvailable() }
 func (packageJudgeGenerator) TaskModel(string) string { return "" }
 
 func writeBootstrapStory(ctx context.Context, ctxDir, analysisDir string, at time.Time, sourceSHA string, opts Options) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := assertEvidenceGroundingBeforeStory(ctxDir); err != nil {
 		return err
 	}

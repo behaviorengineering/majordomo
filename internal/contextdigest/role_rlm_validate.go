@@ -72,10 +72,11 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig, workStor
 	}
 	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	rlmCfg := stropdspy.RLMDefaults()
+	rlmCfg.LLM = llm
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	rlmCfg.Timeout = provider.GetTimeout(3 * time.Minute)
 	rlmCfg.TraceDir = rlmTraceDir(workStoryDir, jmodules.TaskTypologyInspect)
-	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
+	module, err := rlmCfg.CreateModule()
 	if err != nil {
 		return nil, err
 	}

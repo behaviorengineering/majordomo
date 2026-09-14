@@ -79,6 +79,38 @@ review:
 	}
 }
 
+func TestObservabilityMergeAndExpand(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "_defaults.yaml"), []byte(`
+observability:
+  endpoint: localhost:4317
+  api_key: ${PHOENIX_API_KEY}
+`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "demo.yaml"), []byte(`
+scm: github
+repository:
+  owner: acme
+  name: demo
+observability:
+  endpoint: phoenix.example:4317
+`), 0o644)
+	t.Setenv("PHOENIX_API_KEY", "tower-secret")
+	cfg, err := LoadMerged(dir, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Observability.Endpoint != "phoenix.example:4317" {
+		t.Fatalf("endpoint=%q", cfg.Observability.Endpoint)
+	}
+	exp := cfg.Observability.Expand()
+	if exp.APIKey != "tower-secret" {
+		t.Fatalf("api_key=%q", exp.APIKey)
+	}
+	if exp.Endpoint != "phoenix.example:4317" {
+		t.Fatalf("expanded endpoint=%q", exp.Endpoint)
+	}
+}
+
 func TestLegacyTopLevelPublishMode(t *testing.T) {
 	dir := t.TempDir()
 	_ = os.WriteFile(filepath.Join(dir, "_defaults.yaml"), []byte("{}\n"), 0o644)

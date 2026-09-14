@@ -99,7 +99,15 @@ Do not look under OS temp `majordomo-typology-*` after the process exits; that a
   --work-story-dir /path/to/tower/tmp/digest-runs/polypus-manual
 ```
 
-Tracing is on by default (Phoenix optional). On a failed `run review` / `orchestrate`, the full OpenInference trace is written to the failure-dump path above. Attach that JSON to an AI for debug. Digest nests its CHAIN span into Judge/RLM work so Phoenix and failure dumps see one tree when something fails. Set `MAJORDOMO_OTEL_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to `localhost:4317` when Phoenix is running. Disable with `MAJORDOMO_OTEL_ENABLED=0`.
+Tracing is on by default. OTLP export is configured under `observability:` in `_defaults.yaml` (or a per-repo overlay):
+
+```yaml
+observability:
+  endpoint: "localhost:4317"   # Phoenix OTLP gRPC; empty skips OTLP
+  api_key: ${PHOENIX_API_KEY}  # optional Bearer for Phoenix/Arize with auth
+```
+
+Env still overrides when set (`MAJORDOMO_OTEL_ENDPOINT`, `MAJORDOMO_OTEL_API_KEY` / `PHOENIX_API_KEY`, `MAJORDOMO_OTEL_ENABLED=0`). Digest, orchestrate, and run review nest work under one process TraceID (returned as `trace_id` on digest JSON). On a failed `run review` / `orchestrate`, the full OpenInference trace is also written to the failure-dump path above. Disable with `MAJORDOMO_OTEL_ENABLED=0` or `observability.enabled: false`.
 
 Provider allow-list: `typology_cluster_audit` is an RLM Complete path (like objective grounding). Configure it under job providers or fall back to `typology_inspect`. Do not register a dummy CoT ctor for it. Token totals appear in the digest `llm_usage` summary under `typology_cluster_audit`.
 

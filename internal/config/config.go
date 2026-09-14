@@ -199,6 +199,20 @@ type Pipeline struct {
 	Skills       map[string]*string `yaml:"skills,omitempty"` // null = submodule default
 }
 
+// Observability configures OTLP export (Phoenix, Arize, or any OTLP collector).
+type Observability struct {
+	// Enabled defaults true when nil. Set false to disable tracing.
+	Enabled *bool `yaml:"enabled,omitempty"`
+	// Endpoint is OTLP gRPC host:port (example: localhost:4317). Empty skips OTLP export.
+	Endpoint string `yaml:"endpoint,omitempty"`
+	// APIKey is a Bearer token (${PHOENIX_API_KEY}). Optional for local Phoenix without auth.
+	APIKey string `yaml:"api_key,omitempty"`
+	// ServiceName overrides the OpenTelemetry service.name resource attribute.
+	ServiceName string `yaml:"service_name,omitempty"`
+	// Insecure forces plaintext gRPC. Nil means auto: true for localhost/127.0.0.1.
+	Insecure *bool `yaml:"insecure,omitempty"`
+}
+
 // RepoConfig is one file under majordomo-central-config/<repo-id>.yaml.
 type RepoConfig struct {
 	SCM            string                      `yaml:"scm"` // github | gitlab | bitbucket | generic
@@ -214,6 +228,7 @@ type RepoConfig struct {
 	Pipelines      map[string]Pipeline         `yaml:"pipelines,omitempty"`
 	AIProviders    map[string]AIProviderConfig `yaml:"ai_providers,omitempty"`
 	JobConfigs     map[string]JobConfig        `yaml:"job_configs,omitempty"`
+	Observability  Observability               `yaml:"observability,omitempty"`
 }
 
 // EffectivePublishMode returns review.publishMode, else top-level publishMode, else "auto".
