@@ -1,0 +1,21 @@
+{
+  "source": "tmp/digest-runs/gitboard-20260914-000537Z/rlm-traces/typology_cluster_audit/rlm_2026-09-14_10-07-24_a071fb58.jsonl",
+  "task": "typology_cluster_audit",
+  "repo_id": "gitboard",
+  "context": "# Cluster merge audit context\n\n## Mechanical grouping\n\ndelivery_paths:\n    - internal/server\nentrypoint_paths:\n    - cmd/gitboard\ndoor_walks:\n    - door_path: cmd/gitboard\n      door_role: entrypoint\n      private_paths:\n        - internal/observability\n        - internal/syncproj\n      cross_door_wiring:\n        - '`cmd/gitboard` -[serves_server]-> `internal/server`'\n    - door_path: internal/server\n      door_role: server\nshared_paths:\n    - internal/board\n    - internal/cliexec\n    - internal...",
+  "query": "You audit Typology cluster merge proposals for Majordomo context digest.\nYou are a challenger, not a second clusterer. MUST NOT invent new merge ids or a better catalog map.\n\nInspection protocol (MUST follow in order):\n1. Read the full proposed-merge list below. Do not invent rows.\n2. For each row, pull that row's packages from context (roles, must_not, callers, mechanical private/shared).\n3. Decide lifecycle-same vs theme-only.\n4. Emit that row's verdict, why, and evidence quotes (package path + symbol).\n5. Only then move to the next row.\n\nVerdicts:\n- accept: same lifecycle / same job; fold into one refined slice is earned\n- overlay: useful teaching nickname only; MUST NOT become catalog owns[]\n- reject: drop the grouping\n\nFrozen sticky verdicts (do not re-litigate):\n(none)\n\nProposed merges to score (every id required exactly once):\n- id=git_adapters intent=slice packages=[internal/localgit, internal/remotegit]\n\nFinal answer MUST be a YAML list of objects (no markdown fences), one object per proposed id:\n- id: <id>\n  verdict: accept|overlay|reject\n  reason: <one sentence>\n  evidence:\n    - <path + symbol quote>\n",
+  "context_truncated": true,
+  "recorded_final_answer": "- id: git_adapters\n  verdict: overlay\n  reason: companion adapters; teaching nickname only\n  evidence:\n    - internal/localgit shared surface\n",
+  "label": "git_adapters",
+  "proposed": [
+    {
+      "id": "git_adapters",
+      "intent": "slice",
+      "packages": [
+        "internal/localgit",
+        "internal/remotegit"
+      ]
+    }
+  ],
+  "recorded_final_answer_synthetic": true
+}

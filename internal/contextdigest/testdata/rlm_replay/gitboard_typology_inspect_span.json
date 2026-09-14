@@ -1,0 +1,10 @@
+{
+  "source": "tmp/digest-runs/gitboard-20260914-000537Z/rlm-traces/typology_inspect/rlm_2026-09-14_10-06-05_7394c9b0.jsonl",
+  "task": "typology_inspect",
+  "repo_id": "gitboard",
+  "context": "## ./internal/cliexec\n- package: `cliexec`\n- hasMain: false\n- jsonTags: false\n- goEmbed: false\n- embedsStatic: false\n- importsNetHTTP: false\n- importsOsExec: true\n- importsGrpc: false\n- importsOtel: false\n- importsPrometheus: false\n- mechanicalRole: exec_runner\n- mechanicalConfidence: 0.80\n- mechanicalEvidence: imports_os_exec, exports_run_surface\n- exportedDecls: Exec, Runner\n- exportedFuncs: New\n- exportedMethods: Runner.LookPath, Runner.Run, Runner.RunJSON\n- unexportedDecls: (none)\n- unexport...",
+  "query": "Classify this Go package into exactly one role.\nAllowed roles: entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown.\nMechanical prior: role=exec_runner evidence=imports_os_exec, exports_run_surface\nMUST NOT use the directory basename as evidence.\nExplore exports and bodies in the context; dig into private helpers only if needed.\nFinal answer MUST be a small YAML object (no markdown fences):\nrole: <one allowed role>\nevidence: <short symbol quotes>\nPackage path (not evidence): internal/cliexec",
+  "context_truncated": true,
+  "recorded_final_answer": "role: exec_runner\nevidence: \"Runner.Run, Runner.RunJSON\"",
+  "label": "internal/cliexec"
+}
