@@ -2,8 +2,6 @@ package contextdigest
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -48,6 +46,48 @@ func TestParseClusterAuditAnswerAcceptNeedsEvidence(t *testing.T) {
 	}
 	if got[0].Verdict != verdictReject {
 		t.Fatalf("want reject without evidence, got %+v", got[0])
+	}
+}
+
+func TestParseClusterAuditAnswerAcceptKeepsMultilineEvidence(t *testing.T) {
+	proposed := []proposedMerge{
+		{ID: "git-adapters", Packages: []string{"internal/localgit", "internal/remotegit"}, Intent: mergeIntentSlice},
+		{ID: "git-aggregators", Packages: []string{"internal/dashboard", "internal/pruneagent"}, Intent: mergeIntentSlice},
+	}
+	// Shape produced by live RLM: evidence: on its own line, quotes on following lines.
+	answer := `id: git-adapters
+verdict: accept
+reason: complementary git adapters
+evidence:
+internal/localgit: Inspector.InspectPath
+internal/remotegit: github.go, gitlab.go
+id: git-aggregators
+verdict: reject
+reason: different lifecycles
+evidence:
+internal/dashboard: NewMux
+`
+	got, err := parseClusterAuditAnswer(answer, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Verdict != verdictAccept {
+		t.Fatalf("git-adapters want accept, got %+v", got[0])
+	}
+	if len(got[0].Evidence) < 2 {
+		t.Fatalf("git-adapters evidence=%v", got[0].Evidence)
+	}
+	if got[1].Verdict != verdictReject {
+		t.Fatalf("git-aggregators want reject, got %+v", got[1])
+	}
+}
+
+func TestParseClusterAuditAnswerYAMLDecodeFailsClosed(t *testing.T) {
+	proposed := []proposedMerge{{ID: "x", Packages: []string{"a", "b"}, Intent: mergeIntentSlice}}
+	// Looks like YAML (document key) but is not a valid merges list; must not fall through to line scrape.
+	_, err := parseClusterAuditAnswer("merges:\n  - id: [unterminated\n", proposed)
+	if err == nil {
+		t.Fatal("expected YAML decode error")
 	}
 }
 
@@ -123,19 +163,11 @@ slices:
 `
 	refined := draft
 	stub := &stubJudgeGen{
-		clusterMD: `# Cluster
-
-## Capability constraints (is / is-not)
-
-- ` + "`internal/localgit`" + ` role=adapter is=[] must_not=[]
-- ` + "`internal/remotegit`" + ` role=adapter is=[] must_not=[]
-`,
 		proposedMergesYAML: `- id: git
   packages: [internal/localgit, internal/remotegit]
   intent: slice
 `,
 		refined: refined,
-		journey: "# Journey\n\n## Status\n\nDraft.\n\n## Technical debt and boundary violations\n\nNone.\n",
 	}
 	auditor := &stubClusterAuditor{}
 	out, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
@@ -156,11 +188,7 @@ slices:
 	if auditor.calls != 1 {
 		t.Fatalf("auditor calls=%d", auditor.calls)
 	}
-	body, ok := extractProposedMergesMachineBody(out.ClusterProposalMD)
-	if !ok {
-		t.Fatalf("teaching machine section missing:\n%s", out.ClusterProposalMD)
-	}
-	merges, err := parseProposedMergesYAML(body)
+	merges, err := parseProposedMergesYAML(out.ClusterMergeProposalYAML)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,21 +229,9 @@ slices:
     owns: [{path: internal/c}]
 `
 	flip := &flippingClusterJudge{
-		firstMD: `# Cluster
-## Capability constraints (is / is-not)
-- ` + "`internal/a`" + `
-- ` + "`internal/b`" + `
-- ` + "`internal/c`" + `
-`,
 		firstYAML: `- id: git
   packages: [internal/a, internal/b]
   intent: slice
-`,
-		secondMD: `# Cluster
-## Capability constraints (is / is-not)
-- ` + "`internal/a`" + `
-- ` + "`internal/b`" + `
-- ` + "`internal/c`" + `
 `,
 		secondYAML: `- id: forge
   packages: [internal/b, internal/a]
@@ -225,7 +241,6 @@ slices:
   intent: nickname
 `,
 		refined: draft,
-		journey: "# Journey\n\n## Status\n\nDraft.\n\n## Technical debt and boundary violations\n\nNone.\n",
 	}
 	auditor := &countingRejectAuditor{}
 	_, err := (JudgeTypologyRefineGenerator{Gen: flip}).Refine(context.Background(), TypologyRefineInput{
@@ -250,24 +265,48 @@ slices:
 }
 
 type flippingClusterJudge struct {
-	firstMD, firstYAML, secondMD, secondYAML, refined, journey string
-	clusterCalls                                               int
+	firstYAML, secondYAML, refined string
+	clusterCalls                   int
+}
+
+func (s *flippingClusterJudge) clusterLists(yaml string) map[string]interface{} {
+	merges, err := parseProposedMergesYAML(yaml)
+	if err != nil {
+		return map[string]interface{}{
+			"merge_ids": "none", "merge_packages": "none", "merge_intents": "none",
+		}
+	}
+	if len(merges) == 0 {
+		return map[string]interface{}{
+			"merge_ids": "none", "merge_packages": "none", "merge_intents": "none",
+		}
+	}
+	ids := make([]string, 0, len(merges))
+	pkgs := make([]string, 0, len(merges))
+	intents := make([]string, 0, len(merges))
+	for _, m := range merges {
+		ids = append(ids, m.ID)
+		pkgs = append(pkgs, strings.Join(m.Packages, ","))
+		intents = append(intents, m.Intent)
+	}
+	return map[string]interface{}{
+		"merge_ids":      strings.Join(ids, ","),
+		"merge_packages": strings.Join(pkgs, ";"),
+		"merge_intents":  strings.Join(intents, ","),
+	}
 }
 
 func (s *flippingClusterJudge) Generate(_ context.Context, task string, _ map[string]interface{}, _ int) (map[string]interface{}, error) {
 	switch task {
 	case jmodules.TaskTypologyCluster:
 		s.clusterCalls++
-		md, yaml := s.firstMD, s.firstYAML
+		yaml := s.firstYAML
 		if s.clusterCalls > 1 {
-			md, yaml = s.secondMD, s.secondYAML
+			yaml = s.secondYAML
 		}
-		return map[string]interface{}{
-			"cluster_proposal_md":  md,
-			"proposed_merges_yaml": yaml,
-		}, nil
+		return s.clusterLists(yaml), nil
 	case jmodules.TaskTypologyRefine:
-		return map[string]interface{}{"refined_catalog_yaml": s.refined, "journey_md": s.journey}, nil
+		return map[string]interface{}{"refined_catalog_yaml": s.refined}, nil
 	default:
 		return map[string]interface{}{}, nil
 	}
@@ -317,20 +356,5 @@ func TestAssertAcceptedMembershipBlocksLibraryThemeFold(t *testing.T) {
 	}
 	if len(split.Libraries) > 0 && len(libraryPackagePaths(split.Libraries[0])) >= 2 {
 		t.Fatalf("library still co-owns: %+v", split.Libraries)
-	}
-}
-
-func TestRLMTraceDirCreatesScratch(t *testing.T) {
-	base := t.TempDir()
-	dir := rlmTraceDir(base, jmodules.TaskTypologyClusterAudit)
-	marker := filepath.Join(dir, "step.jsonl")
-	if err := os.WriteFile(marker, []byte(`{"step":1}`+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(marker); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(dir, "rlm-traces") {
-		t.Fatalf("dir=%q", dir)
 	}
 }
