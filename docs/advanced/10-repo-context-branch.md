@@ -347,19 +347,17 @@ Selection MUST stay small. If an area pack does not match the task, it MUST NOT 
 ## Digest inference cache
 
 Teaching files live on `majordomo-context/<repo-id>`. A reseed may delete those
-refs. Package inspect and slice ledger RLM results live on a **separate** branch:
+refs. Fingerprint-keyed LLM/RLM outputs live on a **separate** inference-cache branch.
+Aborted seed resume means cache hits on the next run, not a partial teaching-tree commit
+(the seed still clones a fresh temp context until the final bootstrap commit).
 
-- Branch: `majordomo-digest-cache/<repo-id>` (`config.DigestCacheBranch`)
-- Artifacts: JSON fingerprints under `inspect/` and `ledger/` (not teaching markdown)
-- Hit when package source (and for ledger: owned paths + constraints) match the
-  same model/prompt/schema; cluster proposal prose is **not** an invalidation input
-- End-of-run log line reports hit/miss counts and `estimated_tokens_saved`
-- **Push on the go:** each successful inspect/ledger Store commits and pushes the
-  cache branch immediately (same rule as PR review cache store+push). Do not wait
-  for refine/eval/job success; a failed reseed must still leave durable hits.
+- Branch: `majordomo-inference-cache/<repo-id>` (`config.InferenceCacheBranch`; `DigestCacheBranch` aliases it). Legacy `majordomo-digest-cache/*` is cold-start superseded.
+- Artifacts under `digest/`: `inspect/`, `ledger/`, `cluster/`, `refine/`, `intervention/`, `story/` (plus legacy `cluster_audit/` for full-list audits)
+- Hit when stable evidence hashes + model/prompt/schema match; do not key on ephemeral RLM prose
+- End-of-run log line reports hit/miss counts (including cluster_cot, refine, intervention, story) and `estimated_tokens_saved`
+- **Push on the go:** each successful Store commits and pushes the cache branch immediately. Do not wait for job success; a failed reseed must still leave durable hits.
 - Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
-- Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete
-  `majordomo-digest-cache/*`
+- Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete `majordomo-inference-cache/*`
 
 CLI helpers: `majordomo cache digest-lookup` / `digest-store` / `digest-push`.
 Operator rule: `ai-copilots/skills/majordomo-inference-cache/SKILL.md`.

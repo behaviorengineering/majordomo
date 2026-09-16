@@ -92,7 +92,7 @@ Open. Binding decisions required.
 			PRPriorityMD:        "- localgit needs binding decision\n- pruneagent needs binding decision\n- remotegit needs binding decision\n",
 		}, nil
 	})
-	if err := flagHumanIntervention(context.Background(), evidence, fake, nil); err != nil {
+	if err := flagHumanIntervention(context.Background(), evidence, fake, nil, Options{}); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := contextstore.ParseTypologyManifest(filepath.Join(evidence, "manifest.yaml"))
@@ -134,7 +134,7 @@ func TestFlagHumanInterventionSkipsFallback(t *testing.T) {
 		called = true
 		return HumanInterventionOutput{}, nil
 	})
-	if err := flagHumanIntervention(context.Background(), evidence, fake, nil); err != nil {
+	if err := flagHumanIntervention(context.Background(), evidence, fake, nil, Options{}); err != nil {
 		t.Fatal(err)
 	}
 	if called {

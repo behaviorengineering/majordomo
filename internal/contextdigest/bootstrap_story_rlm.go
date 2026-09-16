@@ -3,9 +3,11 @@ package contextdigest
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
@@ -132,9 +134,35 @@ func (g rlmBootstrapStoryGenerator) Generate(ctx context.Context, input Bootstra
 		span.SetAttributes(attribute.String("bootstrap.section_id", sec.ID))
 		var markdown string
 		var lastErr error
+		storyFP := cache.StoryFingerprint{
+			SectionID:        sec.ID,
+			RefinedHash:      draftCatalogIdentitySHA(input.TypologyRefinedCatalog),
+			LedgerHash:       cache.ContentSHA(input.TypologySliceObjectiveLedger),
+			ArchitectureHash: architectureIdentitySHA(input.TypologyArchitecture),
+			ReadmeHash:       cache.ContentSHA(input.ReadmeSnapshot),
+			ModelID:          input.DigestModelID,
+			PromptVersion:    cache.DigestStoryPromptV1,
+			SchemaVersion:    cache.DigestStorySchemaV2,
+		}
 		for attempt := 1; attempt <= maxBootstrapStoryAttempts; attempt++ {
+			if attempt == 1 && strings.TrimSpace(feedback) == "" &&
+				input.DigestSkips && input.DigestCache != nil {
+				if hit, ok, err := input.DigestCache.LookupStory(storyFP); err == nil && ok && strings.TrimSpace(hit.Markdown) != "" {
+					if err := validateBootstrapStorySection(input.RepoID, sec.ID, hit.Markdown); err == nil {
+						input.DigestCache.RecordStoryHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+						logf("INFO", "digest cache hit story section=%s", sec.ID)
+						sec.Setter(&out, hit.Markdown)
+						feedback = ""
+						lastErr = nil
+						break
+					}
+				}
+			}
+			if input.DigestCache != nil && attempt == 1 {
+				input.DigestCache.RecordStoryMiss()
+			}
 			query := formatBootstrapStorySectionQuery(input.RepoID, sec, feedback)
-			answer, _, _, _, _, err := g.caller.Complete(secCtx, contextMD, query)
+			answer, _, promptTok, completionTok, totalTok, err := g.caller.Complete(secCtx, contextMD, query)
 			if err != nil {
 				lastErr = err
 				if attempt == maxBootstrapStoryAttempts {
@@ -167,6 +195,16 @@ func (g rlmBootstrapStoryGenerator) Generate(ctx context.Context, input Bootstra
 				}
 				feedback = err.Error()
 				continue
+			}
+			if input.DigestCache != nil {
+				if err := input.DigestCache.StoreStory(storyFP, cache.StoryCached{
+					Markdown:         markdown,
+					PromptTokens:     promptTok,
+					CompletionTokens: completionTok,
+					TotalTokens:      totalTok,
+				}); err != nil {
+					logf("WARN", "digest cache store story section=%s failed: %v", sec.ID, err)
+				}
 			}
 			feedback = ""
 			lastErr = nil
@@ -288,6 +326,19 @@ func validateBootstrapStorySection(repoID, id, text string) error {
 	return nil
 }
 
+// majordomoReadingMarkerRE matches required context-branch HTML comment markers.
+// These must stay in README/mission markdown but must not trip product-voice gates.
+var majordomoReadingMarkerRE = regexp.MustCompile(`(?is)<!--\s*majordomo-reading-(?:nav|toc):(?:start|end)\s*-->`)
+
+var majordomoReadingBlockRE = regexp.MustCompile(`(?is)<!--\s*majordomo-reading-(?:nav|toc):start\s*-->.*?<!--\s*majordomo-reading-(?:nav|toc):end\s*-->`)
+
+// stripMajordomoReadingMarkers removes reading-path marker HTML so product-voice
+// checks only see teaching prose (markers themselves contain the word Majordomo).
+func stripMajordomoReadingMarkers(text string) string {
+	out := majordomoReadingBlockRE.ReplaceAllString(text, "")
+	return majordomoReadingMarkerRE.ReplaceAllString(out, "")
+}
+
 func rejectMajordomoAsProduct(repoID, sectionID, text string) error {
 	switch sectionID {
 	case "mission", "architecture", "grounding":
@@ -297,7 +348,7 @@ func rejectMajordomoAsProduct(repoID, sectionID, text string) error {
 	if strings.EqualFold(strings.TrimSpace(repoID), "majordomo") {
 		return nil
 	}
-	lower := strings.ToLower(text)
+	lower := strings.ToLower(stripMajordomoReadingMarkers(text))
 	// Product-as-actor patterns from observed gitboard drift.
 	banned := []string{
 		"majordomo provides",

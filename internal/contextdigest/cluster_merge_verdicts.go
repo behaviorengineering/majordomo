@@ -150,6 +150,22 @@ func isMergeNoneSentinel(raw string) bool {
 	return s == "" || s == "none" || s == "-" || s == "[]"
 }
 
+// flattenMergesForCache encodes proposed merges back into CoT flat string fields.
+func flattenMergesForCache(merges []proposedMerge) (ids, pkgs, intents string) {
+	if len(merges) == 0 {
+		return "none", "none", "none"
+	}
+	idParts := make([]string, 0, len(merges))
+	pkgParts := make([]string, 0, len(merges))
+	intentParts := make([]string, 0, len(merges))
+	for _, m := range merges {
+		idParts = append(idParts, m.ID)
+		pkgParts = append(pkgParts, strings.Join(m.Packages, ","))
+		intentParts = append(intentParts, m.Intent)
+	}
+	return strings.Join(idParts, ","), strings.Join(pkgParts, ";"), strings.Join(intentParts, ",")
+}
+
 func splitCommaTokens(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))

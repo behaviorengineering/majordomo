@@ -95,6 +95,84 @@ func TestDigestLedgerRoundTripAndRefuseOverclaim(t *testing.T) {
 	}
 }
 
+func TestDigestClusterCoTRefineInterventionStoryRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	store := &DigestStore{Dir: dir}
+	var flushes int
+	store.PushFn = func() error {
+		flushes++
+		return nil
+	}
+
+	clusterFP := ClusterCoTFingerprint{
+		DraftHash: ContentSHA("draft"), RolesHash: ContentSHA("roles"),
+		ConstraintsHash: ContentSHA("cons"), MechanicalHash: ContentSHA("mech"),
+		ModelID: "gemma",
+	}
+	if _, ok, err := store.LookupClusterCoT(clusterFP); err != nil || ok {
+		t.Fatalf("cluster miss: ok=%v err=%v", ok, err)
+	}
+	if err := store.StoreClusterCoT(clusterFP, ClusterCoTCached{
+		MergeIDs: "git", MergePackages: "internal/a,internal/b", MergeIntents: "slice", TotalTokens: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	gotCluster, ok, err := store.LookupClusterCoT(clusterFP)
+	if err != nil || !ok || gotCluster.MergeIDs != "git" {
+		t.Fatalf("cluster hit=%v got=%+v err=%v", ok, gotCluster, err)
+	}
+
+	refineFP := RefineFingerprint{
+		DraftHash: ContentSHA("draft"), RolesHash: ContentSHA("roles"),
+		ConstraintsHash: ContentSHA("cons"), LedgerHash: ContentSHA("ledger"),
+		VerdictsHash: ContentSHA("verdicts"), MechanicalHash: ContentSHA("mech"),
+		ModelID: "gemma",
+	}
+	if err := store.StoreRefine(refineFP, RefineCached{RefinedCatalogYAML: "id: x\n", TotalTokens: 20}); err != nil {
+		t.Fatal(err)
+	}
+	gotRefine, ok, err := store.LookupRefine(refineFP)
+	if err != nil || !ok || gotRefine.RefinedCatalogYAML != "id: x\n" {
+		t.Fatalf("refine hit=%v got=%+v err=%v", ok, gotRefine, err)
+	}
+	if err := store.StoreRefine(refineFP, RefineCached{}); err == nil {
+		t.Fatal("expected refuse empty refine")
+	}
+
+	intFP := InterventionFingerprint{
+		TaskID: "typology_intervention_journey", ArchitectureHash: ContentSHA("arch"),
+		RefinedHash: ContentSHA("ref"), VerdictsHash: ContentSHA("v"), FindingsHash: ContentSHA("f"),
+		ModelID: "gemma",
+	}
+	if err := store.StoreIntervention(intFP, InterventionCached{Markdown: "# Journey\n", TotalTokens: 5}); err != nil {
+		t.Fatal(err)
+	}
+	gotInt, ok, err := store.LookupIntervention(intFP)
+	if err != nil || !ok || !strings.Contains(gotInt.Markdown, "Journey") {
+		t.Fatalf("intervention hit=%v got=%+v err=%v", ok, gotInt, err)
+	}
+
+	storyFP := StoryFingerprint{
+		SectionID: "mission", RefinedHash: ContentSHA("ref"), LedgerHash: ContentSHA("led"),
+		ArchitectureHash: ContentSHA("arch"), ReadmeHash: ContentSHA("readme"), ModelID: "gemma",
+	}
+	if err := store.StoreStory(storyFP, StoryCached{Markdown: "# Mission\nGitboard serves.\n", TotalTokens: 8}); err != nil {
+		t.Fatal(err)
+	}
+	gotStory, ok, err := store.LookupStory(storyFP)
+	if err != nil || !ok || !strings.Contains(gotStory.Markdown, "Gitboard") {
+		t.Fatalf("story hit=%v got=%+v err=%v", ok, gotStory, err)
+	}
+	drift := storyFP
+	drift.ReadmeHash = ContentSHA("other")
+	if _, ok, err := store.LookupStory(drift); err != nil || ok {
+		t.Fatalf("want story miss on drift ok=%v err=%v", ok, err)
+	}
+	if flushes != 4 {
+		t.Fatalf("flushes=%d want 4", flushes)
+	}
+}
+
 func TestHashDigestPartsStable(t *testing.T) {
 	a := HashDigestParts("a", "b")
 	b := HashDigestParts("a", "b")

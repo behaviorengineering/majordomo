@@ -120,13 +120,48 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	var mergeVerdicts []clusterMergeVerdict
 	var auditMeta clusterAuditResult
 	auditor := input.ClusterAuditor
+	constraintsForCluster := stringField(clusterFields, "package_capability_constraints")
+	mechIdentityHash, mechErr := mechanicalIdentitySHA(input.PackageRoles)
+	if mechErr != nil {
+		mechIdentityHash = cache.ContentSHA(mechanicalGroupingYAML)
+	}
+	clusterFP := cache.ClusterCoTFingerprint{
+		DraftHash:       draftCatalogIdentitySHA(input.DraftCatalogYAML),
+		RolesHash:       rolesIdentitySHA(input.PackageRoles),
+		ConstraintsHash: cache.ContentSHA(constraintsForCluster),
+		MechanicalHash:  mechIdentityHash,
+		ModelID:         input.DigestModelID,
+		PromptVersion:   cache.DigestClusterCoTPromptV1,
+		SchemaVersion:   cache.DigestClusterCoTSchemaV3,
+	}
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
 		if attempt > 1 {
 			clusterFields["validation_feedback"] = clusterFeedback
 		}
-		clusterOut, err := gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, attempt)
-		if err != nil {
-			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
+		var clusterOut map[string]interface{}
+		usedClusterCache := false
+		if attempt == 1 && strings.TrimSpace(clusterFeedback) == "" &&
+			input.DigestSkips && input.DigestCache != nil {
+			if hit, ok, err := input.DigestCache.LookupClusterCoT(clusterFP); err == nil && ok {
+				input.DigestCache.RecordClusterCoTHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+				logf("INFO", "digest cache hit cluster_cot")
+				clusterOut = map[string]interface{}{
+					"merge_ids":      hit.MergeIDs,
+					"merge_packages": hit.MergePackages,
+					"merge_intents":  hit.MergeIntents,
+				}
+				usedClusterCache = true
+			}
+		}
+		if clusterOut == nil {
+			if input.DigestCache != nil {
+				input.DigestCache.RecordClusterCoTMiss()
+			}
+			var err error
+			clusterOut, err = gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, attempt)
+			if err != nil {
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
+			}
 		}
 		merges, parseErr := mergesFromClusterOut(clusterOut)
 		if parseErr != nil {
@@ -178,6 +213,16 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		if hasOpenClusterRejects(mergeVerdicts) && attempt < maxTypologyRefineAttempts {
 			clusterFeedback = formatClusterAuditRejectFeedback(mergeVerdicts)
 			continue
+		}
+		if !usedClusterCache && input.DigestCache != nil {
+			ids, pkgs, intents := flattenMergesForCache(proposedMerges)
+			if err := input.DigestCache.StoreClusterCoT(clusterFP, cache.ClusterCoTCached{
+				MergeIDs:      ids,
+				MergePackages: pkgs,
+				MergeIntents:  intents,
+			}); err != nil {
+				logf("WARN", "digest cache store cluster_cot failed: %v", err)
+			}
 		}
 		break
 	}
@@ -266,7 +311,39 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 	}
 
+	refineFP := cache.RefineFingerprint{
+		DraftHash:       draftCatalogIdentitySHA(input.DraftCatalogYAML),
+		RolesHash:       rolesIdentitySHA(input.PackageRoles),
+		ConstraintsHash: cache.ContentSHA(constraintsYAML),
+		LedgerHash:      cache.ContentSHA(ledgerYAML),
+		VerdictsHash:    clusterVerdictsIdentitySHA(verdictsYAML),
+		MechanicalHash:  mechIdentityHash,
+		ModelID:         input.DigestModelID,
+		PromptVersion:   cache.DigestRefinePromptV1,
+		SchemaVersion:   cache.DigestRefineSchemaV3,
+	}
+	if input.DigestSkips && input.DigestCache != nil && strings.TrimSpace(feedback) == "" {
+		if hit, ok, err := input.DigestCache.LookupRefine(refineFP); err == nil && ok && strings.TrimSpace(hit.RefinedCatalogYAML) != "" {
+			if sanitized, sanErr := validateRefinedCatalogYAML(hit.RefinedCatalogYAML, input.DraftCatalogYAML, input.RepoID, input.PackageRoles); sanErr == nil {
+				input.DigestCache.RecordRefineHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+				logf("INFO", "digest cache hit refine")
+				refined = sanitized
+				return TypologyRefineOutput{
+					ClusterMergeProposalYAML: proposalYAML,
+					ClusterMergeVerdictsYAML: verdictsYAML,
+					MechanicalGroupingYAML:   mechanicalGroupingYAML,
+					RefinedCatalogYAML:       refined,
+					ObjectiveLedgerYAML:      ledgerYAML,
+					ObjectiveClaimsYAML:      claimsYAML,
+				}, nil
+			}
+		}
+	}
+
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
+		if input.DigestCache != nil && attempt == 1 {
+			input.DigestCache.RecordRefineMiss()
+		}
 		refineFields := map[string]interface{}{
 			"repo_id":                        input.RepoID,
 			"module_scope":                   input.ModuleScope,
@@ -381,6 +458,11 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			}
 			feedback = judge.EvalFeedback(agg)
 			continue
+		}
+		if input.DigestCache != nil {
+			if err := input.DigestCache.StoreRefine(refineFP, cache.RefineCached{RefinedCatalogYAML: refined}); err != nil {
+				logf("WARN", "digest cache store refine failed: %v", err)
+			}
 		}
 		break
 	}
@@ -729,6 +811,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 		typo = remapInventedCatalogPaths(typo, allowed)
 	}
 	typo = restoreMissingDraftPackages(typo, draft, roles)
+	typo = restoreMissingRolePackages(typo, roles)
 	if err := catalog.SaveYAML(path, typo); err != nil {
 		return "", fmt.Errorf("typology refine save sanitized catalog: %w", err)
 	}
@@ -955,6 +1038,12 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
+type missingCatalogComponent struct {
+	draftSliceID string
+	draftLibID   string
+	comp         catalog.Component
+}
+
 // restoreMissingDraftPackages reclaims draft package paths the refine LLM dropped.
 // Exec adapters always land under owns[]; interaction paths reattach to surfaces.
 // Draft library packages reattach to the matching refined library when present.
@@ -963,12 +1052,7 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[stri
 		return refined
 	}
 	claimed := collectCatalogPaths(refined)
-	type missingComp struct {
-		draftSliceID string
-		draftLibID   string
-		comp         catalog.Component
-	}
-	var missing []missingComp
+	var missing []missingCatalogComponent
 	add := func(draftSliceID, draftLibID string, c catalog.Component) {
 		n := normalizeCatalogPath(c.Path)
 		if n == "" {
@@ -977,7 +1061,7 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[stri
 		if _, ok := claimed[n]; ok {
 			return
 		}
-		missing = append(missing, missingComp{draftSliceID: draftSliceID, draftLibID: draftLibID, comp: c})
+		missing = append(missing, missingCatalogComponent{draftSliceID: draftSliceID, draftLibID: draftLibID, comp: c})
 		claimed[n] = struct{}{}
 	}
 	for _, s := range draft.Slices {
@@ -998,7 +1082,36 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[stri
 	if len(missing) == 0 {
 		return refined
 	}
+	return attachMissingComponents(refined, roles, missing)
+}
 
+// restoreMissingRolePackages reclaims module package paths from package_roles when refine dropped them.
+func restoreMissingRolePackages(refined catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
+	if len(refined.Slices) == 0 || len(roles) == 0 {
+		return refined
+	}
+	claimed := collectCatalogPaths(refined)
+	var missing []missingCatalogComponent
+	for path := range roles {
+		path = normalizeRolePath(path)
+		if path == "" || strings.HasPrefix(path, "cmd/") {
+			continue
+		}
+		if _, ok := claimed[path]; ok {
+			continue
+		}
+		missing = append(missing, missingCatalogComponent{
+			comp: catalog.Component{ID: filepath.Base(path), Path: path},
+		})
+		claimed[path] = struct{}{}
+	}
+	if len(missing) == 0 {
+		return refined
+	}
+	return attachMissingComponents(refined, roles, missing)
+}
+
+func attachMissingComponents(refined catalog.Typology, roles map[string]packageRoleNode, missing []missingCatalogComponent) catalog.Typology {
 	sliceIdx := make(map[string]int, len(refined.Slices))
 	for i, s := range refined.Slices {
 		if id := strings.TrimSpace(s.ID); id != "" {
@@ -1885,7 +1998,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		}
 	}
 
-	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen); err != nil {
+	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen, opts); err != nil {
 		return fail(err)
 	}
 

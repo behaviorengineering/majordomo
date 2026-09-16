@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
@@ -24,6 +25,9 @@ type HumanInterventionInput struct {
 	ClusterMergeVerdictsYAML string
 	FindingsList             string
 	ValidationFeedback       string
+	DigestCache              *cache.DigestStore
+	DigestSkips              bool
+	DigestModelID            string
 }
 
 // FindingCommentBody is tutor counsel for one architecture finding on the context PR.
@@ -87,7 +91,7 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	journey, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionJourney, baseFields, "journey_md",
 		func(out map[string]interface{}) error {
 			return validateJourneyFindings(findings, stringField(out, "journey_md"))
-		})
+		}, interventionCacheOptsFrom(input, ""))
 	if err != nil {
 		return HumanInterventionOutput{}, err
 	}
@@ -96,7 +100,7 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	brief, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionBrief, baseFields, "human_intervention_md",
 		func(out map[string]interface{}) error {
 			return validateNamedFindingCoverage(findings, "human_intervention_md", stringField(out, "human_intervention_md"))
-		})
+		}, interventionCacheOptsFrom(input, ""))
 	if err != nil {
 		return HumanInterventionOutput{}, err
 	}
@@ -106,7 +110,7 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	weaknesses, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionWeaknesses, weakFields, "weaknesses_seed_md",
 		func(out map[string]interface{}) error {
 			return validateNamedFindingCoverage(findings, "weaknesses_seed_md", stringField(out, "weaknesses_seed_md"))
-		})
+		}, interventionCacheOptsFrom(input, ""))
 	if err != nil {
 		return HumanInterventionOutput{}, err
 	}
@@ -115,7 +119,7 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	prPriority, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionPRPriority, prFields, "pr_priority_md",
 		func(out map[string]interface{}) error {
 			return validateNamedFindingCoverage(findings, "pr_priority_md", stringField(out, "pr_priority_md"))
-		})
+		}, interventionCacheOptsFrom(input, ""))
 	if err != nil {
 		return HumanInterventionOutput{}, err
 	}
@@ -133,7 +137,7 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 		body, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyFindingComment, commentFields, "comment_md",
 			func(out map[string]interface{}) error {
 				return validateNamedFindingCoverage([]string{finding}, "comment_md", stringField(out, "comment_md"))
-			})
+			}, interventionCacheOptsFrom(input, finding))
 		if err != nil {
 			return HumanInterventionOutput{}, fmt.Errorf("finding comment %q: %w", findingMatchNeedle(finding), err)
 		}
@@ -160,13 +164,38 @@ func generateInterventionStep(
 	fields map[string]interface{},
 	outKey string,
 	validate func(map[string]interface{}) error,
+	cacheOpts interventionCacheOpts,
 ) (string, error) {
+	fp := cache.InterventionFingerprint{
+		TaskID:           task,
+		ArchitectureHash: cache.ContentSHA(cacheOpts.ArchitectureMD),
+		RefinedHash:      cache.ContentSHA(cacheOpts.RefinedYAML),
+		VerdictsHash:     clusterVerdictsIdentitySHA(cacheOpts.VerdictsYAML),
+		FindingsHash:     cache.ContentSHA(cacheOpts.FindingsList),
+		FindingHash:      cache.ContentSHA(cacheOpts.Finding),
+		ModelID:          cacheOpts.ModelID,
+		PromptVersion:    cache.DigestInterventionPromptV1,
+		SchemaVersion:    cache.DigestInterventionSchemaV2,
+	}
 	feedback := ""
 	if v, ok := fields["validation_feedback"].(string); ok {
 		feedback = strings.TrimSpace(v)
 	}
+	if feedback == "" && cacheOpts.Skips && cacheOpts.Store != nil {
+		if hit, ok, err := cacheOpts.Store.LookupIntervention(fp); err == nil && ok && strings.TrimSpace(hit.Markdown) != "" {
+			out := map[string]interface{}{outKey: hit.Markdown}
+			if validate == nil || validate(out) == nil {
+				cacheOpts.Store.RecordInterventionHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+				logf("INFO", "digest cache hit intervention task=%s", task)
+				return strings.TrimSpace(hit.Markdown), nil
+			}
+		}
+	}
 	var lastErr error
 	for attempt := 1; attempt <= maxHumanInterventionAttempts; attempt++ {
+		if cacheOpts.Store != nil && attempt == 1 {
+			cacheOpts.Store.RecordInterventionMiss()
+		}
 		stepFields := copyStringMap(fields)
 		stepFields["validation_feedback"] = feedback
 		out, err := gen.Generate(ctx, task, stepFields, attempt)
@@ -205,12 +234,42 @@ func generateInterventionStep(
 			feedback = judge.EvalFeedback(agg)
 			continue
 		}
-		return strings.TrimSpace(stringField(out, outKey)), nil
+		markdown := strings.TrimSpace(stringField(out, outKey))
+		if cacheOpts.Store != nil {
+			if err := cacheOpts.Store.StoreIntervention(fp, cache.InterventionCached{Markdown: markdown}); err != nil {
+				logf("WARN", "digest cache store intervention task=%s failed: %v", task, err)
+			}
+		}
+		return markdown, nil
 	}
 	if lastErr != nil {
 		return "", lastErr
 	}
 	return "", fmt.Errorf("%s exhausted retries", task)
+}
+
+type interventionCacheOpts struct {
+	Store          *cache.DigestStore
+	Skips          bool
+	ModelID        string
+	ArchitectureMD string
+	RefinedYAML    string
+	VerdictsYAML   string
+	FindingsList   string
+	Finding        string
+}
+
+func interventionCacheOptsFrom(input HumanInterventionInput, finding string) interventionCacheOpts {
+	return interventionCacheOpts{
+		Store:          input.DigestCache,
+		Skips:          input.DigestSkips,
+		ModelID:        input.DigestModelID,
+		ArchitectureMD: input.ArchitectureMD,
+		RefinedYAML:    input.RefinedCatalogYAML,
+		VerdictsYAML:   input.ClusterMergeVerdictsYAML,
+		FindingsList:   input.FindingsList,
+		Finding:        finding,
+	}
 }
 
 func copyStringMap(in map[string]interface{}) map[string]interface{} {
@@ -229,7 +288,7 @@ func openJourneyNoFindings(journey string) string {
 	return j
 }
 
-func flagHumanIntervention(ctx context.Context, evidenceDir string, gen HumanInterventionGenerator, judgeGen judge.Generator) error {
+func flagHumanIntervention(ctx context.Context, evidenceDir string, gen HumanInterventionGenerator, judgeGen judge.Generator, opts Options) error {
 	manifestPath := filepath.Join(evidenceDir, "manifest.yaml")
 	manifest, err := contextstore.ParseTypologyManifest(manifestPath)
 	if err != nil {
@@ -277,6 +336,9 @@ func flagHumanIntervention(ctx context.Context, evidenceDir string, gen HumanInt
 		ClusterMergeProposalYAML: clusterYAML,
 		ClusterMergeVerdictsYAML: verdictsYAML,
 		FindingsList:             formatFindingsList(extractArchitectureFindings(string(archMD))),
+		DigestCache:              opts.DigestCache,
+		DigestSkips:              opts.DigestSkips,
+		DigestModelID:            opts.DigestModelID,
 	})
 	if err != nil {
 		return err

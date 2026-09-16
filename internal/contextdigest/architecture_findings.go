@@ -17,6 +17,8 @@ const (
 
 var missingSliceBindingRE = regexp.MustCompile(`(?i)SliceBinding\s+([A-Za-z0-9_./-]+)\s*->\s*([A-Za-z0-9_./-]+)\s+missing`)
 
+var unmappedPackageFindingRE = regexp.MustCompile(`(?i)unmapped package\s+"([^"]+)"`)
+
 // isArchitectureFindingsHeading reports headings that list open architecture issues.
 func isArchitectureFindingsHeading(line string) bool {
 	low := strings.ToLower(strings.TrimSpace(line))
@@ -183,16 +185,53 @@ func validateNamedFindingCoverage(findings []string, name, body string) error {
 	if len(findings) == 0 {
 		return nil
 	}
+	lowBody := strings.ToLower(body)
 	for _, f := range findings {
-		needle := findingMatchNeedle(f)
-		if needle == "" {
+		needles := findingCoverageNeedles(f)
+		if len(needles) == 0 {
 			continue
 		}
-		if !strings.Contains(strings.ToLower(body), strings.ToLower(needle)) {
+		matched := false
+		for _, needle := range needles {
+			if strings.Contains(lowBody, strings.ToLower(needle)) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			return fmt.Errorf("human intervention: finding %q missing from %s", f, name)
 		}
 	}
 	return nil
+}
+
+// findingCoverageNeedles returns substrings that must appear in journey/debt outputs.
+func findingCoverageNeedles(finding string) []string {
+	f := strings.TrimSpace(finding)
+	if f == "" {
+		return nil
+	}
+	var out []string
+	seen := make(map[string]struct{})
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		if _, ok := seen[s]; ok {
+			return
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	if m := unmappedPackageFindingRE.FindStringSubmatch(f); len(m) == 2 {
+		add(m[1])
+		if base := filepath.Base(m[1]); base != m[1] {
+			add(base)
+		}
+	}
+	add(findingMatchNeedle(f))
+	return out
 }
 
 // findingMatchNeedle picks a stable substring for coverage checks.

@@ -69,15 +69,27 @@ func isExecRunnerRole(role string) bool {
 }
 
 // rejectInspectRoleContradiction returns true when an LLM role contradicts mechanical source facts.
+//
+// RLM context markdown often carries Typology flags (importsOsExec: true) instead of
+// quoted import paths. Treat those flags as evidence so agreementMatch can store.
 func rejectInspectRoleContradiction(role, source string) bool {
 	role = strings.TrimSpace(role)
 	src := source
-	hasOsExec := strings.Contains(src, `"os/exec"`)
-	hasHTTP := strings.Contains(src, `"net/http"`) || strings.Contains(src, "ServeHTTP")
-	hasGRPC := strings.Contains(src, "google.golang.org/grpc") || strings.Contains(src, "Register") && strings.Contains(src, "Server")
-	hasEmbed := strings.Contains(src, "go:embed")
-	hasOTel := strings.Contains(src, "go.opentelemetry.io/")
-	hasProm := strings.Contains(src, "github.com/prometheus/client_golang")
+	hasOsExec := strings.Contains(src, `"os/exec"`) ||
+		strings.Contains(src, "importsOsExec: true") ||
+		strings.Contains(src, "imports_os_exec")
+	hasHTTP := strings.Contains(src, `"net/http"`) || strings.Contains(src, "ServeHTTP") ||
+		strings.Contains(src, "importsNetHTTP: true") || strings.Contains(src, "delivery:http")
+	hasGRPC := strings.Contains(src, "google.golang.org/grpc") ||
+		(strings.Contains(src, "Register") && strings.Contains(src, "Server")) ||
+		strings.Contains(src, "importsGrpc: true") || strings.Contains(src, "delivery:grpc")
+	hasEmbed := strings.Contains(src, "go:embed") ||
+		strings.Contains(src, "goEmbed: true") || strings.Contains(src, "embedsStatic: true") ||
+		strings.Contains(src, "embeds_static")
+	hasOTel := strings.Contains(src, "go.opentelemetry.io/") ||
+		strings.Contains(src, "importsOtel: true") || strings.Contains(src, "imports_otel")
+	hasProm := strings.Contains(src, "github.com/prometheus/client_golang") ||
+		strings.Contains(src, "importsPrometheus: true") || strings.Contains(src, "imports_prometheus")
 	hasExportedFunc := strings.Contains(src, "\nfunc ") || strings.Contains(src, "\nfunc\t")
 	switch role {
 	case roleDTO:

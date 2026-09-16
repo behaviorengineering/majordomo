@@ -32,6 +32,35 @@ const (
 	DigestClusterAuditSchemaV1 = "cluster-audit-v1"
 	// DigestClusterAuditPromptV1 labels the cluster audit RLM prompt contract.
 	DigestClusterAuditPromptV1 = "typology_cluster_audit_rlm_v1"
+	// DigestClusterCoTSchemaV1 keys typology cluster CoT merge proposals (full roles YAML).
+	DigestClusterCoTSchemaV1 = "cluster-cot-v1"
+	// DigestClusterCoTSchemaV2 keys cluster CoT on role identity + mechanical identity
+	// (no ephemeral RLM evidence prose).
+	DigestClusterCoTSchemaV2 = "cluster-cot-v2"
+	// DigestClusterCoTSchemaV3 also normalizes draft catalog ids and binding order.
+	DigestClusterCoTSchemaV3 = "cluster-cot-v3"
+	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract.
+	DigestClusterCoTPromptV1 = "typology_cluster_cot_v1"
+	// DigestRefineSchemaV1 keys typology refine CoT catalogs (full verdicts YAML).
+	DigestRefineSchemaV1 = "refine-v1"
+	// DigestRefineSchemaV2 keys refine on role/verdict identity hashes (no duration/trace/prose).
+	DigestRefineSchemaV2 = "refine-v2"
+	// DigestRefineSchemaV3 also normalizes draft catalog ids and binding order.
+	DigestRefineSchemaV3 = "refine-v3"
+	// DigestRefinePromptV1 labels the typology_refine CoT prompt contract.
+	DigestRefinePromptV1 = "typology_refine_cot_v1"
+	// DigestInterventionSchemaV1 keys human-intervention CoT outputs (full verdicts YAML).
+	DigestInterventionSchemaV1 = "intervention-v1"
+	// DigestInterventionSchemaV2 keys intervention on verdict identity (no duration/trace/prose).
+	DigestInterventionSchemaV2 = "intervention-v2"
+	// DigestInterventionPromptV1 labels the human-intervention CoT prompt contract.
+	DigestInterventionPromptV1 = "typology_intervention_cot_v1"
+	// DigestStorySchemaV1 keys bootstrap story RLM sections (raw architecture/refined hashes).
+	DigestStorySchemaV1 = "story-v1"
+	// DigestStorySchemaV2 strips generated_at and normalizes refined catalog ids.
+	DigestStorySchemaV2 = "story-v2"
+	// DigestStoryPromptV1 labels the bootstrap_story RLM prompt contract.
+	DigestStoryPromptV1 = "bootstrap_story_rlm_v1"
 )
 
 // ValidateDigestCacheBranch is an alias for ValidateInferenceCacheBranch.
@@ -41,21 +70,37 @@ func ValidateDigestCacheBranch(branch string) error {
 
 // DigestRunStats counts cache hits/misses and estimated tokens avoided this run.
 type DigestRunStats struct {
-	InspectHits           int
-	InspectMisses         int
-	LedgerHits            int
-	LedgerMisses          int
-	ClusterAuditHits      int
-	ClusterAuditMisses    int
-	TokensSavedPrompt     int
-	TokensSavedCompletion int
-	TokensSavedTotal      int
-	inspectStoredTotalSum int
-	inspectStoredTotalN   int
-	ledgerStoredTotalSum  int
-	ledgerStoredTotalN    int
-	clusterStoredTotalSum int
-	clusterStoredTotalN   int
+	InspectHits              int
+	InspectMisses            int
+	LedgerHits               int
+	LedgerMisses             int
+	ClusterAuditHits         int
+	ClusterAuditMisses       int
+	ClusterCoTHits           int
+	ClusterCoTMisses         int
+	RefineHits               int
+	RefineMisses             int
+	InterventionHits         int
+	InterventionMisses       int
+	StoryHits                int
+	StoryMisses              int
+	TokensSavedPrompt        int
+	TokensSavedCompletion    int
+	TokensSavedTotal         int
+	inspectStoredTotalSum    int
+	inspectStoredTotalN      int
+	ledgerStoredTotalSum     int
+	ledgerStoredTotalN       int
+	clusterStoredTotalSum    int
+	clusterStoredTotalN      int
+	clusterCoTStoredTotalSum int
+	clusterCoTStoredTotalN   int
+	refineStoredTotalSum     int
+	refineStoredTotalN       int
+	interventionStoredSum    int
+	interventionStoredN      int
+	storyStoredTotalSum      int
+	storyStoredTotalN        int
 }
 
 // DigestStore is a local worktree (or plain directory) of digest inference JSON.
@@ -211,6 +256,96 @@ func (s *DigestStore) RecordClusterAuditMiss() {
 	s.stats.ClusterAuditMisses++
 }
 
+func (s *DigestStore) recordTokenHit(prompt, completion, total int, bumpHits func(*DigestRunStats), avgSum, avgN *int) {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	bumpHits(&s.stats)
+	if total <= 0 {
+		total = s.avgLocked(*avgSum, *avgN)
+	}
+	if total <= 0 && prompt+completion > 0 {
+		total = prompt + completion
+	}
+	s.stats.TokensSavedPrompt += prompt
+	s.stats.TokensSavedCompletion += completion
+	s.stats.TokensSavedTotal += total
+}
+
+// RecordClusterCoTHit notes a typology_cluster CoT skip.
+func (s *DigestStore) RecordClusterCoTHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.recordTokenHit(prompt, completion, total, func(st *DigestRunStats) { st.ClusterCoTHits++ }, &s.stats.clusterCoTStoredTotalSum, &s.stats.clusterCoTStoredTotalN)
+}
+
+// RecordClusterCoTMiss notes a typology_cluster provider call.
+func (s *DigestStore) RecordClusterCoTMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.ClusterCoTMisses++
+}
+
+// RecordRefineHit notes a typology_refine CoT skip.
+func (s *DigestStore) RecordRefineHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.recordTokenHit(prompt, completion, total, func(st *DigestRunStats) { st.RefineHits++ }, &s.stats.refineStoredTotalSum, &s.stats.refineStoredTotalN)
+}
+
+// RecordRefineMiss notes a typology_refine provider call.
+func (s *DigestStore) RecordRefineMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.RefineMisses++
+}
+
+// RecordInterventionHit notes a human-intervention CoT skip.
+func (s *DigestStore) RecordInterventionHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.recordTokenHit(prompt, completion, total, func(st *DigestRunStats) { st.InterventionHits++ }, &s.stats.interventionStoredSum, &s.stats.interventionStoredN)
+}
+
+// RecordInterventionMiss notes a human-intervention provider call.
+func (s *DigestStore) RecordInterventionMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.InterventionMisses++
+}
+
+// RecordStoryHit notes a bootstrap_story section skip.
+func (s *DigestStore) RecordStoryHit(prompt, completion, total int) {
+	if s == nil {
+		return
+	}
+	s.recordTokenHit(prompt, completion, total, func(st *DigestRunStats) { st.StoryHits++ }, &s.stats.storyStoredTotalSum, &s.stats.storyStoredTotalN)
+}
+
+// RecordStoryMiss notes a bootstrap_story provider call.
+func (s *DigestStore) RecordStoryMiss() {
+	if s == nil {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.StoryMisses++
+}
+
 func (s *DigestStore) noteClusterAuditStoredUsage(total int) {
 	if s == nil || total <= 0 {
 		return
@@ -219,6 +354,46 @@ func (s *DigestStore) noteClusterAuditStoredUsage(total int) {
 	defer s.statsMu.Unlock()
 	s.stats.clusterStoredTotalSum += total
 	s.stats.clusterStoredTotalN++
+}
+
+func (s *DigestStore) noteClusterCoTStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.clusterCoTStoredTotalSum += total
+	s.stats.clusterCoTStoredTotalN++
+}
+
+func (s *DigestStore) noteRefineStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.refineStoredTotalSum += total
+	s.stats.refineStoredTotalN++
+}
+
+func (s *DigestStore) noteInterventionStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.interventionStoredSum += total
+	s.stats.interventionStoredN++
+}
+
+func (s *DigestStore) noteStoryStoredUsage(total int) {
+	if s == nil || total <= 0 {
+		return
+	}
+	s.statsMu.Lock()
+	defer s.statsMu.Unlock()
+	s.stats.storyStoredTotalSum += total
+	s.stats.storyStoredTotalN++
 }
 
 func (s *DigestStore) noteInspectStoredUsage(total int) {
@@ -251,9 +426,13 @@ func (s *DigestStore) avgLocked(sum, n int) int {
 // FormatStatsLine returns a one-line operator summary of digest cache reuse.
 func FormatStatsLine(st DigestRunStats) string {
 	return fmt.Sprintf(
-		"digest cache summary inspect_hits=%d inspect_misses=%d ledger_hits=%d ledger_misses=%d cluster_audit_hits=%d cluster_audit_misses=%d estimated_tokens_saved=%d (prompt=%d completion=%d)",
+		"digest cache summary inspect_hits=%d inspect_misses=%d ledger_hits=%d ledger_misses=%d cluster_audit_hits=%d cluster_audit_misses=%d cluster_cot_hits=%d cluster_cot_misses=%d refine_hits=%d refine_misses=%d intervention_hits=%d intervention_misses=%d story_hits=%d story_misses=%d estimated_tokens_saved=%d (prompt=%d completion=%d)",
 		st.InspectHits, st.InspectMisses, st.LedgerHits, st.LedgerMisses,
 		st.ClusterAuditHits, st.ClusterAuditMisses,
+		st.ClusterCoTHits, st.ClusterCoTMisses,
+		st.RefineHits, st.RefineMisses,
+		st.InterventionHits, st.InterventionMisses,
+		st.StoryHits, st.StoryMisses,
 		st.TokensSavedTotal, st.TokensSavedPrompt, st.TokensSavedCompletion,
 	)
 }
@@ -340,6 +519,89 @@ type ClusterAuditCached struct {
 	TotalTokens      int                       `json:"total_tokens,omitempty"`
 }
 
+// ClusterCoTFingerprint keys one typology_cluster CoT proposal.
+type ClusterCoTFingerprint struct {
+	DraftHash       string
+	RolesHash       string
+	ConstraintsHash string
+	MechanicalHash  string
+	ModelID         string
+	PromptVersion   string
+	SchemaVersion   string
+}
+
+// ClusterCoTCached is the durable cluster CoT merge-field payload.
+type ClusterCoTCached struct {
+	MergeIDs         string `json:"merge_ids"`
+	MergePackages    string `json:"merge_packages"`
+	MergeIntents     string `json:"merge_intents"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
+	TotalTokens      int    `json:"total_tokens,omitempty"`
+}
+
+// RefineFingerprint keys one typology_refine CoT catalog.
+type RefineFingerprint struct {
+	DraftHash       string
+	RolesHash       string
+	ConstraintsHash string
+	LedgerHash      string
+	VerdictsHash    string
+	MechanicalHash  string
+	ModelID         string
+	PromptVersion   string
+	SchemaVersion   string
+}
+
+// RefineCached is the durable sanitized refined catalog.
+type RefineCached struct {
+	RefinedCatalogYAML string `json:"refined_catalog_yaml"`
+	PromptTokens       int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens   int    `json:"completion_tokens,omitempty"`
+	TotalTokens        int    `json:"total_tokens,omitempty"`
+}
+
+// InterventionFingerprint keys one human-intervention CoT task output.
+type InterventionFingerprint struct {
+	TaskID           string
+	ArchitectureHash string
+	RefinedHash      string
+	VerdictsHash     string
+	FindingsHash     string
+	FindingHash      string // per finding-comment; empty for journey/brief/weaknesses/priority
+	ModelID          string
+	PromptVersion    string
+	SchemaVersion    string
+}
+
+// InterventionCached is durable intervention markdown.
+type InterventionCached struct {
+	Markdown         string `json:"markdown"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
+	TotalTokens      int    `json:"total_tokens,omitempty"`
+}
+
+// StoryFingerprint keys one bootstrap_story RLM section.
+type StoryFingerprint struct {
+	SectionID        string
+	RefinedHash      string
+	LedgerHash       string
+	ArchitectureHash string
+	ReadmeHash       string
+	ModelID          string
+	PromptVersion    string
+	SchemaVersion    string
+}
+
+// StoryCached is durable story-section markdown.
+type StoryCached struct {
+	Markdown         string `json:"markdown"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
+	TotalTokens      int    `json:"total_tokens,omitempty"`
+}
+
 type digestRecord struct {
 	Kind        string          `json:"kind"`
 	Fingerprint string          `json:"fingerprint"`
@@ -417,6 +679,66 @@ func (fp ClusterAuditFingerprint) key() string {
 	)
 }
 
+func (fp ClusterCoTFingerprint) key() string {
+	prompt := fp.PromptVersion
+	if prompt == "" {
+		prompt = DigestClusterCoTPromptV1
+	}
+	schema := fp.SchemaVersion
+	if schema == "" {
+		schema = DigestClusterCoTSchemaV3
+	}
+	return HashDigestParts(
+		"cluster_cot", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.MechanicalHash,
+		fp.ModelID, prompt, schema,
+	)
+}
+
+func (fp RefineFingerprint) key() string {
+	prompt := fp.PromptVersion
+	if prompt == "" {
+		prompt = DigestRefinePromptV1
+	}
+	schema := fp.SchemaVersion
+	if schema == "" {
+		schema = DigestRefineSchemaV3
+	}
+	return HashDigestParts(
+		"refine", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.LedgerHash, fp.VerdictsHash,
+		fp.MechanicalHash, fp.ModelID, prompt, schema,
+	)
+}
+
+func (fp InterventionFingerprint) key() string {
+	prompt := fp.PromptVersion
+	if prompt == "" {
+		prompt = DigestInterventionPromptV1
+	}
+	schema := fp.SchemaVersion
+	if schema == "" {
+		schema = DigestInterventionSchemaV2
+	}
+	return HashDigestParts(
+		"intervention", fp.TaskID, fp.ArchitectureHash, fp.RefinedHash, fp.VerdictsHash,
+		fp.FindingsHash, fp.FindingHash, fp.ModelID, prompt, schema,
+	)
+}
+
+func (fp StoryFingerprint) key() string {
+	prompt := fp.PromptVersion
+	if prompt == "" {
+		prompt = DigestStoryPromptV1
+	}
+	schema := fp.SchemaVersion
+	if schema == "" {
+		schema = DigestStorySchemaV2
+	}
+	return HashDigestParts(
+		"story", fp.SectionID, fp.RefinedHash, fp.LedgerHash, fp.ArchitectureHash, fp.ReadmeHash,
+		fp.ModelID, prompt, schema,
+	)
+}
+
 func (s *DigestStore) inspectPath(key string) string {
 	return filepath.Join(s.Dir, DigestCachePrefix, "inspect", key+".json")
 }
@@ -427,6 +749,22 @@ func (s *DigestStore) ledgerPath(key string) string {
 
 func (s *DigestStore) clusterAuditPath(key string) string {
 	return filepath.Join(s.Dir, "cluster_audit", key+".json")
+}
+
+func (s *DigestStore) clusterCoTPath(key string) string {
+	return filepath.Join(s.Dir, DigestCachePrefix, "cluster", key+".json")
+}
+
+func (s *DigestStore) refinePath(key string) string {
+	return filepath.Join(s.Dir, DigestCachePrefix, "refine", key+".json")
+}
+
+func (s *DigestStore) interventionPath(key string) string {
+	return filepath.Join(s.Dir, DigestCachePrefix, "intervention", key+".json")
+}
+
+func (s *DigestStore) storyPath(key string) string {
+	return filepath.Join(s.Dir, DigestCachePrefix, "story", key+".json")
 }
 
 // LookupInspect returns a cached inspect role when the fingerprint matches.
@@ -548,6 +886,178 @@ func (s *DigestStore) StoreClusterAudit(fp ClusterAuditFingerprint, entry Cluste
 		return err
 	}
 	s.noteClusterAuditStoredUsage(entry.TotalTokens)
+	s.flushAfterStore()
+	return nil
+}
+
+// LookupClusterCoT returns a cached typology_cluster CoT proposal when the fingerprint matches.
+func (s *DigestStore) LookupClusterCoT(fp ClusterCoTFingerprint) (ClusterCoTCached, bool, error) {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return ClusterCoTCached{}, false, nil
+	}
+	key := fp.key()
+	rec, ok, err := readDigestRecord(s.clusterCoTPath(key), key)
+	if err != nil || !ok {
+		return ClusterCoTCached{}, false, err
+	}
+	var out ClusterCoTCached
+	if err := json.Unmarshal(rec.Payload, &out); err != nil {
+		return ClusterCoTCached{}, false, fmt.Errorf("digest cluster_cot payload: %w", err)
+	}
+	return out, true, nil
+}
+
+// StoreClusterCoT writes a successful typology_cluster CoT proposal.
+func (s *DigestStore) StoreClusterCoT(fp ClusterCoTFingerprint, entry ClusterCoTCached) error {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return nil
+	}
+	if strings.TrimSpace(entry.MergeIDs) == "" || strings.TrimSpace(entry.MergePackages) == "" || strings.TrimSpace(entry.MergeIntents) == "" {
+		return fmt.Errorf("digest cluster_cot store refuses empty merge fields")
+	}
+	key := fp.key()
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if err := writeDigestRecord(s.clusterCoTPath(key), digestRecord{
+		Kind:        "cluster_cot",
+		Fingerprint: key,
+		CreatedAt:   time.Now().UTC().Format(timestampFmt),
+		Payload:     payload,
+	}); err != nil {
+		return err
+	}
+	s.noteClusterCoTStoredUsage(entry.TotalTokens)
+	s.flushAfterStore()
+	return nil
+}
+
+// LookupRefine returns a cached typology_refine catalog when the fingerprint matches.
+func (s *DigestStore) LookupRefine(fp RefineFingerprint) (RefineCached, bool, error) {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return RefineCached{}, false, nil
+	}
+	key := fp.key()
+	rec, ok, err := readDigestRecord(s.refinePath(key), key)
+	if err != nil || !ok {
+		return RefineCached{}, false, err
+	}
+	var out RefineCached
+	if err := json.Unmarshal(rec.Payload, &out); err != nil {
+		return RefineCached{}, false, fmt.Errorf("digest refine payload: %w", err)
+	}
+	return out, true, nil
+}
+
+// StoreRefine writes a validated refined catalog.
+func (s *DigestStore) StoreRefine(fp RefineFingerprint, entry RefineCached) error {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return nil
+	}
+	if strings.TrimSpace(entry.RefinedCatalogYAML) == "" {
+		return fmt.Errorf("digest refine store refuses empty catalog")
+	}
+	key := fp.key()
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if err := writeDigestRecord(s.refinePath(key), digestRecord{
+		Kind:        "refine",
+		Fingerprint: key,
+		CreatedAt:   time.Now().UTC().Format(timestampFmt),
+		Payload:     payload,
+	}); err != nil {
+		return err
+	}
+	s.noteRefineStoredUsage(entry.TotalTokens)
+	s.flushAfterStore()
+	return nil
+}
+
+// LookupIntervention returns cached human-intervention markdown when the fingerprint matches.
+func (s *DigestStore) LookupIntervention(fp InterventionFingerprint) (InterventionCached, bool, error) {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return InterventionCached{}, false, nil
+	}
+	key := fp.key()
+	rec, ok, err := readDigestRecord(s.interventionPath(key), key)
+	if err != nil || !ok {
+		return InterventionCached{}, false, err
+	}
+	var out InterventionCached
+	if err := json.Unmarshal(rec.Payload, &out); err != nil {
+		return InterventionCached{}, false, fmt.Errorf("digest intervention payload: %w", err)
+	}
+	return out, true, nil
+}
+
+// StoreIntervention writes validated human-intervention markdown.
+func (s *DigestStore) StoreIntervention(fp InterventionFingerprint, entry InterventionCached) error {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return nil
+	}
+	if strings.TrimSpace(entry.Markdown) == "" {
+		return fmt.Errorf("digest intervention store refuses empty markdown")
+	}
+	key := fp.key()
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if err := writeDigestRecord(s.interventionPath(key), digestRecord{
+		Kind:        "intervention",
+		Fingerprint: key,
+		CreatedAt:   time.Now().UTC().Format(timestampFmt),
+		Payload:     payload,
+	}); err != nil {
+		return err
+	}
+	s.noteInterventionStoredUsage(entry.TotalTokens)
+	s.flushAfterStore()
+	return nil
+}
+
+// LookupStory returns a cached bootstrap_story section when the fingerprint matches.
+func (s *DigestStore) LookupStory(fp StoryFingerprint) (StoryCached, bool, error) {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return StoryCached{}, false, nil
+	}
+	key := fp.key()
+	rec, ok, err := readDigestRecord(s.storyPath(key), key)
+	if err != nil || !ok {
+		return StoryCached{}, false, err
+	}
+	var out StoryCached
+	if err := json.Unmarshal(rec.Payload, &out); err != nil {
+		return StoryCached{}, false, fmt.Errorf("digest story payload: %w", err)
+	}
+	return out, true, nil
+}
+
+// StoreStory writes a validated bootstrap_story section.
+func (s *DigestStore) StoreStory(fp StoryFingerprint, entry StoryCached) error {
+	if s == nil || strings.TrimSpace(s.Dir) == "" {
+		return nil
+	}
+	if strings.TrimSpace(entry.Markdown) == "" {
+		return fmt.Errorf("digest story store refuses empty markdown")
+	}
+	key := fp.key()
+	payload, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if err := writeDigestRecord(s.storyPath(key), digestRecord{
+		Kind:        "story",
+		Fingerprint: key,
+		CreatedAt:   time.Now().UTC().Format(timestampFmt),
+		Payload:     payload,
+	}); err != nil {
+		return err
+	}
+	s.noteStoryStoredUsage(entry.TotalTokens)
 	s.flushAfterStore()
 	return nil
 }

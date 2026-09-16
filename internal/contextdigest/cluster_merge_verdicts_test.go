@@ -139,6 +139,30 @@ func TestDemoteRejectedMergesList(t *testing.T) {
 	}
 }
 
+func TestFlattenMergesForCacheRoundTrip(t *testing.T) {
+	merges := []proposedMerge{
+		{ID: "git", Packages: []string{"internal/a", "internal/b"}, Intent: mergeIntentSlice},
+		{ID: "nick", Packages: []string{"internal/c", "internal/d"}, Intent: mergeIntentNickname},
+	}
+	ids, pkgs, intents := flattenMergesForCache(merges)
+	got, err := mergesFromClusterOut(map[string]interface{}{
+		"merge_ids": ids, "merge_packages": pkgs, "merge_intents": intents,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != "git" || got[1].Intent != mergeIntentNickname {
+		t.Fatalf("got=%+v", got)
+	}
+	noneIDs, nonePkgs, noneIntents := flattenMergesForCache(nil)
+	gotNone, err := mergesFromClusterOut(map[string]interface{}{
+		"merge_ids": noneIDs, "merge_packages": nonePkgs, "merge_intents": noneIntents,
+	})
+	if err != nil || gotNone != nil {
+		t.Fatalf("none: got=%v err=%v", gotNone, err)
+	}
+}
+
 func TestPackageSetKeyStable(t *testing.T) {
 	a := packageSetKey([]string{"internal/b", "internal/a"})
 	b := packageSetKey([]string{"internal/a", "internal/b", "internal/a"})
