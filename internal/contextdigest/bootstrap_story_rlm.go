@@ -65,6 +65,7 @@ func newStropBootstrapStoryRLM(ctx context.Context, cfg config.RepoConfig, workS
 	}
 	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	rlmCfg := stropdspy.RLMDefaults()
+	rlmCfg.LLM = llm
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	timeout := provider.GetTimeout(ledgerRLMTimeout)
 	if timeout < ledgerRLMTimeout {
