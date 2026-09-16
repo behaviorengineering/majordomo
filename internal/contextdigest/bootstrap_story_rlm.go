@@ -72,7 +72,7 @@ func newStropBootstrapStoryRLM(ctx context.Context, cfg config.RepoConfig, workS
 	}
 	rlmCfg.Timeout = timeout
 	rlmCfg.TraceDir = rlmTraceDir(workStoryDir, jmodules.TaskBootstrapStory)
-	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
+	module, err := rlmCfg.CreateModule()
 	if err != nil {
 		return rlmBootstrapStoryGenerator{}, err
 	}

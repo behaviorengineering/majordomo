@@ -13,6 +13,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
+	"github.com/behaviorengineering/majordomo/internal/observability"
 	"github.com/behaviorengineering/strop/runreport"
 )
 
@@ -28,6 +29,7 @@ type Result struct {
 	GateStatus    string            `json:"gate_status,omitempty"`
 	Message       string            `json:"message,omitempty"`
 	WorkStoryDir  string            `json:"work_story_dir,omitempty"` // durable RLM + runreport dump (local AI testing)
+	TraceID       string            `json:"trace_id,omitempty"`
 	LLMUsage      *llmusage.Summary `json:"llm_usage,omitempty"`
 }
 
@@ -73,9 +75,15 @@ func Run(opts Options) (res Result, err error) {
 		ctx = context.Background()
 	}
 	opts.Context = ctx
+	if tid := observability.TraceIDFromContext(ctx); tid != "" {
+		logf("INFO", "repo=%s otel trace_id=%s", opts.RepoID, tid)
+	}
 	usage := llmusage.New()
 	llmusage.Push(usage)
 	defer func() {
+		if tid := observability.TraceIDFromContext(ctx); tid != "" {
+			res.TraceID = tid
+		}
 		snap := usage.Snapshot()
 		res.LLMUsage = &snap
 		logf("INFO", "repo=%s LLM usage summary", opts.RepoID)
@@ -379,7 +387,7 @@ func Run(opts Options) (res Result, err error) {
 			if err := ensureDigestJudge(&opts, cfg); err != nil {
 				return Result{}, err
 			}
-			if err := walkCommitContexts(ctxDir, commitCtxs, now, regenFeedback, opts.Judge); err != nil {
+			if err := walkCommitContexts(ctx, ctxDir, commitCtxs, now, regenFeedback, opts.Judge); err != nil {
 				return Result{}, err
 			}
 		}

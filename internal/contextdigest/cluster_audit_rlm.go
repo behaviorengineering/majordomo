@@ -82,6 +82,7 @@ func newStropClusterMergeAuditor(ctx context.Context, cfg config.RepoConfig, tra
 	}
 	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	rlmCfg := stropdspy.RLMDefaults()
+	rlmCfg.LLM = llm
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	timeout := provider.GetTimeout(ledgerRLMTimeout)
 	if timeout < ledgerRLMTimeout {
@@ -89,7 +90,7 @@ func newStropClusterMergeAuditor(ctx context.Context, cfg config.RepoConfig, tra
 	}
 	rlmCfg.Timeout = timeout
 	rlmCfg.TraceDir = strings.TrimSpace(traceDir)
-	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
+	module, err := rlmCfg.CreateModule()
 	if err != nil {
 		return nil, err
 	}
