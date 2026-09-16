@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/behaviorengineering/majordomo/internal/config"
@@ -99,7 +100,8 @@ func TestLiveTypologyClusterReplay(t *testing.T) {
 		t.Fatalf("typology_cluster generate: %v", err)
 	}
 
-	t.Logf("merge_ids=%q", stringField(out, "merge_ids"))
+	mergeIDs := stringField(out, "merge_ids")
+	t.Logf("merge_ids=%q", mergeIDs)
 	t.Logf("merge_packages=%q", stringField(out, "merge_packages"))
 	t.Logf("merge_intents=%q", stringField(out, "merge_intents"))
 	if ack := stringField(out, "directives_ack"); ack != "" {
@@ -113,6 +115,12 @@ func TestLiveTypologyClusterReplay(t *testing.T) {
 	t.Logf("proposed_merge_rows=%d", len(rows))
 	for _, row := range rows {
 		t.Logf("  merge id=%s intent=%s packages=%v", row.ID, row.Intent, row.Packages)
+		if strings.EqualFold(strings.TrimSpace(row.ID), "analysis") {
+			t.Fatalf("cluster replay must not invent merge id %q", row.ID)
+		}
+	}
+	if strings.Contains(strings.ToLower(mergeIDs), "analysis") {
+		t.Fatalf("merge_ids must not contain analysis: %q", mergeIDs)
 	}
 
 	entries, err := os.ReadDir(traceDir)
