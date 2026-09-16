@@ -32,16 +32,23 @@ const (
 	DigestClusterAuditSchemaV1 = "cluster-audit-v1"
 	// DigestClusterAuditPromptV1 labels the cluster audit RLM prompt contract.
 	DigestClusterAuditPromptV1 = "typology_cluster_audit_rlm_v1"
-	// DigestClusterCoTSchemaV1 keys typology cluster CoT merge proposals.
+	// DigestClusterCoTSchemaV1 keys typology cluster CoT merge proposals (full roles YAML).
 	DigestClusterCoTSchemaV1 = "cluster-cot-v1"
+	// DigestClusterCoTSchemaV2 keys cluster CoT on role identity + mechanical identity
+	// (no ephemeral RLM evidence prose).
+	DigestClusterCoTSchemaV2 = "cluster-cot-v2"
 	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract.
 	DigestClusterCoTPromptV1 = "typology_cluster_cot_v1"
-	// DigestRefineSchemaV1 keys typology refine CoT catalogs.
+	// DigestRefineSchemaV1 keys typology refine CoT catalogs (full verdicts YAML).
 	DigestRefineSchemaV1 = "refine-v1"
+	// DigestRefineSchemaV2 keys refine on role/verdict identity hashes (no duration/trace/prose).
+	DigestRefineSchemaV2 = "refine-v2"
 	// DigestRefinePromptV1 labels the typology_refine CoT prompt contract.
 	DigestRefinePromptV1 = "typology_refine_cot_v1"
-	// DigestInterventionSchemaV1 keys human-intervention CoT outputs.
+	// DigestInterventionSchemaV1 keys human-intervention CoT outputs (full verdicts YAML).
 	DigestInterventionSchemaV1 = "intervention-v1"
+	// DigestInterventionSchemaV2 keys intervention on verdict identity (no duration/trace/prose).
+	DigestInterventionSchemaV2 = "intervention-v2"
 	// DigestInterventionPromptV1 labels the human-intervention CoT prompt contract.
 	DigestInterventionPromptV1 = "typology_intervention_cot_v1"
 	// DigestStorySchemaV1 keys bootstrap story RLM sections.
@@ -673,7 +680,7 @@ func (fp ClusterCoTFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestClusterCoTSchemaV1
+		schema = DigestClusterCoTSchemaV2
 	}
 	return HashDigestParts(
 		"cluster_cot", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.MechanicalHash,
@@ -688,7 +695,7 @@ func (fp RefineFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestRefineSchemaV1
+		schema = DigestRefineSchemaV2
 	}
 	return HashDigestParts(
 		"refine", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.LedgerHash, fp.VerdictsHash,
@@ -703,7 +710,7 @@ func (fp InterventionFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestInterventionSchemaV1
+		schema = DigestInterventionSchemaV2
 	}
 	return HashDigestParts(
 		"intervention", fp.TaskID, fp.ArchitectureHash, fp.RefinedHash, fp.VerdictsHash,

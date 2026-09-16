@@ -121,14 +121,18 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	var auditMeta clusterAuditResult
 	auditor := input.ClusterAuditor
 	constraintsForCluster := stringField(clusterFields, "package_capability_constraints")
+	mechIdentityHash, mechErr := mechanicalIdentitySHA(input.PackageRoles)
+	if mechErr != nil {
+		mechIdentityHash = cache.ContentSHA(mechanicalGroupingYAML)
+	}
 	clusterFP := cache.ClusterCoTFingerprint{
 		DraftHash:       cache.ContentSHA(input.DraftCatalogYAML),
-		RolesHash:       cache.ContentSHA(input.PackageRoles),
+		RolesHash:       rolesIdentitySHA(input.PackageRoles),
 		ConstraintsHash: cache.ContentSHA(constraintsForCluster),
-		MechanicalHash:  cache.ContentSHA(mechanicalGroupingYAML),
+		MechanicalHash:  mechIdentityHash,
 		ModelID:         input.DigestModelID,
 		PromptVersion:   cache.DigestClusterCoTPromptV1,
-		SchemaVersion:   cache.DigestClusterCoTSchemaV1,
+		SchemaVersion:   cache.DigestClusterCoTSchemaV2,
 	}
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
 		if attempt > 1 {
@@ -309,14 +313,14 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 
 	refineFP := cache.RefineFingerprint{
 		DraftHash:       cache.ContentSHA(input.DraftCatalogYAML),
-		RolesHash:       cache.ContentSHA(input.PackageRoles),
+		RolesHash:       rolesIdentitySHA(input.PackageRoles),
 		ConstraintsHash: cache.ContentSHA(constraintsYAML),
 		LedgerHash:      cache.ContentSHA(ledgerYAML),
-		VerdictsHash:    cache.ContentSHA(verdictsYAML),
-		MechanicalHash:  cache.ContentSHA(mechanicalGroupingYAML),
+		VerdictsHash:    clusterVerdictsIdentitySHA(verdictsYAML),
+		MechanicalHash:  mechIdentityHash,
 		ModelID:         input.DigestModelID,
 		PromptVersion:   cache.DigestRefinePromptV1,
-		SchemaVersion:   cache.DigestRefineSchemaV1,
+		SchemaVersion:   cache.DigestRefineSchemaV2,
 	}
 	if input.DigestSkips && input.DigestCache != nil && strings.TrimSpace(feedback) == "" {
 		if hit, ok, err := input.DigestCache.LookupRefine(refineFP); err == nil && ok && strings.TrimSpace(hit.RefinedCatalogYAML) != "" {

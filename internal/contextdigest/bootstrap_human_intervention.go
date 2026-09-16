@@ -170,12 +170,12 @@ func generateInterventionStep(
 		TaskID:           task,
 		ArchitectureHash: cache.ContentSHA(cacheOpts.ArchitectureMD),
 		RefinedHash:      cache.ContentSHA(cacheOpts.RefinedYAML),
-		VerdictsHash:     cache.ContentSHA(cacheOpts.VerdictsYAML),
+		VerdictsHash:     clusterVerdictsIdentitySHA(cacheOpts.VerdictsYAML),
 		FindingsHash:     cache.ContentSHA(cacheOpts.FindingsList),
 		FindingHash:      cache.ContentSHA(cacheOpts.Finding),
 		ModelID:          cacheOpts.ModelID,
 		PromptVersion:    cache.DigestInterventionPromptV1,
-		SchemaVersion:    cache.DigestInterventionSchemaV1,
+		SchemaVersion:    cache.DigestInterventionSchemaV2,
 	}
 	feedback := ""
 	if v, ok := fields["validation_feedback"].(string); ok {

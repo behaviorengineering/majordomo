@@ -267,7 +267,10 @@ func validatePackageRolesRLM(ctx context.Context, validator packageRoleRLMValida
 				evidence = strings.TrimSpace(evidence + " contradiction_rejected")
 			}
 			updated := applyRLMAgreement(n, llmRole, evidence, iters)
-			if store != nil && updated.Agreement == agreementMatch {
+			// Persist any completed RLM outcome (match, abstain, disagree). Skipping
+			// abstain left a few packages regenerating evidence prose every reseed and
+			// busting cluster/refine fingerprints that hash roles YAML.
+			if store != nil && updated.Agreement != "" && updated.Agreement != agreementUnvalidated {
 				cached := cachedFromPackageRole(updated)
 				cached.PromptTokens = promptTok
 				cached.CompletionTokens = completionTok
