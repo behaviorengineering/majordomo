@@ -3,6 +3,7 @@ package contextdigest
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -288,6 +289,19 @@ func validateBootstrapStorySection(repoID, id, text string) error {
 	return nil
 }
 
+// majordomoReadingMarkerRE matches required context-branch HTML comment markers.
+// These must stay in README/mission markdown but must not trip product-voice gates.
+var majordomoReadingMarkerRE = regexp.MustCompile(`(?is)<!--\s*majordomo-reading-(?:nav|toc):(?:start|end)\s*-->`)
+
+var majordomoReadingBlockRE = regexp.MustCompile(`(?is)<!--\s*majordomo-reading-(?:nav|toc):start\s*-->.*?<!--\s*majordomo-reading-(?:nav|toc):end\s*-->`)
+
+// stripMajordomoReadingMarkers removes reading-path marker HTML so product-voice
+// checks only see teaching prose (markers themselves contain the word Majordomo).
+func stripMajordomoReadingMarkers(text string) string {
+	out := majordomoReadingBlockRE.ReplaceAllString(text, "")
+	return majordomoReadingMarkerRE.ReplaceAllString(out, "")
+}
+
 func rejectMajordomoAsProduct(repoID, sectionID, text string) error {
 	switch sectionID {
 	case "mission", "architecture", "grounding":
@@ -297,7 +311,7 @@ func rejectMajordomoAsProduct(repoID, sectionID, text string) error {
 	if strings.EqualFold(strings.TrimSpace(repoID), "majordomo") {
 		return nil
 	}
-	lower := strings.ToLower(text)
+	lower := strings.ToLower(stripMajordomoReadingMarkers(text))
 	// Product-as-actor patterns from observed gitboard drift.
 	banned := []string{
 		"majordomo provides",

@@ -35,6 +35,21 @@ func TestRejectMajordomoAsProduct(t *testing.T) {
 	}
 }
 
+func TestRejectMajordomoAsProductAllowsReadingMarkers(t *testing.T) {
+	mission := `# Mission
+<!-- majordomo-reading-nav:start -->
+Reading path: [Prev: README.md](README.md) · [Next: architecture.md](architecture.md) · [TOC](README.md)
+<!-- majordomo-reading-nav:end -->
+Gitboard serves as a local code-change dashboard for GitLab and GitHub.
+`
+	if err := rejectMajordomoAsProduct("gitboard", "mission", mission); err != nil {
+		t.Fatalf("reading markers must not trip product gate: %v", err)
+	}
+	if err := rejectMajordomoAsProduct("gitboard", "mission", mission+"\nMajordomo establishes the board.\n"); err == nil {
+		t.Fatal("expected real Majordomo product voice to still fail")
+	}
+}
+
 func TestRequireBootstrapStoryEvidenceNeedsLedgerAfterRefine(t *testing.T) {
 	input := BootstrapStoryInput{
 		RepoID:                 "gitboard",
