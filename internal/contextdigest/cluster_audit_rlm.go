@@ -151,12 +151,17 @@ func runClusterMergeAudit(ctx context.Context, caller clusterAuditCaller, req cl
 		if hit, ok, err := req.DigestCache.LookupClusterAudit(fp); err == nil && ok {
 			req.DigestCache.RecordClusterAuditHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
 			logf("INFO", "digest cache hit cluster_audit merges=%d", len(req.Proposed))
-			out.Verdicts = append(append([]clusterMergeVerdict(nil), req.Frozen...), fromCachedVerdicts(hit.Merges)...)
-			out.RLMIterations = hit.RLMIterations
-			out.PromptTokens = hit.PromptTokens
-			out.CompletionTok = hit.CompletionTokens
-			out.TotalTokens = hit.TotalTokens
-			return out, nil
+			cachedRows, alignErr := alignClusterAuditRows(fromCachedVerdicts(hit.Merges), req.Proposed)
+			if alignErr != nil {
+				logf("WARN", "digest cache cluster_audit realign failed: %v", alignErr)
+			} else {
+				out.Verdicts = append(append([]clusterMergeVerdict(nil), req.Frozen...), cachedRows...)
+				out.RLMIterations = hit.RLMIterations
+				out.PromptTokens = hit.PromptTokens
+				out.CompletionTok = hit.CompletionTokens
+				out.TotalTokens = hit.TotalTokens
+				return out, nil
+			}
 		}
 	}
 

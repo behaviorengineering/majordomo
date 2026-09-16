@@ -123,6 +123,15 @@ func TestValidateHumanInterventionOutputsRequiresCoverage(t *testing.T) {
 	}
 }
 
+func TestValidateHumanInterventionOutputsUnmappedPackageAcceptsPackageBase(t *testing.T) {
+	findings := []string{`unmapped package "internal/localgit" in module; not claimed by any slice or library in owns[] or surfaces[]`}
+	journey := "## Status\nOpen\n\n## Technical debt and boundary violations\n\n| Finding | Smell | Alternative | Lean |\n| --- | --- | --- | --- |\n| localgit unmapped | orphan adapter | own slice | record debt |\n"
+	err := validateHumanInterventionOutputs(findings, journey, "- localgit", "- localgit boundary")
+	if err != nil {
+		t.Fatalf("expected localgit base to satisfy unmapped package finding: %v", err)
+	}
+}
+
 func TestDigestPRBodyIncludesPriority(t *testing.T) {
 	body, err := digestPRBody(0, "abc123", contextgate.Sidecar{}, "- localgit needs a binding decision")
 	if err != nil {

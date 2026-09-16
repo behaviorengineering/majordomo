@@ -729,6 +729,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 		typo = remapInventedCatalogPaths(typo, allowed)
 	}
 	typo = restoreMissingDraftPackages(typo, draft, roles)
+	typo = restoreMissingRolePackages(typo, roles)
 	if err := catalog.SaveYAML(path, typo); err != nil {
 		return "", fmt.Errorf("typology refine save sanitized catalog: %w", err)
 	}
@@ -955,6 +956,12 @@ func containsString(list []string, want string) bool {
 	return false
 }
 
+type missingCatalogComponent struct {
+	draftSliceID string
+	draftLibID   string
+	comp         catalog.Component
+}
+
 // restoreMissingDraftPackages reclaims draft package paths the refine LLM dropped.
 // Exec adapters always land under owns[]; interaction paths reattach to surfaces.
 // Draft library packages reattach to the matching refined library when present.
@@ -963,12 +970,7 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[stri
 		return refined
 	}
 	claimed := collectCatalogPaths(refined)
-	type missingComp struct {
-		draftSliceID string
-		draftLibID   string
-		comp         catalog.Component
-	}
-	var missing []missingComp
+	var missing []missingCatalogComponent
 	add := func(draftSliceID, draftLibID string, c catalog.Component) {
 		n := normalizeCatalogPath(c.Path)
 		if n == "" {
@@ -977,7 +979,7 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[stri
 		if _, ok := claimed[n]; ok {
 			return
 		}
-		missing = append(missing, missingComp{draftSliceID: draftSliceID, draftLibID: draftLibID, comp: c})
+		missing = append(missing, missingCatalogComponent{draftSliceID: draftSliceID, draftLibID: draftLibID, comp: c})
 		claimed[n] = struct{}{}
 	}
 	for _, s := range draft.Slices {
@@ -998,7 +1000,36 @@ func restoreMissingDraftPackages(refined, draft catalog.Typology, roles map[stri
 	if len(missing) == 0 {
 		return refined
 	}
+	return attachMissingComponents(refined, roles, missing)
+}
 
+// restoreMissingRolePackages reclaims module package paths from package_roles when refine dropped them.
+func restoreMissingRolePackages(refined catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
+	if len(refined.Slices) == 0 || len(roles) == 0 {
+		return refined
+	}
+	claimed := collectCatalogPaths(refined)
+	var missing []missingCatalogComponent
+	for path := range roles {
+		path = normalizeRolePath(path)
+		if path == "" || strings.HasPrefix(path, "cmd/") {
+			continue
+		}
+		if _, ok := claimed[path]; ok {
+			continue
+		}
+		missing = append(missing, missingCatalogComponent{
+			comp: catalog.Component{ID: filepath.Base(path), Path: path},
+		})
+		claimed[path] = struct{}{}
+	}
+	if len(missing) == 0 {
+		return refined
+	}
+	return attachMissingComponents(refined, roles, missing)
+}
+
+func attachMissingComponents(refined catalog.Typology, roles map[string]packageRoleNode, missing []missingCatalogComponent) catalog.Typology {
 	sliceIdx := make(map[string]int, len(refined.Slices))
 	for i, s := range refined.Slices {
 		if id := strings.TrimSpace(s.ID); id != "" {
