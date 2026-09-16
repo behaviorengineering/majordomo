@@ -50,8 +50,10 @@ type openPR struct {
 
 var majordomoInternalBranchPrefixes = []string{
 	"majordomo-context/",
-	"majordomo-pr-reviewer-cache/",
+	"majordomo-inference-cache/",
 	"majordomo-poll-cache/",
+	// Legacy prefixes kept so orphaned refs never look like product PRs.
+	"majordomo-pr-reviewer-cache/",
 	"majordomo-digest-cache/",
 }
 

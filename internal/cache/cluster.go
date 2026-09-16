@@ -338,7 +338,7 @@ func Store(opts StoreOptions) (map[string]any, error) {
 		}
 		markdownArtifactCount = len(markdownFiles)
 		if markdownArtifactCount > 0 {
-			markdownArtifactFile = opts.SkillName + "/markdown-" + opts.ClusterSHA + ".json"
+			markdownArtifactFile = ReviewCachePrefix + "/" + opts.SkillName + "/markdown-" + opts.ClusterSHA + ".json"
 		}
 	}
 
@@ -366,7 +366,7 @@ func Store(opts StoreOptions) (map[string]any, error) {
 		metadata["markdown_artifact_count"] = strconv.Itoa(markdownArtifactCount)
 	}
 
-	skillDir := filepath.Join(cacheDir, opts.SkillName)
+	skillDir := filepath.Join(cacheDir, ReviewCachePrefix, opts.SkillName)
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		return nil, err
 	}

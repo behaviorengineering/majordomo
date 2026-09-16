@@ -15,9 +15,11 @@ keyed artifact. Re-runs with identical fingerprints MUST skip the provider call.
 
 | Store | Branch / location | Skips |
 |-------|-------------------|-------|
-| PR review cluster cache | `majordomo-pr-reviewer-cache/<project-id>` | Cluster analysis on fingerprint hit |
-| Digest inference cache | `majordomo-digest-cache/<repo-id>` | Package inspect + slice ledger RLM |
+| Inference cache (review + digest) | `majordomo-inference-cache/<repo-id>` with `review/` and `digest/` path prefixes | Cluster analysis; package inspect + slice ledger RLM |
 | Context cursor | `majordomo-context/<repo-id>` `meta.yaml` | Whole digest job when HEAD already visited |
+
+Legacy branch names `majordomo-pr-reviewer-cache/*` and `majordomo-digest-cache/*` are
+cold-start superseded. Poll still excludes them so orphaned refs stay non-product.
 
 ---
 
@@ -25,7 +27,7 @@ keyed artifact. Re-runs with identical fingerprints MUST skip the provider call.
 
 - Adding a generate, evaluate, refine, or RLM step in Majordomo
 - Wiring digest or review so reseeds / retries do not repeat identical inferences
-- Choosing where to persist skip artifacts (review cache vs digest cache)
+- Choosing where to persist skip artifacts under `majordomo-inference-cache/`
 
 ---
 
@@ -51,8 +53,8 @@ be stored as hits.
 - Enforcement: lookup before LLM; failed verdicts omit Store
 - Violation: STOP, fix lookup/store gates
 
-**CONSTRAINT:** MUST NOT invent a third git-branch naming scheme without extending
-`internal/cache` and documenting it next to review + digest cache.
+**CONSTRAINT:** MUST NOT invent a new git-branch naming scheme without extending
+`internal/cache` and documenting it next to the inference-cache layout.
 
 - Enforcement: branch helpers live in `internal/config` + `internal/cache`
 - Violation: STOP, reuse or extend existing prefixes
@@ -64,7 +66,7 @@ for the whole digest or review job to succeed. A later refine, eval, or gate
 failure MUST NOT discard already-earned inspect/ledger (or cluster) hits.
 
 - Enforcement: `DigestStore` Flush after Store*; digest run configures push when
-  materializing `majordomo-digest-cache/<repo-id>`; final Flush on exit
+  materializing `majordomo-inference-cache/<repo-id>`; final Flush on exit
 - Violation: STOP, wire push-on-store (or phase flush), re-verify
 
 **CONSTRAINT:** Digest fingerprint inputs MUST be stable across reseeds of the
@@ -82,11 +84,11 @@ usage when present.
 - Enforcement: `DigestStore` stats + `FormatStatsLine` after inspect/ledger and on exit
 - Violation: STOP, wire Record*Hit/Miss and end-of-run summary
 
-**CONSTRAINT:** Digest teaching reseeds MUST NOT delete `majordomo-digest-cache/*`.
+**CONSTRAINT:** Digest teaching reseeds MUST NOT delete `majordomo-inference-cache/*`.
 Context wipe (`majordomo-context/*`) is allowed; inference reuse must survive it.
 
 - Enforcement: reseed scripts only target context refs; docs list the exclusion
-- Violation: STOP, restore digest-cache branch policy
+- Violation: STOP, restore inference-cache branch policy
 
 CORRECT:
 ```go
@@ -146,6 +148,6 @@ if digestSucceeded {
       Pass: summary line present with counts
       Fail: STOP, wire DigestStore stats
 - [ ] Branch / dir uses `internal/cache` helpers
-      Method: `DigestCacheBranch` or review `CacheBranch`
+      Method: `InferenceCacheBranch` (aliases `CacheBranch` / `DigestCacheBranch`)
       Pass: no ad-hoc branch string
       Fail: STOP, use helpers

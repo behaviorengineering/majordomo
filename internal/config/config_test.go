@@ -2,11 +2,17 @@ package config
 
 import "testing"
 
-func TestCacheBranch(t *testing.T) {
-	got := CacheBranch("payments-api")
-	want := "majordomo-pr-reviewer-cache/payments-api"
+func TestInferenceCacheBranch(t *testing.T) {
+	got := InferenceCacheBranch("payments-api")
+	want := "majordomo-inference-cache/payments-api"
 	if got != want {
-		t.Fatalf("CacheBranch = %q, want %q", got, want)
+		t.Fatalf("InferenceCacheBranch = %q, want %q", got, want)
+	}
+	if CacheBranch("payments-api") != got {
+		t.Fatalf("CacheBranch alias mismatch")
+	}
+	if DigestCacheBranch("payments-api") != got {
+		t.Fatalf("DigestCacheBranch alias mismatch")
 	}
 }
 
@@ -15,14 +21,6 @@ func TestContextBranch(t *testing.T) {
 	want := "majordomo-context/payments-api"
 	if got != want {
 		t.Fatalf("ContextBranch = %q, want %q", got, want)
-	}
-}
-
-func TestDigestCacheBranch(t *testing.T) {
-	got := DigestCacheBranch("payments-api")
-	want := "majordomo-digest-cache/payments-api"
-	if got != want {
-		t.Fatalf("DigestCacheBranch = %q, want %q", got, want)
 	}
 }
 

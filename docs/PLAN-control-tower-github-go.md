@@ -114,7 +114,7 @@ See [02 — Setup](02-setup.md) for local builds, and the rest of this plan for 
 
 | # | Topic | Decision |
 |---|-------|----------|
-| 1 | Review cache location | **On the served repo.** Cluster analysis cache branches live in the app repo under review (`majordomo-pr-reviewer-cache/<project-id>`). |
+| 1 | Review cache location | **On the served repo.** Unified inference cache branch `majordomo-inference-cache/<repo-id>` holds review (`review/`) and digest (`digest/`) artifacts. Legacy `majordomo-pr-reviewer-cache/*` / `majordomo-digest-cache/*` cold-start superseded. |
 | 2 | Poll cursor location (v1) | **GitHub Actions cache** on the control-tower job (directory `.poll-cache/`, files `.poll-cache/<repo-id>/poll-cursor.json`). Not on the served repo yet. Durable enough for pilot; see Phase 5 for optional served-repo git branch hardening. |
 | 3 | Control-tower location | **Separate repository** [`xynova/majordomo-tower`](https://github.com/xynova/majordomo-tower). Pipeline code stays at [`behaviorengineering/majordomo`](https://github.com/behaviorengineering/majordomo). Tower pins that repo as `.majordomo/` submodule; holds org config, GHA workflows, and optional trigger deploy assets. |
 | 4 | Default trigger | **Pull poll always runs** (every 5m, GitHub cron floor) as the reconciliation layer for all onboarded repos. Push modes (workflow/webhook) are optional accelerators on top — not a replacement for poll. |
@@ -160,10 +160,10 @@ git submodule add https://github.com/behaviorengineering/majordomo.git .majordom
 
 Behaviour for cluster cache on the served repo:
 
-Git-tracked analysis files on branch `majordomo-pr-reviewer-cache/<project-id>` (or similar), with retention and fingerprint checks. See `majordomo cache` (`precheck` / `lookup` / `store` / `restore` / `push`).
+Git-tracked analysis files on branch `majordomo-inference-cache/<repo-id>` under `review/` (or similar), with retention and fingerprint checks. See `majordomo cache` (`precheck` / `lookup` / `store` / `restore` / `push`).
 
-- Cache branch pattern: `majordomo-pr-reviewer-cache/<project-id>`.
-- Skill-scoped layout: `<skill-name>/analysis-<cluster-sha>.json`
+- Cache branch pattern: `majordomo-inference-cache/<repo-id>`.
+- Skill-scoped layout: `review/<skill-name>/analysis-<cluster-sha>.json`
 - Cluster SHA keys derived from clustering output — skip re-analysis on cache hit.
 - Control tower clones the **served repo** for review; cache read/write uses the same clone remote and a write-capable token for that repo.
 - `cache.repo: central` (cache in control-tower repo) is **not planned** for the new stack unless a future need arises.
@@ -529,7 +529,7 @@ review.enableContinuousRuns: false (default)
 | Cache | Location (v1) | Skips |
 |-------|---------------|-------|
 | **Poll cursor** | Tower Actions cache → `.poll-cache/<repo-id>/poll-cursor.json` | Whole review job (see continuous policy above) |
-| **Review cache** | Served-repo git branch `majordomo-pr-reviewer-cache/<project-id>` | Cluster AI work inside a run |
+| **Review cache** | Served-repo git branch `majordomo-inference-cache/<repo-id>` (`review/`) | Cluster AI work inside a run |
 
 **v1 store of truth for poll:** GitHub Actions `actions/cache` on poll and review jobs (restore before poll / after review cursor update). Eviction (~7 days unused) may re-queue; acceptable for pilot. Optional Phase 5: move cursor to served-repo branch `majordomo-poll-cache/<repo-id>` for multi-runner durability.
 
@@ -918,3 +918,4 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | 2026-08-28 | Phase 6 hardening: strop generator modules + `MAJORDOMO_JUDGE=strop` cutover, LLM story section-walk, Bitbucket gate comments, digest commit cap + gate workflow |
 | 2026-08-29 | Tower review job: LLM secrets, `MAJORDOMO_JUDGE` / `MAJORDOMO_AGENT_IMAGE` vars, fail-closed orchestrate, context-dir pass-through |
 | 2026-08-29 | Strop-only Judge: remove `MAJORDOMO_JUDGE` cutover and OpenCode protocol path; `dispatch`/`orchestrate` always use in-process strop |
+| 2026-09-13 | Unify review + digest caches on `majordomo-inference-cache/<repo-id>` (`review/` + `digest/` prefixes); poll keeps excluding legacy cache prefixes |

@@ -2,12 +2,18 @@ package cache
 
 import "testing"
 
-func TestValidateReviewCacheBranch(t *testing.T) {
-	if err := ValidateReviewCacheBranch("majordomo-pr-reviewer-cache/payments-api"); err != nil {
+func TestValidateInferenceCacheBranch(t *testing.T) {
+	if err := ValidateInferenceCacheBranch("majordomo-inference-cache/payments-api"); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateReviewCacheBranch("evil/branch"); err == nil {
+	if err := ValidateInferenceCacheBranch("majordomo-inference-cache/org/repo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateInferenceCacheBranch("evil/branch"); err == nil {
 		t.Fatal("expected error")
+	}
+	if err := ValidateReviewCacheBranch("majordomo-inference-cache/payments-api"); err != nil {
+		t.Fatal(err)
 	}
 }
 

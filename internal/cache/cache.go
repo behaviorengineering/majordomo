@@ -11,18 +11,29 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/githttps"
 )
 
-var cacheBranchRE = regexp.MustCompile(`^majordomo-pr-reviewer-cache/[a-z0-9][a-z0-9-]*$`)
+var inferenceCacheBranchRE = regexp.MustCompile(`^majordomo-inference-cache/[a-z0-9][a-z0-9._/-]*$`)
 var pollBranchRE = regexp.MustCompile(`(?i)^majordomo-poll-cache/[a-z0-9][a-z0-9._/-]*$`)
+
+// Path prefixes under majordomo-inference-cache/<repo-id>.
+const (
+	ReviewCachePrefix = "review"
+	DigestCachePrefix = "digest"
+)
 
 // ExitPatternViolation matches push-to-cache.py exit 42.
 const ExitPatternViolation = 42
 
-// ValidateReviewCacheBranch returns nil if branch name is allowed.
-func ValidateReviewCacheBranch(branch string) error {
-	if !cacheBranchRE.MatchString(branch) {
-		return fmt.Errorf("cache branch %q does not match majordomo-pr-reviewer-cache/<slug>", branch)
+// ValidateInferenceCacheBranch returns nil if branch name is allowed.
+func ValidateInferenceCacheBranch(branch string) error {
+	if !inferenceCacheBranchRE.MatchString(branch) {
+		return fmt.Errorf("cache branch %q does not match majordomo-inference-cache/<repo-id>", branch)
 	}
 	return nil
+}
+
+// ValidateReviewCacheBranch is an alias for ValidateInferenceCacheBranch.
+func ValidateReviewCacheBranch(branch string) error {
+	return ValidateInferenceCacheBranch(branch)
 }
 
 // ValidatePollCacheBranch returns nil if poll-cache branch name is plausible.
@@ -41,9 +52,9 @@ type PushOptions struct {
 	Token    string // BITBUCKET_TOKEN or GITHUB_TOKEN
 }
 
-// Push pushes the cache branch with forge HTTPS auth (port of push-to-cache.py).
+// Push pushes the inference-cache branch with forge HTTPS auth (port of push-to-cache.py).
 func Push(opts PushOptions) error {
-	if err := ValidateReviewCacheBranch(opts.Branch); err != nil {
+	if err := ValidateInferenceCacheBranch(opts.Branch); err != nil {
 		return err
 	}
 	if opts.Remote == "" || opts.Worktree == "" {
