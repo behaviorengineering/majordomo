@@ -176,8 +176,9 @@ func TestTypologyClusterModuleLibrariesStance(t *testing.T) {
 		"merge_intents",
 		"authoritative for door-private",
 		"do not emit markdown counsel",
-		"required scan before emitting none",
-		"none is not the default safe answer",
+		"literal none",
+		"optional",
+		"allowed default",
 	} {
 		if !strings.Contains(inst, needle) {
 			t.Fatalf("cluster instruction missing %q: %s", needle, jmodules.TypologyClusterModule().GetSignature().Instruction)
@@ -185,6 +186,12 @@ func TestTypologyClusterModuleLibrariesStance(t *testing.T) {
 	}
 	if strings.Contains(inst, "sole importer: package imported by only one caller -> merge into caller") {
 		t.Fatal("cluster instruction still uses sole-importer merge-into-caller heuristic")
+	}
+	if strings.Contains(inst, "git,analysis") {
+		t.Fatal("cluster instruction must not use git,analysis emit example")
+	}
+	if strings.Contains(inst, "none is not the default") {
+		t.Fatal("cluster instruction must not force folds by rejecting none as default")
 	}
 }
 

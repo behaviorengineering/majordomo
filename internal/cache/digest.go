@@ -39,8 +39,9 @@ const (
 	DigestClusterCoTSchemaV2 = "cluster-cot-v2"
 	// DigestClusterCoTSchemaV3 also normalizes draft catalog ids and binding order.
 	DigestClusterCoTSchemaV3 = "cluster-cot-v3"
-	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract.
-	DigestClusterCoTPromptV1 = "typology_cluster_cot_v1"
+	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract
+	// (v2 stops forced companion invent; empty/none folds are an allowed default).
+	DigestClusterCoTPromptV1 = "typology_cluster_cot_v2"
 	// DigestRefineSchemaV1 keys typology refine CoT catalogs (full verdicts YAML).
 	DigestRefineSchemaV1 = "refine-v1"
 	// DigestRefineSchemaV2 keys refine on role/verdict identity hashes (no duration/trace/prose).

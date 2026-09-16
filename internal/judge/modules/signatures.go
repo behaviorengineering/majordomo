@@ -170,17 +170,14 @@ Hard rules from observed roles and the door-walk seed:
 - fills_dto edges mean adapters fill JSON types; they are NOT "forge depends on the UI".
 - uses_runner edges mean a package shells out through a runner; they are NOT "depends on the CLI domain".
 
-Required scan before emitting none (MUST):
-1. List every product_seeds entry in mechanical_grouping_yaml and decide fold-with-neighbour vs leave separate (singleton seeds alone are not a merge row).
-2. List same-job-family companions among adapters (and similar roles) that share an evidenced import or stem (example: localgit + remotegit). Propose those as merge rows when both sides are adapters (or both match the same high-confidence role) and an evidenced edge or shared caller exists.
-3. Only after that scan finds zero eligible folds may you emit the literal none in all three fields. none is not the default safe answer when companions exist.
+Empty folds are valid: the literal none in all three fields is an allowed default when no lifecycle-same fold is earned. Do not invent companions or product pillars to avoid none.
 
 Apply these merge heuristics only after honoring package_roles:
-1. Same job family companions (for example two forge adapters, or local + remote git adapters) MUST be proposed when both are adapters with evidenced wiring.
-2. Split companion packages that share a stem (sa + satools -> sa).
+1. Propose a fold only when packages share the same lifecycle job (same high-confidence role family) with evidenced wiring. Companions are optional; do not invent folds.
+2. Split companion packages that share a stem (sa + satools -> sa) when that fold is earned.
 3. Sole importer: wiring note only; never merge-into-caller against observed roles.
 
-Mechanical product clumps in mechanical_grouping_yaml are seed hints that start the scan above; they are not earned catalog slices until a later cluster_merge accept verdict. Folding into the refined catalog requires that accept verdict.
+Mechanical product clumps in mechanical_grouping_yaml are seed hints, not earned catalog slices until a later cluster_merge accept verdict. Folding into the refined catalog requires that accept verdict.
 
 Enforce anti-patterns:
 - Do not promote capabilities to domain pillars.
@@ -191,10 +188,10 @@ Enforce anti-patterns:
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
 
 Emit three parallel flat strings of the same length (or all the literal none):
-- merge_ids: comma-separated nicknames (example: git,analysis)
-- merge_packages: semicolon-separated groups; inside each group comma-separated repo-relative paths (example: internal/localgit,internal/remotegit;internal/pruneagent,internal/triage)
-- merge_intents: comma-separated slice or nickname per id (example: slice,nickname)
-When proposing no folds after the required scan, set each field to the literal none (not empty tags).
+- merge_ids: comma-separated nicknames, or the literal none (example when no folds: none)
+- merge_packages: semicolon-separated groups; inside each group comma-separated repo-relative paths, or the literal none (example when no folds: none; positive example: internal/adaptera,internal/adapterb)
+- merge_intents: comma-separated slice or nickname per id, or the literal none (example when no folds: none; positive example: nickname)
+When proposing no folds, set each field to the literal none (not empty tags).
 Do not emit markdown counsel or catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)
 }
