@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +27,7 @@ type Result struct {
 	ContextPR     string            `json:"context_pr,omitempty"`
 	GateStatus    string            `json:"gate_status,omitempty"`
 	Message       string            `json:"message,omitempty"`
+	WorkStoryDir  string            `json:"work_story_dir,omitempty"` // durable RLM + runreport dump (local AI testing)
 	LLMUsage      *llmusage.Summary `json:"llm_usage,omitempty"`
 }
 
@@ -52,7 +52,11 @@ type Options struct {
 	DigestCache                *cache.DigestStore // optional; inspect/ledger fingerprint skips
 	DigestSkips                bool               // when true with DigestCache, skip LLM on hit
 	DigestModelID              string             // model id for fingerprints
-	// Context nests OTEL chain spans and runreport into digest Judge/RLM work.
+	// WorkStoryDir is a durable local dump for RLM JSONL, module TraceSession JSONL, and runreports (AI testing).
+	// When empty, Run creates tmp/digest-runs/<repo-id>-<timestamp> (or MAJORDOMO_DIGEST_WORK_STORY_DIR).
+	// Not the teaching context branch; not deleted with the analysis clone.
+	WorkStoryDir string
+	// Context nests OTEL chain spans, module TraceSession, and runreport into digest Judge/RLM work.
 	// When nil, Background is used.
 	Context context.Context
 }
@@ -221,6 +225,12 @@ func Run(opts Options) (res Result, err error) {
 		if err := CheckoutOrCreate(ctxGit, updateBranch, baseBranch); err != nil {
 			return Result{}, err
 		}
+		closeTrace, err := prepareWorkStory(&opts, now)
+		if err != nil {
+			return Result{}, err
+		}
+		defer func() { _ = closeTrace() }()
+		res.WorkStoryDir = opts.WorkStoryDir
 		if err := ensureDigestJudge(&opts, cfg); err != nil {
 			return Result{}, err
 		}
@@ -360,6 +370,12 @@ func Run(opts Options) (res Result, err error) {
 				}
 				commitCtxs = append(commitCtxs, cc)
 			}
+			closeTrace, err := prepareWorkStory(&opts, now)
+			if err != nil {
+				return Result{}, err
+			}
+			defer func() { _ = closeTrace() }()
+			res.WorkStoryDir = opts.WorkStoryDir
 			if err := ensureDigestJudge(&opts, cfg); err != nil {
 				return Result{}, err
 			}
@@ -552,10 +568,7 @@ func ensureDigestJudge(opts *Options, cfg config.RepoConfig) error {
 	if opts == nil || opts.Judge != nil || opts.SkipStory {
 		return nil
 	}
-	rrDir := "tmp/logs/runs"
-	if opts.WorkDir != "" {
-		rrDir = filepath.Join(opts.WorkDir, "tmp", "logs", "runs")
-	}
+	rrDir := runreportDir(inferenceWorkRoot(*opts, opts.WorkDir))
 	rt, err := judge.EnsureRuntimeFromConfig(cfg, judge.RuntimeOptions{
 		Tasks: judge.DigestTasks(),
 		RunReport: runreport.Config{
@@ -569,6 +582,29 @@ func ensureDigestJudge(opts *Options, cfg config.RepoConfig) error {
 	}
 	opts.Judge = rt
 	return nil
+}
+
+// prepareWorkStory creates a durable dump root for RLM traces, module traces, and runreports.
+// The returned closer flushes the CoT TraceSession; callers MUST defer it.
+func prepareWorkStory(opts *Options, now time.Time) (func() error, error) {
+	noop := func() error { return nil }
+	if opts == nil {
+		return noop, fmt.Errorf("prepare work story: options is nil")
+	}
+	dir, err := ensureWorkStoryDir(*opts, now)
+	if err != nil {
+		return noop, err
+	}
+	opts.WorkStoryDir = dir
+	logf("INFO", "digest AI work story dir=%s (rlm-traces + module-traces + runreports; survives analysis cleanup)", dir)
+	closeTrace, err := attachModuleTrace(opts)
+	if err != nil {
+		return noop, err
+	}
+	if closeTrace == nil {
+		return noop, nil
+	}
+	return closeTrace, nil
 }
 
 func treeHasChanges(dir string) bool {

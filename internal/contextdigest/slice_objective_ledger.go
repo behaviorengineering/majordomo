@@ -14,12 +14,12 @@ import (
 )
 
 const (
-	sliceObjectiveLedgerRel   = "slice_objective_ledger.yaml"
-	ledgerVerdictGrounded     = "grounded"
-	ledgerVerdictOverclaim    = "overclaim"
-	ledgerSourceRLM           = "slice_objective_rlm"
-	ledgerSourceUnclaimed     = "slice_objective_rlm_unclaimed"
-	ledgerUnclaimedObjective  = "Package role is unclassified; no portable capability claim is justified yet."
+	sliceObjectiveLedgerRel  = "slice_objective_ledger.yaml"
+	ledgerVerdictGrounded    = "grounded"
+	ledgerVerdictOverclaim   = "overclaim"
+	ledgerSourceRLM          = "slice_objective_rlm"
+	ledgerSourceUnclaimed    = "slice_objective_rlm_unclaimed"
+	ledgerUnclaimedObjective = "Package role is unclassified; no portable capability claim is justified yet."
 )
 
 var (
@@ -367,6 +367,9 @@ func formatConstraintRowsForPaths(paths []string, byPath map[string]packageCapab
 }
 
 func parseSliceObjectiveLedgerAnswer(text string) (evidence []string, claims []string, objective, verdict string, err error) {
+	if e, c, o, v, yamlErr := parseSliceObjectiveLedgerAnswerYAML(text); yamlErr == nil {
+		return e, c, o, v, nil
+	}
 	for _, line := range strings.Split(text, "\n") {
 		trim := strings.TrimSpace(line)
 		if trim == "" {
@@ -388,6 +391,30 @@ func parseSliceObjectiveLedgerAnswer(text string) (evidence []string, claims []s
 			objective = strings.TrimSpace(m[1])
 		}
 	}
+	return finalizeLedgerAnswer(evidence, claims, objective, verdict)
+}
+
+func parseSliceObjectiveLedgerAnswerYAML(text string) (evidence []string, claims []string, objective, verdict string, err error) {
+	body := strings.TrimSpace(stripCodeFence(text))
+	if body == "" {
+		return nil, nil, "", "", fmt.Errorf("empty ledger answer")
+	}
+	var doc struct {
+		Verdict   string   `yaml:"verdict"`
+		Evidence  []string `yaml:"evidence"`
+		Claims    []string `yaml:"claims"`
+		Objective string   `yaml:"objective"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
+		return nil, nil, "", "", err
+	}
+	if strings.TrimSpace(doc.Verdict) == "" && strings.TrimSpace(doc.Objective) == "" && len(doc.Evidence) == 0 {
+		return nil, nil, "", "", fmt.Errorf("ledger yaml missing fields")
+	}
+	return finalizeLedgerAnswer(doc.Evidence, doc.Claims, doc.Objective, doc.Verdict)
+}
+
+func finalizeLedgerAnswer(evidence, claims []string, objective, verdict string) ([]string, []string, string, string, error) {
 	evidence = uniqueStrings(normalizeEvidenceList(evidence))
 	claims = uniqueStrings(claims)
 	objective = strings.TrimSpace(objective)
@@ -408,8 +435,6 @@ func parseSliceObjectiveLedgerAnswer(text string) (evidence []string, claims []s
 				return nil, nil, "", "", fmt.Errorf("slice objective ledger unknown claim code %q", c)
 			}
 		}
-		// Empty claims are allowed only when the caller accepts an unclaimed slice
-		// (every portable code is in must_not). That check lives in buildSliceObjectiveLedger.
 	}
 	return evidence, claims, objective, verdict, nil
 }

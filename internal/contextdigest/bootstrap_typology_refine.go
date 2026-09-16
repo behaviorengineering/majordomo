@@ -46,7 +46,6 @@ type TypologyRefineInput struct {
 	RepoLayout            string
 	ReadmeSnapshot        string
 	ValidationFeedback    string
-	ClusterProposalMD     string
 	AnalysisDir           string
 	EvidenceDir           string
 	LedgerBuilder         sliceObjectiveLedgerBuilder
@@ -56,12 +55,13 @@ type TypologyRefineInput struct {
 	DigestModelID         string
 }
 
-// TypologyRefineOutput is the refined catalog proposal and journey notes.
+// TypologyRefineOutput is the refined catalog and durable cluster evidence YAML.
+// Journey markdown is written later by human-intervention (after architecture).
 type TypologyRefineOutput struct {
-	ClusterProposalMD        string
+	MechanicalGroupingYAML   string
+	ClusterMergeProposalYAML string
 	ClusterMergeVerdictsYAML string
 	RefinedCatalogYAML       string
-	JourneyMD                string
 	ObjectiveLedgerYAML      string
 	ObjectiveClaimsYAML      string
 }
@@ -81,7 +81,10 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		gen = packageJudgeGenerator{}
 	}
 	rolesDoc := mustParseRoles(input.PackageRoles)
-	mechanicalGroupingMD := mechanicalPreCluster(rolesDoc)
+	mechanicalGroupingYAML, err := mechanicalPreClusterYAML(rolesDoc)
+	if err != nil {
+		return TypologyRefineOutput{}, err
+	}
 	constraintsDoc, constraintsErr := parseCapabilityConstraintsYAML(input.CapabilityConstraints)
 	if constraintsErr != nil && strings.TrimSpace(input.CapabilityConstraints) != "" {
 		return TypologyRefineOutput{}, fmt.Errorf("typology refine capability constraints: %w", constraintsErr)
@@ -98,7 +101,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		"package_contracts":              input.PackageContracts,
 		"package_roles":                  input.PackageRoles,
 		"package_capability_constraints": input.CapabilityConstraints,
-		"mechanical_grouping_md":         mechanicalGroupingMD,
+		"mechanical_grouping_yaml":       mechanicalGroupingYAML,
 		"architecture_draft":             input.ArchitectureDraft,
 		"repo_layout":                    input.RepoLayout,
 		"readme_snapshot":                input.ReadmeSnapshot,
@@ -111,7 +114,6 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		clusterFields["package_capability_constraints"] = encoded
 	}
-	var clusterMD string
 	var proposedMerges []proposedMerge
 	clusterFeedback := input.ValidationFeedback
 	sticky := stickyVerdictMap{}
@@ -126,52 +128,36 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		if err != nil {
 			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
 		}
-		clusterMD = strings.TrimSpace(stringField(clusterOut, "cluster_proposal_md"))
-		if clusterMD == "" {
-			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: cluster_proposal_md is required")
-		}
-		clusterMD = ensureClusterCapabilityConstraintsSection(clusterMD, constraintsDoc)
-		if fixed, note := scrubForbiddenHTTPEntrypointMerges(clusterMD, input.PackageRoles); note != "" {
-			// Deterministic role gate: scrub sole-importer folds, then continue to structured merges + audit.
-			clusterMD = ensureClusterCapabilityConstraintsSection(fixed, constraintsDoc)
-			_ = note
-		}
-		if ok, fb := clusterProposalHasCapabilityConstraints(clusterMD, constraintsDoc); !ok {
-			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology cluster evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
-			}
-			clusterFeedback = fb
-			continue
-		}
-		merges, parseErr := parseProposedMergesYAML(stringField(clusterOut, "proposed_merges_yaml"))
+		merges, parseErr := mergesFromClusterOut(clusterOut)
 		if parseErr != nil {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology cluster proposed_merges_yaml failed after %d attempts: %w", maxTypologyRefineAttempts, parseErr)
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster merge fields failed after %d attempts: %w", maxTypologyRefineAttempts, parseErr)
 			}
 			clusterFeedback = parseErr.Error()
 			continue
 		}
+		merges = scrubForbiddenHTTPEntrypointMergeRows(merges, input.PackageRoles)
 		pending, frozen := sticky.applySticky(merges)
 		if len(pending) > 0 && auditor == nil {
 			return TypologyRefineOutput{}, fmt.Errorf("typology_cluster_audit RLM is required for proposed merges but no cluster auditor is configured")
 		}
-		constraintsForAudit, _ := clusterFields["package_capability_constraints"].(string)
+		constraintsForAudit := stringField(clusterFields, "package_capability_constraints")
 		auditStart := time.Now()
 		audited := clusterAuditResult{Verdicts: append([]clusterMergeVerdict(nil), frozen...), TraceDir: auditMeta.TraceDir}
 		if len(pending) > 0 {
 			var auditErr error
 			audited, auditErr = auditor.Audit(ctx, clusterAuditRequest{
-				AnalysisDir:   input.AnalysisDir,
-				EvidenceDir:   input.EvidenceDir,
-				Proposed:      pending,
-				Frozen:        frozen,
-				RolesYAML:     input.PackageRoles,
-				Constraints:   constraintsForAudit,
-				MechanicalMD:  mechanicalGroupingMD,
-				DigestCache:   input.DigestCache,
-				DigestSkips:   input.DigestSkips,
-				DigestModelID: input.DigestModelID,
-				Attempt:       attempt,
+				AnalysisDir:    input.AnalysisDir,
+				EvidenceDir:    input.EvidenceDir,
+				Proposed:       pending,
+				Frozen:         frozen,
+				RolesYAML:      input.PackageRoles,
+				Constraints:    constraintsForAudit,
+				MechanicalYAML: mechanicalGroupingYAML,
+				DigestCache:    input.DigestCache,
+				DigestSkips:    input.DigestSkips,
+				DigestModelID:  input.DigestModelID,
+				Attempt:        attempt,
 			})
 			if auditErr != nil {
 				if attempt == maxTypologyRefineAttempts {
@@ -195,8 +181,11 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		break
 	}
-	demoted, nicknames := demoteRejectedMergesList(proposedMerges, mergeVerdicts)
-	clusterMD = syncDemotedMergesIntoTeachingMD(clusterMD, demoted, nicknames)
+	proposedMerges = demoteRejectedMergesList(proposedMerges, mergeVerdicts)
+	proposalYAML, err := marshalClusterMergeProposal(proposedMerges)
+	if err != nil {
+		return TypologyRefineOutput{}, err
+	}
 	verdictsDoc := clusterMergeVerdictsDoc{
 		Attempt:       maxTypologyRefineAttempts,
 		RLMIterations: auditMeta.RLMIterations,
@@ -214,7 +203,6 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	}
 
 	var refined string
-	var journey string
 	var ledgerYAML string
 	var claimsYAML string
 	feedback := input.ValidationFeedback
@@ -245,19 +233,19 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 
 	var ledgerDoc sliceObjectiveLedgerDoc
 	if needsLedger {
-		clusterForLedger := strings.TrimSpace(clusterMD)
+		clusterForLedger := strings.TrimSpace(proposalYAML)
 		if strings.TrimSpace(verdictsYAML) != "" {
 			clusterForLedger = strings.TrimSpace(clusterForLedger) + "\n\n## Cluster merge verdicts\n\n" + strings.TrimSpace(verdictsYAML) + "\n"
 		}
 		built, issues, buildErr := input.LedgerBuilder.BuildSliceLedger(ctx, sliceLedgerBuildRequest{
-			AnalysisDir:   input.AnalysisDir,
-			EvidenceDir:   input.EvidenceDir,
-			DraftTypo:     draftTypo,
-			Constraints:   constraintsDoc,
-			ClusterMD:     clusterForLedger,
-			DigestCache:   input.DigestCache,
-			DigestSkips:   input.DigestSkips,
-			DigestModelID: input.DigestModelID,
+			AnalysisDir:     input.AnalysisDir,
+			EvidenceDir:     input.EvidenceDir,
+			DraftTypo:       draftTypo,
+			Constraints:     constraintsDoc,
+			ClusterHintYAML: clusterForLedger,
+			DigestCache:     input.DigestCache,
+			DigestSkips:     input.DigestSkips,
+			DigestModelID:   input.DigestModelID,
 		})
 		if buildErr != nil {
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed: %w", buildErr)
@@ -283,7 +271,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			"repo_id":                        input.RepoID,
 			"module_scope":                   input.ModuleScope,
 			"draft_catalog_yaml":             input.DraftCatalogYAML,
-			"cluster_proposal_md":            clusterMD,
+			"cluster_merge_proposal_yaml":    proposalYAML,
 			"cluster_merge_verdicts_yaml":    verdictsYAML,
 			"package_contracts":              input.PackageContracts,
 			"package_roles":                  input.PackageRoles,
@@ -299,12 +287,8 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine: %w", err)
 		}
 		refined = stripCodeFence(stringField(out, "refined_catalog_yaml"))
-		journey = reconcileJourneyStatusWithDebt(strings.TrimSpace(stringField(out, "journey_md")))
 		if refined == "" {
 			return TypologyRefineOutput{}, fmt.Errorf("typology refine: refined_catalog_yaml is required")
-		}
-		if journey == "" {
-			return TypologyRefineOutput{}, fmt.Errorf("typology refine: journey_md is required")
 		}
 		sanitized, err := validateRefinedCatalogYAML(refined, input.DraftCatalogYAML, input.RepoID, input.PackageRoles)
 		if err != nil {
@@ -315,7 +299,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			continue
 		}
 		refined = sanitized
-		if ok, evalFeedback := evaluateTypologyBoundaries(refined, journey, input.ArchitectureDraft, input.PackageRoles); !ok {
+		if ok, evalFeedback := evaluateTypologyCatalogBoundaries(refined, input.PackageRoles); !ok {
 			if attempt == maxTypologyRefineAttempts {
 				return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, evalFeedback)
 			}
@@ -380,7 +364,6 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		evalOut := map[string]interface{}{
 			"refined_catalog_yaml":        refined,
-			"journey_md":                  journey,
 			"slice_objective_ledger_yaml": ledgerYAML,
 			"objective_claims_yaml":       claimsYAML,
 		}
@@ -403,17 +386,42 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	}
 
 	return TypologyRefineOutput{
-		ClusterProposalMD:        clusterMD,
+		MechanicalGroupingYAML:   mechanicalGroupingYAML,
+		ClusterMergeProposalYAML: proposalYAML,
 		ClusterMergeVerdictsYAML: verdictsYAML,
 		RefinedCatalogYAML:       refined,
-		JourneyMD:                journey,
 		ObjectiveLedgerYAML:      ledgerYAML,
 		ObjectiveClaimsYAML:      claimsYAML,
 	}, nil
 }
 
 // evaluateTypologyBoundaries applies deterministic typology hard-fails before LLM EvaluateWorkflow.
+// Journey debt checks apply when journeyMD is non-empty (human-intervention path).
 func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, rolesYAML string) (bool, string) {
+	ok, catalogIssues := evaluateTypologyCatalogBoundaries(refinedYAML, rolesYAML)
+	var issues []string
+	if !ok {
+		issues = append(issues, strings.Split(catalogIssues, "\n")...)
+	}
+
+	if architectureHasFindings(architectureDraft) && strings.TrimSpace(journeyMD) != "" && !journeyHasDebtTable(journeyMD) {
+		issues = append(issues, fmt.Sprintf("%s: architecture findings remain but journey has no technical debt / boundary violations table", typologypack.CriterionIDDebtWhenFindings))
+	}
+	if journeyStatusClaimsComplete(journeyMD) && journeyDebtStillSaysMerge(journeyMD) {
+		issues = append(issues, fmt.Sprintf(
+			"%s: journey Status claims complete but debt still lists Merge into actions; set Status to Open while Merge into rows remain, or remove those Merge into rows if the catalog already reflects the merges",
+			typologypack.CriterionIDJourneyConsistent,
+		))
+	}
+
+	if len(issues) == 0 {
+		return true, ""
+	}
+	return false, strings.Join(issues, "\n")
+}
+
+// evaluateTypologyCatalogBoundaries checks catalog-only refine gates (no journey yet).
+func evaluateTypologyCatalogBoundaries(refinedYAML, rolesYAML string) (bool, string) {
 	var issues []string
 
 	tmp, err := os.CreateTemp("", "majordomo-eval-*.yaml")
@@ -454,16 +462,6 @@ func evaluateTypologyBoundaries(refinedYAML, journeyMD, architectureDraft, roles
 				}
 			}
 		}
-	}
-
-	if architectureHasFindings(architectureDraft) && !journeyHasDebtTable(journeyMD) {
-		issues = append(issues, fmt.Sprintf("%s: architecture findings remain but journey has no technical debt / boundary violations table", typologypack.CriterionIDDebtWhenFindings))
-	}
-	if journeyStatusClaimsComplete(journeyMD) && journeyDebtStillSaysMerge(journeyMD) {
-		issues = append(issues, fmt.Sprintf(
-			"%s: journey Status claims complete but debt still lists Merge into actions; set Status to Open while Merge into rows remain, or remove those Merge into rows if the catalog already reflects the merges",
-			typologypack.CriterionIDJourneyConsistent,
-		))
 	}
 
 	issues = appendEvidenceGroundingIssues(typo, issues)
@@ -1556,6 +1554,31 @@ func dumpRefinedCatalogFailure(raw string) string {
 	return path
 }
 
+// scrubForbiddenHTTPEntrypointMergeRows drops cluster rows that fold server packages into an entrypoint.
+func scrubForbiddenHTTPEntrypointMergeRows(merges []proposedMerge, rolesYAML string) []proposedMerge {
+	roles := roleByPath(mustParseRoles(rolesYAML))
+	if len(roles) == 0 || len(merges) == 0 {
+		return merges
+	}
+	out := make([]proposedMerge, 0, len(merges))
+	for _, m := range merges {
+		hasHTTP, hasEntry := false, false
+		for _, p := range m.Packages {
+			switch roles[normalizeRolePath(p)].Role {
+			case roleHTTPSurface:
+				hasHTTP = true
+			case roleEntrypoint:
+				hasEntry = true
+			}
+		}
+		if hasHTTP && hasEntry {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
 // scrubForbiddenHTTPEntrypointMerges rewrites cluster proposals that fold server
 // packages into an entrypoint slice. Returns a feedback note when a forbidden merge was found.
 func scrubForbiddenHTTPEntrypointMerges(proposalMD, rolesYAML string) (string, string) {
@@ -1734,15 +1757,19 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	rrCfg := runreport.Config{
 		Enabled:           true,
 		RecordModuleCalls: true,
-		Dir:               runreportDir(analysisDir),
+		Dir:               runreportDir(inferenceWorkRoot(opts, analysisDir)),
 	}
-	var refineErr error
+	var reportErr error
 	ctx, finishReport := runreport.StartSession(ctx, rrCfg, runreport.Meta{
 		Pipeline: "context-digest",
 		Job:      "typology-refine",
 		EntityID: manifest.RepoID,
 	})
-	defer finishReport(refineErr)
+	defer func() { finishReport(reportErr) }()
+	fail := func(err error) error {
+		reportErr = err
+		return err
+	}
 
 	out, err := gen.Refine(ctx, TypologyRefineInput{
 		RepoID:                manifest.RepoID,
@@ -1763,114 +1790,121 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		DigestSkips:           opts.DigestSkips,
 		DigestModelID:         opts.DigestModelID,
 	})
-	refineErr = err
 	if err != nil {
-		return err
+		return fail(err)
 	}
 
-	clusterPath := filepath.Join(evidenceDir, manifest.ClusterProposalPath)
-	if err := writeText(clusterPath, out.ClusterProposalMD); err != nil {
-		return err
+	clusterPath := filepath.Join(evidenceDir, clusterMergeProposalRel)
+	if err := writeRequiredFile(clusterPath, out.ClusterMergeProposalYAML); err != nil {
+		return fail(err)
+	}
+	if err := writeRequiredFile(filepath.Join(evidenceDir, mechanicalGroupingRel), out.MechanicalGroupingYAML); err != nil {
+		return fail(err)
 	}
 	verdictsRel := clusterMergeVerdictsRel
 	if strings.TrimSpace(out.ClusterMergeVerdictsYAML) != "" {
-		if err := writeText(filepath.Join(evidenceDir, verdictsRel), out.ClusterMergeVerdictsYAML); err != nil {
-			return err
+		if err := writeRequiredFile(filepath.Join(evidenceDir, verdictsRel), out.ClusterMergeVerdictsYAML); err != nil {
+			return fail(err)
 		}
 	}
 	refinedPath := filepath.Join(evidenceDir, manifest.RefinedSnapshotPath)
-	if err := writeText(refinedPath, out.RefinedCatalogYAML); err != nil {
-		return err
+	if err := writeRequiredFile(refinedPath, out.RefinedCatalogYAML); err != nil {
+		return fail(err)
 	}
 	journeyPath := filepath.Join(evidenceDir, manifest.JourneyPath)
-	if err := writeText(journeyPath, out.JourneyMD); err != nil {
-		return err
+	if _, err := os.Stat(journeyPath); err != nil {
+		// Journey is authored after architecture by human-intervention; seed an empty stub.
+		if err := writeRequiredFile(journeyPath, "# Journey\n\nPending human-intervention after architecture.\n"); err != nil {
+			return fail(err)
+		}
 	}
 	if strings.TrimSpace(out.ObjectiveLedgerYAML) != "" {
 		ledgerDoc, err := parseObjectiveLedgerYAML(out.ObjectiveLedgerYAML)
 		if err != nil {
-			return fmt.Errorf("typology refine write objective ledger: %w", err)
+			return fail(fmt.Errorf("typology refine write objective ledger: %w", err))
 		}
 		if err := writeObjectiveLedger(filepath.Join(evidenceDir, sliceObjectiveLedgerRel), ledgerDoc); err != nil {
-			return err
+			return fail(err)
 		}
 	}
 	claimsPath := filepath.Join(evidenceDir, sliceObjectiveClaimsRel)
 	if strings.TrimSpace(out.ObjectiveClaimsYAML) != "" {
 		claimsDoc, err := parseObjectiveClaimsYAML(out.ObjectiveClaimsYAML)
 		if err != nil {
-			return fmt.Errorf("typology refine write objective claims: %w", err)
+			return fail(fmt.Errorf("typology refine write objective claims: %w", err))
 		}
 		if err := writeObjectiveClaims(claimsPath, claimsDoc); err != nil {
-			return err
+			return fail(err)
 		}
 	}
 	snapshotPath := filepath.Join(evidenceDir, manifest.SnapshotPath)
 	if err := copyFile(refinedPath, snapshotPath); err != nil {
-		return fmt.Errorf("typology refine copy snapshot: %w", err)
+		return fail(fmt.Errorf("typology refine copy snapshot: %w", err))
 	}
 
 	archOut := filepath.Join(evidenceDir, manifest.ArchitecturePath)
 	refinedLocal := filepath.Join(analysisDir, "tmp", "typology", "refined.yaml")
 	if err := copyFile(refinedPath, refinedLocal); err != nil {
-		return fmt.Errorf("typology refine stage catalog: %w", err)
+		return fail(fmt.Errorf("typology refine stage catalog: %w", err))
 	}
 	if err := runTypology(ctx, opts.TypologyBinary, analysisDir, "architecture", manifest.ModuleScope,
 		"--catalog", refinedLocal, "--out", archOut); err != nil {
-		return fmt.Errorf("typology refine architecture: %w", err)
+		return fail(fmt.Errorf("typology refine architecture: %w", err))
 	}
 	if _, err := os.Stat(archOut); err != nil {
 		fallbackArch := filepath.Join(analysisDir, "docs", "architecture", "typology.md")
 		if copyErr := copyFile(fallbackArch, archOut); copyErr != nil {
-			return fmt.Errorf("typology refine architecture missing: %w", err)
+			return fail(fmt.Errorf("typology refine architecture missing: %w", err))
 		}
 	}
 	if err := polishTypologyArchitectureBrief(archOut); err != nil {
-		return err
+		return fail(err)
 	}
 
 	if changed, err := completeEvidencedLibraryBindings(refinedLocal, archOut); err != nil {
-		return err
+		return fail(err)
 	} else if changed {
 		if err := copyFile(refinedLocal, refinedPath); err != nil {
-			return fmt.Errorf("typology refine rewrite catalog after library bindings: %w", err)
+			return fail(fmt.Errorf("typology refine rewrite catalog after library bindings: %w", err))
 		}
 		if err := copyFile(refinedPath, snapshotPath); err != nil {
-			return fmt.Errorf("typology refine rewrite snapshot after library bindings: %w", err)
+			return fail(fmt.Errorf("typology refine rewrite snapshot after library bindings: %w", err))
 		}
 		if err := runTypology(ctx, opts.TypologyBinary, analysisDir, "architecture", manifest.ModuleScope,
 			"--catalog", refinedLocal, "--out", archOut); err != nil {
-			return fmt.Errorf("typology refine architecture after library bindings: %w", err)
+			return fail(fmt.Errorf("typology refine architecture after library bindings: %w", err))
 		}
 		if _, err := os.Stat(archOut); err != nil {
 			fallbackArch := filepath.Join(analysisDir, "docs", "architecture", "typology.md")
 			if copyErr := copyFile(fallbackArch, archOut); copyErr != nil {
-				return fmt.Errorf("typology refine architecture missing after library bindings: %w", err)
+				return fail(fmt.Errorf("typology refine architecture missing after library bindings: %w", err))
 			}
 		}
 		if err := polishTypologyArchitectureBrief(archOut); err != nil {
-			return err
+			return fail(err)
 		}
 	}
 
 	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen); err != nil {
-		return err
+		return fail(err)
 	}
 
 	// Preserve human_intervention_path written by the flagger.
 	updated, err := contextstore.ParseTypologyManifest(filepath.Join(evidenceDir, "manifest.yaml"))
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	manifest.HumanInterventionPath = updated.HumanInterventionPath
 	manifest.PackageCapabilityConstraintsPath = packageCapabilityConstraintsRel
 	manifest.SliceObjectiveClaimsPath = sliceObjectiveClaimsRel
 	manifest.SliceObjectiveLedgerPath = sliceObjectiveLedgerRel
+	manifest.ClusterProposalPath = clusterMergeProposalRel
+	manifest.MechanicalGroupingPath = mechanicalGroupingRel
 	if strings.TrimSpace(out.ClusterMergeVerdictsYAML) != "" {
 		manifest.ClusterMergeVerdictsPath = clusterMergeVerdictsRel
 	}
 	manifest.RefineStatus = contextstore.TypologyRefineComplete
-	return writeTypologyManifest(evidenceDir, manifest)
+	return fail(writeTypologyManifest(evidenceDir, manifest))
 }
 
 func capReadmeSnapshot(text string) string {
@@ -1893,7 +1927,7 @@ func newRLMValidatorFromOpts(ctx context.Context, opts Options, analysisDir stri
 	if err != nil {
 		return nil, err
 	}
-	return newStropPackageRoleRLM(ctx, cfg, analysisDir)
+	return newStropPackageRoleRLM(ctx, cfg, inferenceWorkRoot(opts, analysisDir))
 }
 
 func appendUnique(list []string, item string) []string {

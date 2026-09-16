@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	stropvalidation "github.com/behaviorengineering/strop/dspy/validation"
 	"github.com/behaviorengineering/strop/evaluation"
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
@@ -18,25 +19,26 @@ import (
 
 // BootstrapStoryInput carries the evidence pack into the bootstrap LLM task.
 type BootstrapStoryInput struct {
-	RepoID                 string
-	SourceSHA              string
-	GeneratedAt            time.Time
-	EvidenceMode           string
-	ModuleScope            string
-	ReadmeSnapshot         string
-	TypologyManifest       string
-	TypologyArchitecture   string
-	TypologyRefinedCatalog string
-	TypologyJourney        string
-	RepoLayout             string
-	CurrentReadme          string
-	CurrentMission         string
-	CurrentArchitecture    string
-	CurrentConventions     string
-	CurrentWeaknesses      string
-	CurrentChronology      string
-	CurrentGrounding       string
-	ValidationFeedback     string
+	RepoID                       string
+	SourceSHA                    string
+	GeneratedAt                  time.Time
+	EvidenceMode                 string
+	ModuleScope                  string
+	ReadmeSnapshot               string
+	TypologyManifest             string
+	TypologyArchitecture         string
+	TypologyRefinedCatalog       string
+	TypologyJourney              string
+	TypologySliceObjectiveLedger string
+	RepoLayout                   string
+	CurrentReadme                string
+	CurrentMission               string
+	CurrentArchitecture          string
+	CurrentConventions           string
+	CurrentWeaknesses            string
+	CurrentChronology            string
+	CurrentGrounding             string
+	ValidationFeedback           string
 }
 
 const maxBootstrapStoryAttempts = 3
@@ -57,12 +59,13 @@ type BootstrapStoryGenerator interface {
 	Generate(ctx context.Context, input BootstrapStoryInput) (BootstrapStoryOutput, error)
 }
 
-// JudgeBootstrapStoryGenerator uses an injected or process-wide judge generator.
+// JudgeBootstrapStoryGenerator is retained for tests that inject a CoT generator.
+// Production bootstrap uses rlmBootstrapStoryGenerator (per-section Completes, no Evaluate).
 type JudgeBootstrapStoryGenerator struct {
 	Gen judge.Generator
 }
 
-// Generate renders the bootstrap story using the shared judge task with evaluate/retry.
+// Generate renders all sections via the legacy mega-CoT path (tests / explicit injection only).
 func (g JudgeBootstrapStoryGenerator) Generate(ctx context.Context, input BootstrapStoryInput) (BootstrapStoryOutput, error) {
 	gen := g.Gen
 	if gen == nil {
@@ -84,6 +87,7 @@ func (g JudgeBootstrapStoryGenerator) Generate(ctx context.Context, input Bootst
 			"typology_manifest":        input.TypologyManifest,
 			"typology_architecture":    input.TypologyArchitecture,
 			"typology_refined_catalog": input.TypologyRefinedCatalog,
+			"slice_objective_ledger":   input.TypologySliceObjectiveLedger,
 			"typology_journey":         input.TypologyJourney,
 			"repo_layout":              input.RepoLayout,
 			"current_readme":           input.CurrentReadme,
@@ -116,31 +120,7 @@ func (g JudgeBootstrapStoryGenerator) Generate(ctx context.Context, input Bootst
 			feedback = err.Error()
 			continue
 		}
-		agg, err := gen.Evaluate(ctx, jmodules.TaskBootstrapStory, fields, map[string]interface{}{
-			"readme_md":       res.ReadmeMD,
-			"mission_md":      res.MissionMD,
-			"architecture_md": res.ArchitectureMD,
-			"conventions_md":  res.ConventionsMD,
-			"weaknesses_md":   res.WeaknessesMD,
-			"chronology_md":   res.ChronologyMD,
-			"grounding_md":    res.GroundingMD,
-		}, attempt)
-		if err != nil {
-			lastErr = err
-			if attempt == maxBootstrapStoryAttempts {
-				return BootstrapStoryOutput{}, fmt.Errorf("bootstrap story LLM evaluation: %w", err)
-			}
-			feedback = err.Error()
-			continue
-		}
-		if !judge.EvalPassed(agg) {
-			lastErr = fmt.Errorf("%s", judge.EvalFeedback(agg))
-			if attempt == maxBootstrapStoryAttempts {
-				return BootstrapStoryOutput{}, fmt.Errorf("bootstrap story LLM evaluation failed after %d attempts:\n%s", maxBootstrapStoryAttempts, judge.EvalFeedback(agg))
-			}
-			feedback = judge.EvalFeedback(agg)
-			continue
-		}
+		// Intentionally no LLM Evaluate: production path is rlmBootstrapStoryGenerator.
 		return res, nil
 	}
 	if lastErr != nil {
@@ -168,7 +148,7 @@ func (packageJudgeGenerator) Ready() bool { return judge.StoryLLMAvailable() }
 
 func (packageJudgeGenerator) TaskModel(string) string { return "" }
 
-func writeBootstrapStory(ctxDir, analysisDir string, at time.Time, sourceSHA string, gen BootstrapStoryGenerator, judgeGen judge.Generator) error {
+func writeBootstrapStory(ctx context.Context, ctxDir, analysisDir string, at time.Time, sourceSHA string, opts Options) error {
 	if err := assertEvidenceGroundingBeforeStory(ctxDir); err != nil {
 		return err
 	}
@@ -176,14 +156,22 @@ func writeBootstrapStory(ctxDir, analysisDir string, at time.Time, sourceSHA str
 	if err != nil {
 		return err
 	}
+	gen := opts.BootstrapStoryGenerator
 	if gen == nil {
-		gen = JudgeBootstrapStoryGenerator{Gen: judgeGen}
+		rlm, rlmErr := newBootstrapStoryRLMFromOpts(ctx, opts, analysisDir)
+		if rlmErr != nil {
+			return fmt.Errorf("bootstrap story RLM: %w", rlmErr)
+		}
+		gen = rlm
 	}
-	out, err := gen.Generate(context.Background(), input)
+	out, err := gen.Generate(ctx, input)
 	if err != nil {
 		return err
 	}
-	return persistBootstrapStory(ctxDir, out)
+	if err := persistBootstrapStory(ctxDir, out); err != nil {
+		return err
+	}
+	return assertArchitectureKeepsGroundedObjectives(ctxDir)
 }
 
 func loadBootstrapStoryInput(ctxDir, analysisDir string, at time.Time, sourceSHA string) (BootstrapStoryInput, error) {
@@ -225,29 +213,53 @@ func loadBootstrapStoryInput(ctxDir, analysisDir string, at time.Time, sourceSHA
 	if strings.TrimSpace(manifest.JourneyPath) != "" {
 		input.TypologyJourney = readText(filepath.Join(ctxDir, "evidence", "typology", manifest.JourneyPath))
 	}
+	if strings.TrimSpace(manifest.SliceObjectiveLedgerPath) != "" {
+		input.TypologySliceObjectiveLedger = readText(filepath.Join(ctxDir, "evidence", "typology", manifest.SliceObjectiveLedgerPath))
+	}
+	if err := requireBootstrapStoryEvidence(input, manifest); err != nil {
+		return BootstrapStoryInput{}, err
+	}
 	return input, nil
 }
 
+// requireBootstrapStoryEvidence fail-closes when seed refine evidence is hollow before story RLM.
+func requireBootstrapStoryEvidence(input BootstrapStoryInput, manifest contextstore.TypologyManifest) error {
+	fields := map[string]any{
+		"repo_id":         input.RepoID,
+		"readme_snapshot": input.ReadmeSnapshot,
+	}
+	required := []string{"repo_id", "readme_snapshot"}
+	refinedRan := strings.TrimSpace(manifest.RefinedSnapshotPath) != "" &&
+		!strings.EqualFold(manifest.RefineStatus, contextstore.TypologyRefineSkipped) &&
+		manifest.Mode != contextstore.TypologyModeFallback
+	if refinedRan {
+		fields["typology_refined_catalog"] = input.TypologyRefinedCatalog
+		fields["slice_objective_ledger"] = input.TypologySliceObjectiveLedger
+		required = append(required, "typology_refined_catalog", "slice_objective_ledger")
+	}
+	return stropvalidation.ValidateRequiredInputs(required)(context.Background(), fields, nil)
+}
+
 func persistBootstrapStory(ctxDir string, out BootstrapStoryOutput) error {
-	if err := writeText(filepath.Join(ctxDir, "README.md"), out.ReadmeMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "README.md"), out.ReadmeMD); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "mission.md"), out.MissionMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "mission.md"), out.MissionMD); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "architecture.md"), ensureStoryArchitectureBanner(out.ArchitectureMD)); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "architecture.md"), ensureStoryArchitectureBanner(out.ArchitectureMD)); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "conventions.md"), out.ConventionsMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "conventions.md"), out.ConventionsMD); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "weaknesses.md"), out.WeaknessesMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "weaknesses.md"), out.WeaknessesMD); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "chronology.md"), out.ChronologyMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "chronology.md"), out.ChronologyMD); err != nil {
 		return err
 	}
-	if err := writeText(filepath.Join(ctxDir, "agenting", "overview", "GROUNDING.md"), out.GroundingMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(ctxDir, "agenting", "overview", "GROUNDING.md"), out.GroundingMD); err != nil {
 		return err
 	}
 	return contextstore.ApplyReadingPath(ctxDir)
@@ -278,9 +290,9 @@ func readText(path string) string {
 	return string(data)
 }
 
-func writeText(path, text string) error {
+func writeRequiredFile(path, text string) error {
 	if strings.TrimSpace(text) == "" {
-		return fmt.Errorf("bootstrap story output for %s is required", path)
+		return fmt.Errorf("required content for %s is empty", path)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

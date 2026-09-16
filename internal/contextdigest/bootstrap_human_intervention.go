@@ -16,13 +16,14 @@ const maxHumanInterventionAttempts = 3
 
 // HumanInterventionInput is the post-refine evidence pack for flagging human decisions.
 type HumanInterventionInput struct {
-	RepoID             string
-	ArchitectureMD     string
-	RefinedCatalogYAML string
-	JourneyMD          string
-	ClusterProposalMD  string
-	FindingsList       string
-	ValidationFeedback string
+	RepoID                   string
+	ArchitectureMD           string
+	RefinedCatalogYAML       string
+	JourneyMD                string
+	ClusterMergeProposalYAML string
+	ClusterMergeVerdictsYAML string
+	FindingsList             string
+	ValidationFeedback       string
 }
 
 // FindingCommentBody is tutor counsel for one architecture finding on the context PR.
@@ -74,12 +75,13 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 	}
 
 	baseFields := map[string]interface{}{
-		"repo_id":              input.RepoID,
-		"architecture_md":      input.ArchitectureMD,
-		"refined_catalog_yaml": input.RefinedCatalogYAML,
-		"journey_md":           input.JourneyMD,
-		"cluster_proposal_md":  input.ClusterProposalMD,
-		"findings_list":        input.FindingsList,
+		"repo_id":                     input.RepoID,
+		"architecture_md":             input.ArchitectureMD,
+		"refined_catalog_yaml":        input.RefinedCatalogYAML,
+		"journey_md":                  input.JourneyMD,
+		"cluster_merge_proposal_yaml": input.ClusterMergeProposalYAML,
+		"cluster_merge_verdicts_yaml": input.ClusterMergeVerdictsYAML,
+		"findings_list":               input.FindingsList,
 	}
 
 	journey, err := generateInterventionStep(ctx, gen, jmodules.TaskTypologyInterventionJourney, baseFields, "journey_md",
@@ -252,39 +254,46 @@ func flagHumanIntervention(ctx context.Context, evidenceDir string, gen HumanInt
 	if err != nil {
 		return fmt.Errorf("human intervention read journey: %w", err)
 	}
-	clusterMD := ""
+	clusterYAML := ""
 	if p := strings.TrimSpace(manifest.ClusterProposalPath); p != "" {
 		if b, err := os.ReadFile(filepath.Join(evidenceDir, p)); err == nil {
-			clusterMD = string(b)
+			clusterYAML = string(b)
+		}
+	}
+	verdictsYAML := ""
+	if p := strings.TrimSpace(manifest.ClusterMergeVerdictsPath); p != "" {
+		if b, err := os.ReadFile(filepath.Join(evidenceDir, p)); err == nil {
+			verdictsYAML = string(b)
 		}
 	}
 	if gen == nil {
 		gen = JudgeHumanInterventionGenerator{Gen: judgeGen}
 	}
 	out, err := gen.Generate(ctx, HumanInterventionInput{
-		RepoID:             manifest.RepoID,
-		ArchitectureMD:     string(archMD),
-		RefinedCatalogYAML: string(refinedYAML),
-		JourneyMD:          string(journeyMD),
-		ClusterProposalMD:  clusterMD,
-		FindingsList:       formatFindingsList(extractArchitectureFindings(string(archMD))),
+		RepoID:                   manifest.RepoID,
+		ArchitectureMD:           string(archMD),
+		RefinedCatalogYAML:       string(refinedYAML),
+		JourneyMD:                string(journeyMD),
+		ClusterMergeProposalYAML: clusterYAML,
+		ClusterMergeVerdictsYAML: verdictsYAML,
+		FindingsList:             formatFindingsList(extractArchitectureFindings(string(archMD))),
 	})
 	if err != nil {
 		return err
 	}
-	if err := writeText(journeyPath, out.JourneyMD); err != nil {
+	if err := writeRequiredFile(journeyPath, out.JourneyMD); err != nil {
 		return err
 	}
 	interventionRel := strings.TrimSpace(manifest.HumanInterventionPath)
 	if interventionRel == "" {
 		interventionRel = "human_intervention.md"
 	}
-	if err := writeText(filepath.Join(evidenceDir, interventionRel), out.HumanInterventionMD); err != nil {
+	if err := writeRequiredFile(filepath.Join(evidenceDir, interventionRel), out.HumanInterventionMD); err != nil {
 		return err
 	}
 	priorityPath := filepath.Join(evidenceDir, "pr_priority.md")
 	if p := strings.TrimSpace(out.PRPriorityMD); p != "" {
-		if err := writeText(priorityPath, p); err != nil {
+		if err := writeRequiredFile(priorityPath, p); err != nil {
 			return err
 		}
 	} else if err := os.Remove(priorityPath); err != nil && !os.IsNotExist(err) {
@@ -293,7 +302,7 @@ func flagHumanIntervention(ctx context.Context, evidenceDir string, gen HumanInt
 	weak := strings.TrimSpace(out.WeaknessesSeedMD)
 	if weak != "" {
 		ctxDir := filepath.Dir(filepath.Dir(evidenceDir)) // evidence/typology -> context root
-		if err := writeText(filepath.Join(ctxDir, "weaknesses.md"), weak); err != nil {
+		if err := writeRequiredFile(filepath.Join(ctxDir, "weaknesses.md"), weak); err != nil {
 			return err
 		}
 	}

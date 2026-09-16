@@ -432,14 +432,6 @@ func clusterProposalHasCapabilityConstraints(proposalMD string, doc packageCapab
 	return true, ""
 }
 
-func ensureClusterCapabilityConstraintsSection(proposalMD string, doc packageCapabilityConstraintsDoc) string {
-	if strings.Contains(proposalMD, capabilityConstraintsSection) {
-		return proposalMD
-	}
-	block := formatCapabilityConstraintsMarkdown(doc)
-	return strings.TrimSpace(proposalMD) + "\n\n" + block + "\n"
-}
-
 func parseObjectiveClaimsYAML(raw string) (sliceObjectiveClaimsDoc, error) {
 	raw = strings.TrimSpace(stripCodeFence(raw))
 	if raw == "" {

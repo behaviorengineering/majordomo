@@ -288,7 +288,7 @@ Inspection protocol (MUST follow in order):
 5. Only then move to the next row.
 
 Verdicts:
-- accept: same lifecycle / same job; fold into one refined slice is earned
+- accept: same lifecycle / same job; fold into one refined slice is earned. Evidence MUST quote every package path in the row; otherwise use overlay or reject.
 - overlay: useful teaching nickname only; MUST NOT become catalog owns[]
 - reject: drop the grouping
 
@@ -404,6 +404,7 @@ func alignClusterAuditRows(rows []clusterMergeVerdict, proposed []proposedMerge)
 		}
 		delete(byID, p.ID)
 		v.Packages = p.Packages
+		v = enforceAcceptEvidenceCoverage(v)
 		out = append(out, v)
 	}
 	if len(byID) > 0 {
@@ -462,6 +463,7 @@ func parseClusterAuditAnswerLines(answer string, proposed []proposedMerge) ([]cl
 		}
 		delete(byID, p.ID)
 		v.Packages = p.Packages
+		v = enforceAcceptEvidenceCoverage(v)
 		out = append(out, v)
 	}
 	if len(byID) > 0 {
@@ -576,6 +578,33 @@ func splitEvidenceList(raw string) []string {
 		return []string{raw}
 	}
 	return out
+}
+
+// enforceAcceptEvidenceCoverage demotes accept to overlay when evidence does not cite every package.
+func enforceAcceptEvidenceCoverage(v clusterMergeVerdict) clusterMergeVerdict {
+	if v.Verdict != verdictAccept || len(v.Packages) < 2 {
+		return v
+	}
+	joined := strings.ToLower(strings.Join(v.Evidence, "\n"))
+	var missing []string
+	for _, pkg := range v.Packages {
+		p := strings.TrimSpace(strings.ToLower(pkg))
+		if p == "" {
+			continue
+		}
+		if !strings.Contains(joined, p) {
+			missing = append(missing, pkg)
+		}
+	}
+	if len(missing) == 0 {
+		return v
+	}
+	v.Verdict = verdictOverlay
+	v.Reason = firstNonEmpty(v.Reason, "accept without per-package evidence quotes")
+	if !strings.Contains(strings.ToLower(v.Reason), "per-package evidence") {
+		v.Reason = strings.TrimSpace(v.Reason) + "; accept without per-package evidence quotes"
+	}
+	return v
 }
 
 func newClusterAuditorFromOpts(ctx context.Context, opts Options, analysisDir string) (clusterMergeAuditor, error) {

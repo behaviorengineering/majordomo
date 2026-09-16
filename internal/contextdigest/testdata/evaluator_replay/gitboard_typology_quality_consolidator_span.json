@@ -1,0 +1,17 @@
+{
+  "source": "tmp/digest-runs/gitboard-20260914-143414Z/module-traces/module_20260914-143429.jsonl",
+  "operation": "Predict:Typology Quality Consolidator",
+  "repo_id": "gitboard",
+  "task": "Typology Quality Consolidator",
+  "fields": {
+    "agent_scores": "- Typology Quality Evaluator: 10.0/10\n",
+    "individual_feedbacks": "=== Typology Quality Evaluator (10.0/10) ===\n- [✓] No issues found. The output meets all criteria and requirements.\n\n",
+    "iterationVersion": 1,
+    "weighted_score": 10
+  },
+  "recorded_outputs": {
+    "__raw_response": "<response>\n  <directives_ack>\n  <![CDATA[\n  1. Instructions: Group/organize evaluator feedback into a nested checklist; preserve evaluator tags; exclude [BYPASS] items; use specific XML/CDATA format.\n  2. Objectives: VOICE: Feedback Consolidator. MUST: Produce a single unified checklist. ANTI_PATTERN: Synthesizing new content or inferring tags from scores.\n  3. Plan: 1. Review individual_feedbacks. 2. Identify actionable items (none found). 3. Format output according to rules.\n  4. Attention check: Risk of leaving consolidated_feedback empty; will avoid by using the mandatory \"All criteria met\" string.\n  ]]>\n  </directives_ack>\n  <consolidated_feedback>\n  <![CDATA[\n  [✓] All criteria met.\n  ]]>\n  </consolidated_feedback>\n</response>",
+    "consolidated_feedback": "[✓] All criteria met.",
+    "directives_ack": "1. Instructions: Group/organize evaluator feedback into a nested checklist; preserve evaluator tags; exclude [BYPASS] items; use specific XML/CDATA format.\n  2. Objectives: VOICE: Feedback Consolidator. MUST: Produce a single unified checklist. ANTI_PATTERN: Synthesizing new content or inferring tags from scores.\n  3. Plan: 1. Review individual_feedbacks. 2. Identify actionable items (none found). 3. Format output according to rules.\n  4. Attention check: Risk of leaving consolidated_feedback empty; will avoid by using the mandatory \"All criteria met\" string."
+  }
+}

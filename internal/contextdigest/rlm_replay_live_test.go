@@ -114,7 +114,7 @@ func TestRLMReplayFixturesOffline(t *testing.T) {
 				if section == "" {
 					section = "readme"
 				}
-				if err := validateBootstrapStorySection(section, md); err != nil {
+				if err := validateBootstrapStorySection("gitboard", section, md); err != nil {
 					t.Fatal(err)
 				}
 				t.Logf("section=%s markdown_len=%d", section, len(md))
@@ -205,7 +205,7 @@ func TestLiveDigestRLMReplay(t *testing.T) {
 				if section == "" {
 					section = "readme"
 				}
-				if err := validateBootstrapStorySection(section, md); err != nil {
+				if err := validateBootstrapStorySection("gitboard", section, md); err != nil {
 					t.Logf("section validation (truncated context may cause soft fail): %v", err)
 				}
 				if strings.TrimSpace(md) == "" {

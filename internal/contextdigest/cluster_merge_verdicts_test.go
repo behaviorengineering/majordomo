@@ -15,10 +15,13 @@ func TestParseProposedMergesYAMLEmptyList(t *testing.T) {
 	}
 }
 
-func TestParseProposedMergesYAMLMissing(t *testing.T) {
-	_, err := parseProposedMergesYAML("")
-	if err == nil {
-		t.Fatal("expected error")
+func TestParseProposedMergesYAMLEmptyIsValid(t *testing.T) {
+	merges, err := parseProposedMergesYAML("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if merges != nil {
+		t.Fatalf("merges=%v", merges)
 	}
 }
 
@@ -48,6 +51,53 @@ func TestParseProposedMergesYAMLRows(t *testing.T) {
 	}
 }
 
+func TestMergesFromClusterOutZipsParallelLists(t *testing.T) {
+	got, err := mergesFromClusterOut(map[string]interface{}{
+		"merge_ids":      "git,board",
+		"merge_packages": "internal/localgit,internal/remotegit;internal/board",
+		"merge_intents":  "slice,nickname",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ID != "git" || got[1].Intent != mergeIntentNickname {
+		t.Fatalf("merges=%+v", got)
+	}
+}
+
+func TestMergesFromClusterOutNoneSentinel(t *testing.T) {
+	got, err := mergesFromClusterOut(map[string]interface{}{
+		"merge_ids": "none", "merge_packages": "none", "merge_intents": "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("merges=%v", got)
+	}
+}
+
+func TestMergesFromClusterOutEmptyLists(t *testing.T) {
+	got, err := mergesFromClusterOut(map[string]interface{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != nil {
+		t.Fatalf("merges=%v", got)
+	}
+}
+
+func TestMergesFromClusterOutLengthMismatch(t *testing.T) {
+	_, err := mergesFromClusterOut(map[string]interface{}{
+		"merge_ids":      "git",
+		"merge_packages": "internal/a,internal/b;internal/c",
+		"merge_intents":  "slice",
+	})
+	if err == nil {
+		t.Fatal("expected length mismatch error")
+	}
+}
+
 func TestStickyVerdictMapIgnoresNicknameRename(t *testing.T) {
 	sticky := stickyVerdictMap{}
 	sticky.put(clusterMergeVerdict{
@@ -68,12 +118,12 @@ func TestStickyVerdictMapIgnoresNicknameRename(t *testing.T) {
 	}
 }
 
-func TestDemoteRejectedMergesListAndTeachingSync(t *testing.T) {
+func TestDemoteRejectedMergesList(t *testing.T) {
 	merges := []proposedMerge{
 		{ID: "git", Packages: []string{"internal/localgit", "internal/remotegit"}, Intent: mergeIntentSlice},
 		{ID: "ok", Packages: []string{"internal/a", "internal/b"}, Intent: mergeIntentSlice},
 	}
-	demoted, nicknames := demoteRejectedMergesList(merges, []clusterMergeVerdict{
+	demoted := demoteRejectedMergesList(merges, []clusterMergeVerdict{
 		{ID: "git", Packages: []string{"internal/localgit", "internal/remotegit"}, Verdict: verdictOverlay, Reason: "theme"},
 		{ID: "ok", Packages: []string{"internal/a", "internal/b"}, Verdict: verdictAccept, Reason: "companions"},
 	})
@@ -86,16 +136,6 @@ func TestDemoteRejectedMergesListAndTeachingSync(t *testing.T) {
 	}
 	if byID["ok"].Intent != mergeIntentSlice {
 		t.Fatalf("ok intent=%q", byID["ok"].Intent)
-	}
-	if len(nicknames) != 1 {
-		t.Fatalf("nicknames=%v", nicknames)
-	}
-	out := syncDemotedMergesIntoTeachingMD("# Cluster\n\nCounsel only.\n", demoted, nicknames)
-	if !strings.Contains(out, "## Teaching nicknames") {
-		t.Fatalf("missing nicknames section:\n%s", out)
-	}
-	if !strings.Contains(out, proposedMergesMachineSection) {
-		t.Fatalf("missing teaching machine sync:\n%s", out)
 	}
 }
 

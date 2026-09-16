@@ -16,11 +16,11 @@ Covered today (gitboard seed):
 
 `typology_objective_grounding` skips until a TraceDir dump exists.
 
-**Truncation:** dspy-go TraceDir session metadata still stores ~503 chars of
-context ending in `...`. After the strop `RLMComplete` sidecar lands, prefer
-`rlm-traces/<task>/rlm_inputs.jsonl` (`type=inputs`) for full context + query,
-and pair with `type=result` for `final_answer`. Until the next digest reseed
-with that strop build, fixtures here may still use truncated metadata.
+**Truncation:** Prefer TraceDir/`rlm_inputs.jsonl` (`type=inputs` + `type=result`)
+for full context. Fixtures refreshed from `gitboard-20260914-143414Z` keep full
+context for inspect and cluster_audit. Bootstrap `readme` context is full from
+that run; `recorded_final_answer` is from a prior successful seed because this
+reseed errored on the README RLM step.
 
 ## Live replay
 

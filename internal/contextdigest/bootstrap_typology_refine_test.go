@@ -11,6 +11,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/typology/catalog"
+	"gopkg.in/yaml.v3"
 )
 
 func TestRefineTypologyEvidenceWritesProposal(t *testing.T) {
@@ -64,7 +65,7 @@ slices:
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
 		PackageRolesPath:     "package_roles.yaml",
-		ClusterProposalPath:  "cluster_proposal.md",
+		ClusterProposalPath:  "cluster_merge_proposal.yaml",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",
 	}
@@ -90,9 +91,9 @@ slices:
 			t.Fatalf("readme_snapshot=%q", in.ReadmeSnapshot)
 		}
 		return TypologyRefineOutput{
-			ClusterProposalMD:  "# Cluster\n\nKeep demo.\n\n## Capability constraints (is / is-not)\n\n- `internal/demo` role=unknown is=[] must_not=[]\n",
-			RefinedCatalogYAML: refined,
-			JourneyMD:          "# Journey\n\n## Technical debt & boundary violations\n\nNone.\n",
+			MechanicalGroupingYAML:   "entrypoint_paths:\n  - internal/demo\n",
+			ClusterMergeProposalYAML: "[]\n",
+			RefinedCatalogYAML:       refined,
 			ObjectiveLedgerYAML: `slices:
   - id: demo
     owned_paths: [internal/demo]
@@ -130,7 +131,7 @@ slices:
 	if updated.SliceObjectiveLedgerPath != "slice_objective_ledger.yaml" {
 		t.Fatalf("ledger_path=%q", updated.SliceObjectiveLedgerPath)
 	}
-	for _, name := range []string{"cluster_proposal.md", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md", "package_capability_constraints.yaml", "slice_objective_claims.yaml", "slice_objective_ledger.yaml"} {
+	for _, name := range []string{"cluster_merge_proposal.yaml", "mechanical_grouping.yaml", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md", "package_capability_constraints.yaml", "slice_objective_claims.yaml", "slice_objective_ledger.yaml"} {
 		if _, err := os.Stat(filepath.Join(evidence, name)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -456,19 +457,23 @@ edges:
     to: internal/server
     kind: serves_server
 `
-	out := mechanicalPreCluster(mustParseRoles(roles))
+	out, err := mechanicalPreClusterYAML(mustParseRoles(roles))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, needle := range []string{
-		"Delivery surfaces",
-		"Door walks",
-		"`cmd/demo`",
-		"`internal/server`",
-		"`internal/grpcserver`",
-		"Library candidates",
-		"`dto`: `internal/board`",
-		"`config`: `internal/config`",
-		"`exec_runner`: `internal/cliexec`",
-		"Unreached",
-		"`internal/agent`",
+		"delivery_paths",
+		"entrypoint_paths",
+		"door_walks",
+		"cmd/demo",
+		"internal/server",
+		"internal/grpcserver",
+		"library_by_role",
+		"internal/board",
+		"internal/config",
+		"internal/cliexec",
+		"unreached_paths",
+		"internal/agent",
 		"entrypoint` and `server` are distinct delivery doors",
 	} {
 		if !strings.Contains(out, needle) {
@@ -541,26 +546,42 @@ edges:
     to: internal/llm
     kind: imports
 `
-	out := mechanicalPreCluster(mustParseRoles(roles))
+	out, err := mechanicalPreClusterYAML(mustParseRoles(roles))
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, needle := range []string{
-		"Door-private packages",
-		"Shared across doors",
-		"`internal/board`",
-		"`internal/config`",
-		"`internal/cliexec`",
-		"`internal/dashboard`",
-		"`internal/llm`",
-		"Product slice seeds",
+		"private_paths",
+		"shared_paths",
+		"internal/board",
+		"internal/config",
+		"internal/cliexec",
+		"internal/dashboard",
+		"internal/llm",
+		"product_seeds",
 	} {
 		if !strings.Contains(out, needle) {
 			t.Fatalf("mechanical seed missing %q:\n%s", needle, out)
 		}
 	}
 	// CLI must not claim dashboard via serves_server flood.
-	for _, line := range strings.Split(out, "\n") {
-		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "- `cmd/gitboard`:") && strings.Contains(trim, "internal/dashboard") {
-			t.Fatalf("CLI door must not claim dashboard private:\n%s", out)
+	var grouping struct {
+		DoorWalks []struct {
+			DoorPath     string   `yaml:"door_path"`
+			PrivatePaths []string `yaml:"private_paths"`
+		} `yaml:"door_walks"`
+	}
+	if err := yaml.Unmarshal([]byte(out), &grouping); err != nil {
+		t.Fatal(err)
+	}
+	for _, walk := range grouping.DoorWalks {
+		if walk.DoorPath != "cmd/gitboard" {
+			continue
+		}
+		for _, p := range walk.PrivatePaths {
+			if p == "internal/dashboard" {
+				t.Fatalf("CLI door must not claim dashboard private:\n%s", out)
+			}
 		}
 	}
 }
@@ -591,15 +612,18 @@ edges:
     to: internal/ledger
     kind: imports
 `
-	out := mechanicalPreCluster(mustParseRoles(roles))
-	if !strings.Contains(out, "Unreached") {
+	out, err := mechanicalPreClusterYAML(mustParseRoles(roles))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "unreached_paths") {
 		t.Fatalf("expected unreached section:\n%s", out)
 	}
-	if !strings.Contains(out, "`internal/agent`") || !strings.Contains(out, "`internal/analyze`") || !strings.Contains(out, "`internal/ledger`") {
+	if !strings.Contains(out, "internal/agent") || !strings.Contains(out, "internal/analyze") || !strings.Contains(out, "internal/ledger") {
 		t.Fatalf("expected aggregators listed as unreached:\n%s", out)
 	}
-	if strings.Contains(out, "seed 1:") {
-		t.Fatalf("expected no door-private product seeds without doors:\n%s", out)
+	if strings.Contains(out, "product_seeds:") {
+		t.Fatalf("expected no product seeds without doors:\n%s", out)
 	}
 }
 

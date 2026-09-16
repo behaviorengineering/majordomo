@@ -859,7 +859,7 @@ func newContextCmd() *cobra.Command {
 	}
 	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
 	mustMarkFlagRequired(validate, "dir")
-	var digestConfigDir, digestRepoID, digestWorkDir, digestOut string
+	var digestConfigDir, digestRepoID, digestWorkDir, digestOut, digestWorkStoryDir string
 	var digestTypologyBinary, digestModuleScope, digestBootstrapPolicy string
 	var skipStory, skipCompact, forceCompact bool
 	digest := &cobra.Command{
@@ -889,6 +889,7 @@ func newContextCmd() *cobra.Command {
 				SkipStory:             skipStory,
 				SkipCompact:           skipCompact,
 				ForceCompact:          forceCompact,
+				WorkStoryDir:          digestWorkStoryDir,
 				Context:               ctx,
 			})
 			if err != nil {
@@ -912,6 +913,7 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().StringVar(&digestRepoID, "repo-id", "", "served repo id")
 	digest.Flags().StringVar(&digestWorkDir, "workdir", "", "served-repo clone with origin remote")
 	digest.Flags().StringVar(&digestOut, "out", "-", "write result JSON (default stdout; logs stay on stdout)")
+	digest.Flags().StringVar(&digestWorkStoryDir, "work-story-dir", "", "durable local dump for RLM + CoT module traces + runreports (AI testing); default tmp/digest-runs/<repo>-<ts> or MAJORDOMO_DIGEST_WORK_STORY_DIR/<repo>-<ts>")
 	digest.Flags().StringVar(&digestTypologyBinary, "typology-binary", os.Getenv("MAJORDOMO_TYPOLOGY_BINARY"), "Typology executable path")
 	digest.Flags().StringVar(&digestModuleScope, "module-scope", os.Getenv("MAJORDOMO_TYPOLOGY_MODULE_SCOPE"), "Typology module scope within the served repo")
 	digest.Flags().StringVar(&digestBootstrapPolicy, "bootstrap-survey-policy", "auto", "bootstrap survey policy: auto|always|never")

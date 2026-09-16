@@ -84,8 +84,20 @@ Three different libraries own three different dumps. Do not invent a fourth.
 | Switch | What it is | When it fires |
 |--------|------------|---------------|
 | OTEL / olly-style failure dump | JSON span tree under `{output-dir}/logs/inference-failures/` (or `tmp/logs/inference-failures/`) | Process envelope ends with **ERROR** only |
-| strop `runreport` | JSON timeline of Judge module/eval steps under analysis `tmp/logs/runs/` | Digest Judge work (success or fail); not committed to the teaching branch |
-| strop `RLMConfig.TraceDir` | Full RLM REPL JSONL for `rlm-viewer` under analysis `tmp/rlm-traces/<task>/` | Inspect, ledger, and cluster-audit RLM Completes |
+| Digest AI work story | Durable local dump for testing AI: `rlm-traces/<task>/`, `module-traces/`, and `logs/runs/` under `--work-story-dir` (default `tmp/digest-runs/<repo-id>-<timestamp>`, or `MAJORDOMO_DIGEST_WORK_STORY_DIR/<repo-id>-<timestamp>`). Path is logged and returned as `work_story_dir` in digest `--out` JSON. | Every digest that runs Judge/RLM; **survives** analysis-clone cleanup |
+| strop `runreport` | JSON timeline of Judge module/eval steps inside the work-story dir (`logs/runs/`) | Digest Judge work (success or fail); not committed to the teaching branch |
+| strop `RLMConfig.TraceDir` | Full RLM REPL JSONL for `rlm-viewer` inside the work-story dir (`rlm-traces/<task>/`) | Inspect, ledger, cluster-audit, and bootstrap-story RLM Completes |
+| strop module TraceSession | CoT/Predict inputs+outputs JSONL via dspy-go `TracingInterceptor` + `AttachModuleTrace` (`module-traces/`) | Digest Judge Generate/Evaluate when work story is prepared |
+
+Do not look under OS temp `majordomo-typology-*` after the process exits; that analysis clone is deleted on purpose. Teaching artifacts land on the context PR; AI work-story dumps stay local for operators.
+
+```bash
+./majordomo context digest \
+  --config-dir majordomo-central-config \
+  --repo-id polypus \
+  --workdir /path/to/polypus \
+  --work-story-dir /path/to/tower/tmp/digest-runs/polypus-manual
+```
 
 Tracing is on by default (Phoenix optional). On a failed `run review` / `orchestrate`, the full OpenInference trace is written to the failure-dump path above. Attach that JSON to an AI for debug. Digest nests its CHAIN span into Judge/RLM work so Phoenix and failure dumps see one tree when something fails. Set `MAJORDOMO_OTEL_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) to `localhost:4317` when Phoenix is running. Disable with `MAJORDOMO_OTEL_ENABLED=0`.
 

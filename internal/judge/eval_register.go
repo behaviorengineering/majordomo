@@ -42,18 +42,18 @@ var digestEvalSpecs = map[string]digestEvalSpec{
 		evaluatorLabel:    "Typology Cluster Evaluator",
 		consolidatorLabel: "Typology Cluster Consolidator",
 		criterionIDs:      typologypack.ClusterCriterionIDs,
-		focusAreas:        "consultant counsel; observed package_roles before any merge overlay",
-		feedbackSuffix: `Score generator_output cluster_proposal_md against the cluster counsel and delivery rubrics.
+		focusAreas:        "parallel merge list fields; observed package_roles before any merge overlay",
+		feedbackSuffix: `Score generator_output merge_ids, merge_packages, and merge_intents (composed into cluster_merge_proposal.yaml) against the cluster delivery rubrics.
 Reject proposals that contradict package_roles.
-Reject ignoring the mechanical_grouping_md seed.
+Reject ignoring the mechanical_grouping_yaml seed.
 Reject using folder names (dashboard, board, cli, server) as classification evidence.
-Reject merge inventories that do not argue why this grouping, what was rejected, and the lean.
+Reject parallel lists of mismatched length or empty package sets.
 Reject "merge dto into aggregator as the UI" or "forge depends on UI" invented from parking board under dashboard.
 Reject folding server into CLI for sole importer.
 Reject treating exec_runner as CLI domain furniture.
-Reject corporate "we reorganized the repository" framing.`,
-		scoreSuffix:        `Prefer low scores when the proposal invents ownership from names, contradicts package_roles, or sounds like consented product work.`,
-		consolidatorSuffix: "Merge cluster feedback. Prefer counsel that helps a human decide over polish.",
+Reject markdown counsel or catalog YAML in the cluster pass.`,
+		scoreSuffix:        `Prefer low scores when merge rows invent ownership from names or contradict package_roles and the door-walk seed.`,
+		consolidatorSuffix: "Merge cluster feedback. Prefer evidence-aligned merge rows over polish.",
 	},
 	jmodules.TaskTypologyRefine: {
 		evaluatorKey:      "typology_quality",
@@ -61,18 +61,17 @@ Reject corporate "we reorganized the repository" framing.`,
 		evaluatorLabel:    "Typology Quality Evaluator",
 		consolidatorLabel: "Typology Quality Consolidator",
 		criterionIDs:      typologypack.CriterionIDs,
-		focusAreas:        "slice objectives, surface placement, adapter vs CLI, journey debt consistency and counsel",
-		feedbackSuffix: `Score generator_output refined_catalog_yaml and journey_md against the typology rubrics.
+		focusAreas:        "slice objectives, surface placement, adapter vs CLI, accepted merge folds only",
+		feedbackSuffix: `Score generator_output refined_catalog_yaml against the typology catalog rubrics.
 Reject hollow objectives like "Provide X functionality".
 Reject process-exec adapters (cliexec) marked kind: cli.
 Reject folding server / goEmbed / NewMux packages into the CLI surface solely because cmd is the sole importer.
-Reject journeys that claim merges are done while debt rows still say Merge into.
-Reject journey decisions that omit what was rejected and why.
-Reject open debt rows that only say "Approve binding or refactor" without smell, alternatives, and a lean.
-Reject journey prose that claims the product team already reorganized the repo ("we successfully consolidated") instead of Majordomo/Typology proposals on the context branch.`,
+Reject catalog folds that ignore cluster_merge_verdicts_yaml accept rows.
+Reject objectives that drift from slice_objective_ledger_yaml.
+Reject journey markdown in this pass; journey is written later by human-intervention.`,
 		scoreSuffix: `Prefer low scores when objectives are template language, surfaces misuse kind: cli for exec adapters,
-HTTP/embed packages are CLI furniture, journey debt contradicts Status, journey counsel is hollow, or speaker attribution sounds like shipped product work.`,
-		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog fixes and argued journey debt over style notes.",
+HTTP/embed packages are CLI furniture, or catalog membership contradicts accepted merge verdicts.`,
+		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog fixes over style notes.",
 	},
 	jmodules.TaskTypologyHumanIntervention: {
 		evaluatorKey:      "typology_intervention_quality",

@@ -174,7 +174,7 @@ func (LocalBootstrapSurveyRunner) Survey(ctx context.Context, input BootstrapSur
 		PackageContractsPath:  "package_contracts.md",
 		PackageRolesPath:      packageRolesRel,
 		PackageRLMContextPath: "package_rlm_context.md",
-		ClusterProposalPath:   "cluster_proposal.md",
+		ClusterProposalPath:   "cluster_merge_proposal.yaml",
 		RefinedSnapshotPath:   refinedSnapshotRel,
 		JourneyPath:           "journey.md",
 	}
@@ -250,7 +250,7 @@ func surveyWithTypologyPythonOnly(ctx context.Context, input BootstrapSurveyInpu
 		PackageContractsPath:  "package_contracts.md",
 		PackageRolesPath:      packageRolesRel,
 		PackageRLMContextPath: "package_rlm_context.md",
-		ClusterProposalPath:   "cluster_proposal.md",
+		ClusterProposalPath:   "cluster_merge_proposal.yaml",
 		RefinedSnapshotPath:   refinedSnapshotRel,
 		JourneyPath:           "journey.md",
 	}

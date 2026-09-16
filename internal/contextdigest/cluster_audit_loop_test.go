@@ -49,6 +49,29 @@ func TestParseClusterAuditAnswerAcceptNeedsEvidence(t *testing.T) {
 	}
 }
 
+func TestParseClusterAuditAnswerAcceptMissingPackageEvidenceDemotesOverlay(t *testing.T) {
+	proposed := []proposedMerge{
+		{ID: "git-adapters", Packages: []string{"internal/localgit", "internal/remotegit"}, Intent: mergeIntentSlice},
+	}
+	// PR 41 shape: accept with evidence that only cites localgit.
+	answer := `id: git-adapters
+verdict: accept
+reason: Both packages serve as adapters for git operations
+evidence:
+internal/localgit: rlm:"Inspector.InspectSync", "BranchSync"
+`
+	got, err := parseClusterAuditAnswer(answer, proposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Verdict != verdictOverlay {
+		t.Fatalf("want overlay when one package missing from evidence, got %+v", got[0])
+	}
+	if !strings.Contains(strings.ToLower(got[0].Reason), "per-package evidence") {
+		t.Fatalf("reason=%q", got[0].Reason)
+	}
+}
+
 func TestParseClusterAuditAnswerAcceptKeepsMultilineEvidence(t *testing.T) {
 	proposed := []proposedMerge{
 		{ID: "git-adapters", Packages: []string{"internal/localgit", "internal/remotegit"}, Intent: mergeIntentSlice},

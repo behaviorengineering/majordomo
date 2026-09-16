@@ -48,7 +48,7 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 	if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, opts.Judge); err != nil {
 		return err
 	}
-	if err := writeBootstrapStory(ctxDir, analysisDir, at, sourceSHA, opts.BootstrapStoryGenerator, opts.Judge); err != nil {
+	if err := writeBootstrapStory(ctx, ctxDir, analysisDir, at, sourceSHA, opts); err != nil {
 		return err
 	}
 	if err := contextstore.ApplyReadingPath(ctxDir); err != nil {

@@ -1,10 +1,17 @@
 package contextdigest
 
-import "github.com/behaviorengineering/typology/roles"
+import (
+	"fmt"
 
-// mechanicalPreCluster formats Typology's deterministic grouping seed for the
-// cluster LLM. Grouping math lives in Typology; Majordomo only renders it.
-func mechanicalPreCluster(doc packageRolesDoc) string {
+	"github.com/behaviorengineering/typology/roles"
+	"gopkg.in/yaml.v3"
+)
+
+const mechanicalGroupingRel = "mechanical_grouping.yaml"
+
+// mechanicalPreClusterYAML returns Typology's deterministic grouping seed as YAML.
+// Grouping math lives in Typology; Majordomo only marshals it for evidence + LLM inputs.
+func mechanicalPreClusterYAML(doc packageRolesDoc) (string, error) {
 	topo := roles.Topology{
 		Packages: make([]roles.Node, 0, len(doc.Packages)),
 		Edges:    make([]roles.Edge, 0, len(doc.Edges)),
@@ -26,5 +33,9 @@ func mechanicalPreCluster(doc packageRolesDoc) string {
 			Kind: e.Kind,
 		})
 	}
-	return roles.FormatGroupingMarkdown(roles.BuildGrouping(topo))
+	raw, err := yaml.Marshal(roles.BuildGrouping(topo))
+	if err != nil {
+		return "", fmt.Errorf("mechanical_grouping encode: %w", err)
+	}
+	return string(raw), nil
 }

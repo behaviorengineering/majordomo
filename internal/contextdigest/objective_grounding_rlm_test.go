@@ -107,11 +107,11 @@ edges: []
 	caller := &countingLedgerCaller{}
 
 	doc, issues, err := buildSliceObjectiveLedger(context.Background(), caller, sliceLedgerBuildRequest{
-		AnalysisDir: dir,
-		EvidenceDir: evidence,
-		DraftTypo:   draft,
-		Constraints: constraints,
-		ClusterMD:   "# cluster\n",
+		AnalysisDir:     dir,
+		EvidenceDir:     evidence,
+		DraftTypo:       draft,
+		Constraints:     constraints,
+		ClusterHintYAML: "# cluster\n",
 	})
 	if err != nil {
 		t.Fatal(err)
