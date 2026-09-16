@@ -313,7 +313,7 @@ repository:
 		t.Fatal(err)
 	}
 	workDir = filepath.Join(cloneParent, "demo")
-	runGit(t, cloneParent, "clone", remote, workDir)
+	runGit(t, cloneParent, "clone", "-b", "main", remote, workDir)
 	return cfgDir, workDir
 }
 

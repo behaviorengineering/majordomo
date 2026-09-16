@@ -25,11 +25,8 @@ const (
 // CriterionIDs is the typology refine boundary rubric pack.
 var CriterionIDs = []criteria.CriterionID{
 	CriterionIDSurfaces,
-	CriterionIDDebtWhenFindings,
 	CriterionIDObjectives,
 	CriterionIDAdapterSurfaces,
-	CriterionIDJourneyConsistent,
-	CriterionIDJourneyCounsel,
 	CriterionIDRoleGrounding,
 	CriterionIDSliceOwnership,
 }
@@ -157,10 +154,10 @@ func Register(r *criteria.CriterionRegistry) {
 	})
 	r.Register(criteria.CriterionDescription{
 		ID:          CriterionIDClusterCounsel,
-		Name:        "Cluster proposal argues merges and debt",
-		Description: `cluster_proposal_md rationale and proposed merges explain why this grouping, what was rejected, cost of the alternative, and the lean. Boundary debt is not a generic mitigation column.`,
-		Scoring: `2 points: Merges and debt argue with alternatives and a lean.
-0 points: Merge inventory only, or debt that only says approve binding or refactor.`,
+		Name:        "Cluster merge rows are structured and justified",
+		Description: `merge_ids, merge_packages, and merge_intents must be the same length. Each row must name real package paths and honor package_roles plus mechanical_grouping_yaml. Empty lists are valid when proposing no folds.`,
+		Scoring: `2 points: Parallel merge lists are well-formed and each fold respects observed roles and the door-walk seed.
+0 points: Mismatched list lengths, empty package sets, or folds that contradict package_roles.`,
 		MaxPoints: 2.0,
 		Category:  criteria.CriterionCategoryOutputQuality,
 	})

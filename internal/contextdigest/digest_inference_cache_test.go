@@ -255,14 +255,14 @@ edges: []
 
 	caller := &countingLedgerCaller{}
 	doc, issues, err := buildSliceObjectiveLedger(context.Background(), caller, sliceLedgerBuildRequest{
-		AnalysisDir:   dir,
-		EvidenceDir:   evidence,
-		DraftTypo:     draft,
-		Constraints:   constraints,
-		ClusterMD:     clusterMD,
-		DigestCache:   store,
-		DigestSkips:   true,
-		DigestModelID: "test-model",
+		AnalysisDir:     dir,
+		EvidenceDir:     evidence,
+		DraftTypo:       draft,
+		Constraints:     constraints,
+		ClusterHintYAML: clusterMD,
+		DigestCache:     store,
+		DigestSkips:     true,
+		DigestModelID:   "test-model",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -325,14 +325,14 @@ edges: []
 	store := &cache.DigestStore{Dir: filepath.Join(dir, "digest-cache")}
 	caller := &overclaimLedgerCaller{}
 	_, issues, err := buildSliceObjectiveLedger(context.Background(), caller, sliceLedgerBuildRequest{
-		AnalysisDir:   dir,
-		EvidenceDir:   evidence,
-		DraftTypo:     draft,
-		Constraints:   constraints,
-		ClusterMD:     "# cluster\n",
-		DigestCache:   store,
-		DigestSkips:   true,
-		DigestModelID: "test-model",
+		AnalysisDir:     dir,
+		EvidenceDir:     evidence,
+		DraftTypo:       draft,
+		Constraints:     constraints,
+		ClusterHintYAML: "# cluster\n",
+		DigestCache:     store,
+		DigestSkips:     true,
+		DigestModelID:   "test-model",
 	})
 	if err != nil {
 		t.Fatal(err)

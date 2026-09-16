@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +27,7 @@ type Result struct {
 	ContextPR     string            `json:"context_pr,omitempty"`
 	GateStatus    string            `json:"gate_status,omitempty"`
 	Message       string            `json:"message,omitempty"`
+	WorkStoryDir  string            `json:"work_story_dir,omitempty"` // durable RLM + runreport dump (local AI testing)
 	LLMUsage      *llmusage.Summary `json:"llm_usage,omitempty"`
 }
 
@@ -52,7 +52,11 @@ type Options struct {
 	DigestCache                *cache.DigestStore // optional; inspect/ledger fingerprint skips
 	DigestSkips                bool               // when true with DigestCache, skip LLM on hit
 	DigestModelID              string             // model id for fingerprints
-	// Context nests OTEL chain spans and runreport into digest Judge/RLM work.
+	// WorkStoryDir is a durable local dump for RLM JSONL, module TraceSession JSONL, and runreports (AI testing).
+	// When empty, Run creates tmp/digest-runs/<repo-id>-<timestamp> (or MAJORDOMO_DIGEST_WORK_STORY_DIR).
+	// Not the teaching context branch; not deleted with the analysis clone.
+	WorkStoryDir string
+	// Context nests OTEL chain spans, module TraceSession, and runreport into digest Judge/RLM work.
 	// When nil, Background is used.
 	Context context.Context
 }
@@ -135,18 +139,18 @@ func Run(opts Options) (res Result, err error) {
 		return Result{}, fmt.Errorf("fetch served repo: %w", err)
 	}
 
-	digestBranch := config.InferenceCacheBranch(cfg.Repository.ID)
-	digestDir, err := os.MkdirTemp("", "majordomo-inference-cache-*")
+	digestBranch := config.DigestCacheBranch(cfg.Repository.ID)
+	digestDir, err := os.MkdirTemp("", "majordomo-digest-cache-*")
 	if err != nil {
 		return Result{}, err
 	}
 	defer func() { _ = os.RemoveAll(digestDir) }()
 	if err := materializeDigestCacheWorktree(digestDir, servedGit, digestBranch, token, scm); err != nil {
-		logf("WARN", "inference cache unavailable: %v", err)
+		logf("WARN", "digest inference cache unavailable: %v", err)
 	} else {
 		store := &cache.DigestStore{Dir: digestDir}
 		if remote, rerr := servedGit.trim("remote", "get-url", "origin"); rerr != nil {
-			logf("WARN", "inference cache push disabled: remote URL: %v", rerr)
+			logf("WARN", "digest inference cache push disabled: remote URL: %v", rerr)
 		} else {
 			store.ConfigurePush(cache.DigestPushOptions{
 				Remote:   remote,
@@ -156,16 +160,16 @@ func Run(opts Options) (res Result, err error) {
 				SCM:      scm,
 			})
 			store.OnFlushError = func(err error) {
-				logf("WARN", "inference cache push: %v", err)
+				logf("WARN", "digest inference cache push: %v", err)
 			}
 		}
 		opts.DigestCache = store
 		opts.DigestSkips = cfg.Cache.SkipsEnabled()
 		opts.DigestModelID = digestModelID(cfg)
-		logf("INFO", "inference cache ready branch=%s skips=%v model=%s", digestBranch, opts.DigestSkips, opts.DigestModelID)
+		logf("INFO", "digest inference cache ready branch=%s skips=%v model=%s", digestBranch, opts.DigestSkips, opts.DigestModelID)
 		defer func() {
 			if ferr := store.Flush(); ferr != nil {
-				logf("WARN", "inference cache final flush: %v", ferr)
+				logf("WARN", "digest inference cache final flush: %v", ferr)
 			}
 			logf("INFO", "%s", cache.FormatStatsLine(store.Stats()))
 		}()
@@ -221,6 +225,12 @@ func Run(opts Options) (res Result, err error) {
 		if err := CheckoutOrCreate(ctxGit, updateBranch, baseBranch); err != nil {
 			return Result{}, err
 		}
+		closeTrace, err := prepareWorkStory(&opts, now)
+		if err != nil {
+			return Result{}, err
+		}
+		defer func() { _ = closeTrace() }()
+		res.WorkStoryDir = opts.WorkStoryDir
 		if err := ensureDigestJudge(&opts, cfg); err != nil {
 			return Result{}, err
 		}
@@ -360,6 +370,12 @@ func Run(opts Options) (res Result, err error) {
 				}
 				commitCtxs = append(commitCtxs, cc)
 			}
+			closeTrace, err := prepareWorkStory(&opts, now)
+			if err != nil {
+				return Result{}, err
+			}
+			defer func() { _ = closeTrace() }()
+			res.WorkStoryDir = opts.WorkStoryDir
 			if err := ensureDigestJudge(&opts, cfg); err != nil {
 				return Result{}, err
 			}
@@ -504,9 +520,9 @@ func finishDigestRun(p finishParams) (Result, error) {
 	}
 	if p.digestReady && p.servedGit != nil && strings.TrimSpace(p.digestDir) != "" {
 		if err := pushDigestCacheWorktree(p.digestDir, p.digestBranch, p.token, p.scm, p.servedGit); err != nil {
-			logf("WARN", "inference cache push: %v", err)
+			logf("WARN", "digest inference cache push: %v", err)
 		} else {
-			logf("INFO", "inference cache pushed branch=%s", p.digestBranch)
+			logf("INFO", "digest inference cache pushed branch=%s", p.digestBranch)
 		}
 	}
 	return Result{
@@ -552,10 +568,7 @@ func ensureDigestJudge(opts *Options, cfg config.RepoConfig) error {
 	if opts == nil || opts.Judge != nil || opts.SkipStory {
 		return nil
 	}
-	rrDir := "tmp/logs/runs"
-	if opts.WorkDir != "" {
-		rrDir = filepath.Join(opts.WorkDir, "tmp", "logs", "runs")
-	}
+	rrDir := runreportDir(inferenceWorkRoot(*opts, opts.WorkDir))
 	rt, err := judge.EnsureRuntimeFromConfig(cfg, judge.RuntimeOptions{
 		Tasks: judge.DigestTasks(),
 		RunReport: runreport.Config{
@@ -569,6 +582,29 @@ func ensureDigestJudge(opts *Options, cfg config.RepoConfig) error {
 	}
 	opts.Judge = rt
 	return nil
+}
+
+// prepareWorkStory creates a durable dump root for RLM traces, module traces, and runreports.
+// The returned closer flushes the CoT TraceSession; callers MUST defer it.
+func prepareWorkStory(opts *Options, now time.Time) (func() error, error) {
+	noop := func() error { return nil }
+	if opts == nil {
+		return noop, fmt.Errorf("prepare work story: options is nil")
+	}
+	dir, err := ensureWorkStoryDir(*opts, now)
+	if err != nil {
+		return noop, err
+	}
+	opts.WorkStoryDir = dir
+	logf("INFO", "digest AI work story dir=%s (rlm-traces + module-traces + runreports; survives analysis cleanup)", dir)
+	closeTrace, err := attachModuleTrace(opts)
+	if err != nil {
+		return noop, err
+	}
+	if closeTrace == nil {
+		return noop, nil
+	}
+	return closeTrace, nil
 }
 
 func treeHasChanges(dir string) bool {

@@ -49,9 +49,10 @@ chronology.md       important evidenced decisions, newest first; compactable
 evidence/typology/  Typology seed proposal for this digest (not confirmed catalog)
   README.md              reading index for the briefing path (required when evidence exists)
   architecture_brief.md  Typology architecture brief (not the teaching story)
-  cluster_proposal.md    optional grouping overlay
-  cluster_merge_verdicts.yaml  cluster RLM accept/overlay/reject rows
-  journey.md             refine decisions and debt
+  mechanical_grouping.yaml       deterministic door-walk seed
+  cluster_merge_proposal.yaml    optional grouping overlay (composed from cluster CoT lists)
+  cluster_merge_verdicts.yaml    cluster RLM accept/overlay/reject rows
+  journey.md             human-intervention decisions and debt (after architecture)
   human_intervention.md  operator priorities
   pr_priority.md         optional cold-reader PR counsel
   finding_comment_bodies.json  counsel for per-finding PR comments
@@ -123,7 +124,7 @@ flowchart TB
 
 *Cold-reader takeaway:* “We already know what each folder actually is, in machine terms.”
 
-**2. Grouping.** Next we infer teaching units: which packages belong in the same slice so a newcomer is not drowned in one-package-per-page noise. Cluster CoT proposes the map (including structured `proposed_merges_yaml`). One Cluster RLM pass then audits the **full** list: lifecycle-same vs theme-only, with evidence quotes. Rejects revise; overlays become teaching nicknames; only `accept` may fold the catalog. This step is allowed to be wrong about membership and get corrected by that audit. It is not allowed to invent a glamorous purpose for the group.
+**2. Grouping.** Next we infer teaching units: which packages belong in the same slice so a newcomer is not drowned in one-package-per-page noise. Go writes `mechanical_grouping.yaml` from the door-walk seed. Cluster CoT emits parallel `merge_ids` / `merge_packages` / `merge_intents` lists; Go composes `cluster_merge_proposal.yaml`. One Cluster RLM pass then audits the **full** list: lifecycle-same vs theme-only, with evidence quotes. Rejects revise; overlays become teaching nicknames; only `accept` may fold the catalog. This step is allowed to be wrong about membership and get corrected by that audit. It is not allowed to invent a glamorous purpose for the group.
 
 *Cold-reader takeaway:* “Here is a proposed map of neighborhoods that survived evidence pushback, not the speech about what each neighborhood means.”
 
@@ -131,7 +132,7 @@ flowchart TB
 
 *Cold-reader takeaway:* “If the objective cannot point at symbols or constraint rows, it does not ship.” Example: dto + fillers → “shared payload shapes,” never “central synchronization.” A dto slice that quotes a real type but claims `fill_dto` still fails.
 
-**4. Human writer + publish.** Refine is the tutor voice. It shapes the catalog, journey, rejected alternatives, and debt so a cold reader can follow the argument. It must copy ledger objectives; it may arrange and lean, not escalate prestige. Gates fail the attempt if the teaching sentence no longer matches the ledger. Everything after that (architecture brief, root story, PR counsel, catch-up) only amplifies the grounded seed.
+**4. Catalog refine + publish.** Refine is the catalog writer. It applies only `accept` cluster merges and emits `refined_catalog_yaml`, copying ledger objectives verbatim. It does not emit journey markdown or cluster counsel prose. Gates fail the attempt if the catalog drifts from the ledger or verdicts. After post-refine architecture, human-intervention generators write journey debt, operator briefings, and PR counsel. Bootstrap story generation uses per-section RLM passes over the grounded evidence pack.
 
 *Cold-reader takeaway:* “The nice prose is a packaging of settled meaning, not a second chance to redefine it.”
 
@@ -139,7 +140,7 @@ flowchart TB
 
 Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + Typology survey/refine proposal when available), not a reconstruction of the whole tape.
 
-For Go or Python served repos (Go: `go.mod` / `go.work`; Python: `pyproject.toml` / `setup.cfg` / `setup.py`), seed survey runs Typology under the analysis worktree. Typology harvest is language-specific but emits one language-neutral evidence contract (`package_roles.yaml`, contracts, RLM context; see typology `docs/evidence-contract.md`). Go roots still run `discover` / `show graph` / draft `architecture`; Python-only roots run `contracts` harvest and a roles-backed architecture stub. Then the typology path above: role RLM and `package_capability_constraints.yaml`, cluster CoT for membership proposals, full-list cluster RLM audit into `cluster_merge_verdicts.yaml`, per-slice evidence-first RLM into `slice_objective_ledger.yaml` with Go claim∩`must_not` plus mechanical claim-entailment gates, refine CoT as human writer that copies ledger objectives and folds only `accept` merges, and Go-derived `slice_objective_claims.yaml` gated against owned `must_not` plus catalog-equals-ledger checks. After HTTP/entrypoint sanitize, hollow package-less slices that only hold bindings are collapsed onto the slice that owns the matching package base. After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then focused **human-intervention** generators rewrite journey debt, write `human_intervention.md`, seed `weaknesses.md`, and produce `pr_priority.md` for the context PR body. Each open architecture finding also gets a dedicated tutor CoT comment body; after the context update PR opens, Majordomo upserts one ordinary PR/MR comment per finding (stable `<!-- majordomo-finding:<fingerprint> -->` marker) so operators can discuss in-thread. Free-form replies are conversation only; `@majordomo done` / `reject` / `why` still drive the gate. When a finding disappears on a later digest, the same comment is updated to a cleared note (not deleted), keeping the trace. It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. Durable context evidence is refined catalog, journey/cluster notes, cluster merge verdicts, post-refine `architecture_brief.md`, human-intervention notes, finding comment sidecars, graph, capability constraints, objective ledger/claims, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. Discovery journey notes (`cluster_proposal.md`, refine `journey.md`) and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution is Majordomo/Typology digest proposing architecture grounding on the context branch, not a product team that already reorganized the default tree. When priorities exist, the PR body leads with that counsel in a tutor voice for a cold reader.
+For Go or Python served repos (Go: `go.mod` / `go.work`; Python: `pyproject.toml` / `setup.cfg` / `setup.py`), seed survey runs Typology under the analysis worktree. Typology harvest is language-specific but emits one language-neutral evidence contract (`package_roles.yaml`, contracts, RLM context; see typology `docs/evidence-contract.md`). Go roots still run `discover` / `show graph` / draft `architecture`; Python-only roots run `contracts` harvest and a roles-backed architecture stub. Then the typology path above: role RLM and `package_capability_constraints.yaml`, cluster CoT for membership proposals, full-list cluster RLM audit into `cluster_merge_verdicts.yaml`, per-slice evidence-first RLM into `slice_objective_ledger.yaml` with Go claim∩`must_not` plus mechanical claim-entailment gates, refine CoT as human writer that copies ledger objectives and folds only `accept` merges, and Go-derived `slice_objective_claims.yaml` gated against owned `must_not` plus catalog-equals-ledger checks. After HTTP/entrypoint sanitize, hollow package-less slices that only hold bindings are collapsed onto the slice that owns the matching package base. After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then focused **human-intervention** generators rewrite journey debt, write `human_intervention.md`, seed `weaknesses.md`, and produce `pr_priority.md` for the context PR body. Each open architecture finding also gets a dedicated tutor CoT comment body; after the context update PR opens, Majordomo upserts one ordinary PR/MR comment per finding (stable `<!-- majordomo-finding:<fingerprint> -->` marker) so operators can discuss in-thread. Free-form replies are conversation only; `@majordomo done` / `reject` / `why` still drive the gate. When a finding disappears on a later digest, the same comment is updated to a cleared note (not deleted), keeping the trace. It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. Durable context evidence is refined catalog, journey/cluster notes, cluster merge verdicts, post-refine `architecture_brief.md`, human-intervention notes, finding comment sidecars, graph, capability constraints, objective ledger/claims, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. Digest does not emit a confirmed Typology catalog into the served default tree; humans promote proposals via `typology-journey`. Human-intervention journey notes and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution is Majordomo/Typology digest proposing architecture grounding on the context branch, not a product team that already reorganized the default tree. When priorities exist, the PR body leads with that counsel in a tutor voice for a cold reader.
 
 ## Digest trigger (v1)
 
@@ -343,39 +344,47 @@ Selection MUST stay small. If an area pack does not match the task, it MUST NOT 
 
 `pipelines.*.agentContext` in central YAML is **legacy** (still materialized today). It is not a substitute for packs. Phase 6 grounding is `agenting/`.
 
-## Inference cache (review + digest)
+## Digest inference cache
 
 Teaching files live on `majordomo-context/<repo-id>`. A reseed may delete those
-refs. Review cluster analysis and digest RLM fingerprints live on one **separate**
-branch with path prefixes:
+refs. Package inspect and slice ledger RLM results live on a **separate** branch:
 
-- Branch: `majordomo-inference-cache/<repo-id>` (`config.InferenceCacheBranch`)
-- Review artifacts: `review/<skill>/analysis-*.json` (+ optional markdown)
-- Digest artifacts: JSON fingerprints under `digest/inspect/` and `digest/ledger/`
-  (not teaching markdown)
+- Branch: `majordomo-digest-cache/<repo-id>` (`config.DigestCacheBranch`)
+- Artifacts: JSON fingerprints under `inspect/` and `ledger/` (not teaching markdown)
 - Hit when package source (and for ledger: owned paths + constraints) match the
   same model/prompt/schema; cluster proposal prose is **not** an invalidation input
 - End-of-run log line reports hit/miss counts and `estimated_tokens_saved`
 - **Push on the go:** each successful inspect/ledger Store commits and pushes the
   cache branch immediately (same rule as PR review cache store+push). Do not wait
   for refine/eval/job success; a failed reseed must still leave durable hits.
-- Opt out with `cache.disableSkips: true` (same flag for review analysis and digest)
+- Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
 - Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete
-  `majordomo-inference-cache/*`
+  `majordomo-digest-cache/*`
 
-CLI helpers: `majordomo cache` (`validate-branch`, `push`, `digest-lookup` /
-`digest-store` / `digest-push`).
+CLI helpers: `majordomo cache digest-lookup` / `digest-store` / `digest-push`.
 Operator rule: `ai-copilots/skills/majordomo-inference-cache/SKILL.md`.
+
+## Local AI work story (operator testing)
+
+Digest clones the served repo into an OS temp analysis tree and deletes that tree on exit.
+RLM JSONL and Judge runreports used to live only there, so a finished local reseed left nothing to reopen.
+
+Durable dump (not the teaching branch):
+
+- Flag: `majordomo context digest --work-story-dir <dir>`
+- Or env parent: `MAJORDOMO_DIGEST_WORK_STORY_DIR` → `<parent>/<repo-id>-<timestamp>`
+- Default: `tmp/digest-runs/<repo-id>-<timestamp>` under the process cwd
+- Contents: `rlm-traces/<task>/`, `module-traces/` (CoT/Predict TraceSession JSONL), `logs/runs/`, and a short `README.md`
+- Result JSON includes `work_story_dir`
 
 ## Poll exclusion
 
 Product poll ignores PRs whose base or head starts with:
 
 - `majordomo-context/` (covers durable base and `…-update` head)
-- `majordomo-inference-cache/`
+- `majordomo-pr-reviewer-cache/`
 - `majordomo-poll-cache/`
-- `majordomo-pr-reviewer-cache/` (legacy)
-- `majordomo-digest-cache/` (legacy)
+- `majordomo-digest-cache/`
 
 Implemented in `internal/poll` (`isMajordomoInternalBranch`).
 

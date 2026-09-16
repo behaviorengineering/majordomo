@@ -19,6 +19,7 @@ import (
 	stropdspy "github.com/behaviorengineering/strop/dspy"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	typroles "github.com/behaviorengineering/typology/roles"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -27,17 +28,17 @@ var (
 )
 
 type clusterAuditRequest struct {
-	AnalysisDir   string
-	EvidenceDir   string
-	Proposed      []proposedMerge
-	Frozen        []clusterMergeVerdict
-	RolesYAML     string
-	Constraints   string
-	MechanicalMD  string
-	DigestCache   *cache.DigestStore
-	DigestSkips   bool
-	DigestModelID string
-	Attempt       int
+	AnalysisDir    string
+	EvidenceDir    string
+	Proposed       []proposedMerge
+	Frozen         []clusterMergeVerdict
+	RolesYAML      string
+	Constraints    string
+	MechanicalYAML string
+	DigestCache    *cache.DigestStore
+	DigestSkips    bool
+	DigestModelID  string
+	Attempt        int
 }
 
 type clusterAuditResult struct {
@@ -141,7 +142,7 @@ func runClusterMergeAudit(ctx context.Context, caller clusterAuditCaller, req cl
 		MergesHash:      cache.ContentSHA(formatProposedMergesForAudit(req.Proposed)),
 		RolesHash:       cache.ContentSHA(req.RolesYAML),
 		ConstraintsHash: cache.ContentSHA(req.Constraints),
-		MechanicalHash:  cache.ContentSHA(req.MechanicalMD),
+		MechanicalHash:  cache.ContentSHA(req.MechanicalYAML),
 		ModelID:         req.DigestModelID,
 		PromptVersion:   cache.DigestClusterAuditPromptV1,
 		SchemaVersion:   cache.DigestClusterAuditSchemaV1,
@@ -179,13 +180,15 @@ func runClusterMergeAudit(ctx context.Context, caller clusterAuditCaller, req cl
 		return out, parseErr
 	}
 	if req.DigestCache != nil {
-		_ = req.DigestCache.StoreClusterAudit(fp, cache.ClusterAuditCached{
+		if err := req.DigestCache.StoreClusterAudit(fp, cache.ClusterAuditCached{
 			Merges:           toCachedVerdicts(audited),
 			RLMIterations:    iters,
 			PromptTokens:     promptTok,
 			CompletionTokens: completionTok,
 			TotalTokens:      totalTok,
-		})
+		}); err != nil {
+			logf("WARN", "digest cache store cluster_audit failed: %v", err)
+		}
 	}
 	out.Verdicts = append(append([]clusterMergeVerdict(nil), req.Frozen...), audited...)
 	logf("INFO", "typology_cluster_audit attempt=%d rows=%d iterations=%d duration_ms=%d tokens=%d",
@@ -235,7 +238,7 @@ func buildClusterAuditContext(req clusterAuditRequest) string {
 	var b strings.Builder
 	b.WriteString("# Cluster merge audit context\n\n")
 	b.WriteString("## Mechanical grouping\n\n")
-	b.WriteString(strings.TrimSpace(req.MechanicalMD))
+	b.WriteString(strings.TrimSpace(req.MechanicalYAML))
 	b.WriteString("\n\n## Package roles\n\n")
 	b.WriteString(strings.TrimSpace(req.RolesYAML))
 	b.WriteString("\n\n## Capability constraints\n\n")
@@ -285,7 +288,7 @@ Inspection protocol (MUST follow in order):
 5. Only then move to the next row.
 
 Verdicts:
-- accept: same lifecycle / same job; fold into one refined slice is earned
+- accept: same lifecycle / same job; fold into one refined slice is earned. Evidence MUST quote every package path in the row; otherwise use overlay or reject.
 - overlay: useful teaching nickname only; MUST NOT become catalog owns[]
 - reject: drop the grouping
 
@@ -301,16 +304,121 @@ Frozen sticky verdicts (do not re-litigate):
 	b.WriteString("\nProposed merges to score (every id required exactly once):\n")
 	b.WriteString(formatProposedMergesForAudit(proposed))
 	b.WriteString(`
-Output one block per proposed id, in any order, with lines:
-id: <id>
-verdict: accept|overlay|reject
-reason: <one sentence>
-evidence: <path + symbol quotes>
+Final answer MUST be a YAML list of objects (no markdown fences), one object per proposed id:
+- id: <id>
+  verdict: accept|overlay|reject
+  reason: <one sentence>
+  evidence:
+    - <path + symbol quote>
 `)
 	return b.String()
 }
 
 func parseClusterAuditAnswer(answer string, proposed []proposedMerge) ([]clusterMergeVerdict, error) {
+	body := strings.TrimSpace(stripCodeFence(answer))
+	if looksLikeClusterAuditYAML(body) {
+		rows, err := parseClusterAuditAnswerYAML(answer)
+		if err != nil {
+			return nil, err
+		}
+		return alignClusterAuditRows(rows, proposed)
+	}
+	if rows, err := parseClusterAuditAnswerYAML(answer); err == nil && len(rows) > 0 {
+		return alignClusterAuditRows(rows, proposed)
+	}
+	return parseClusterAuditAnswerLines(answer, proposed)
+}
+
+func looksLikeClusterAuditYAML(body string) bool {
+	trim := strings.TrimSpace(body)
+	if trim == "" {
+		return false
+	}
+	if strings.HasPrefix(trim, "merges:") || strings.HasPrefix(trim, "- id:") || strings.HasPrefix(trim, "-id:") {
+		return true
+	}
+	return strings.Contains(trim, "\n- id:") || strings.Contains(trim, "\nmerges:")
+}
+
+func parseClusterAuditAnswerYAML(answer string) ([]clusterMergeVerdict, error) {
+	body := strings.TrimSpace(stripCodeFence(answer))
+	if body == "" {
+		return nil, fmt.Errorf("empty cluster audit answer")
+	}
+	var rows []clusterMergeVerdict
+	if err := yaml.Unmarshal([]byte(body), &rows); err != nil {
+		// Also accept a document wrapper: merges: [...]
+		var wrap struct {
+			Merges []clusterMergeVerdict `yaml:"merges"`
+		}
+		if err2 := yaml.Unmarshal([]byte(body), &wrap); err2 != nil || len(wrap.Merges) == 0 {
+			return nil, fmt.Errorf("cluster audit yaml: %w", err)
+		}
+		rows = wrap.Merges
+	}
+	out := make([]clusterMergeVerdict, 0, len(rows))
+	for _, row := range rows {
+		id := strings.TrimSpace(row.ID)
+		if id == "" {
+			continue
+		}
+		verdict := strings.ToLower(strings.TrimSpace(row.Verdict))
+		if verdict == "" {
+			verdict = verdictReject
+		}
+		out = append(out, clusterMergeVerdict{
+			ID:       id,
+			Packages: normalizePackageList(row.Packages),
+			Verdict:  verdict,
+			Reason:   strings.TrimSpace(row.Reason),
+			Evidence: row.Evidence,
+		})
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("cluster audit yaml had no rows")
+	}
+	return out, nil
+}
+
+func alignClusterAuditRows(rows []clusterMergeVerdict, proposed []proposedMerge) ([]clusterMergeVerdict, error) {
+	byID := make(map[string]clusterMergeVerdict, len(rows))
+	for _, row := range rows {
+		v := row
+		if v.Verdict == verdictAccept && len(v.Evidence) == 0 {
+			v.Verdict = verdictReject
+			v.Reason = firstNonEmpty(v.Reason, "accept without evidence quotes")
+		}
+		byID[v.ID] = v
+	}
+	out := make([]clusterMergeVerdict, 0, len(proposed))
+	for _, p := range proposed {
+		v, ok := byID[p.ID]
+		if !ok {
+			out = append(out, clusterMergeVerdict{
+				ID:       p.ID,
+				Packages: p.Packages,
+				Verdict:  verdictReject,
+				Reason:   "unparsed: missing verdict for proposed id",
+			})
+			continue
+		}
+		delete(byID, p.ID)
+		v.Packages = p.Packages
+		v = enforceAcceptEvidenceCoverage(v)
+		out = append(out, v)
+	}
+	if len(byID) > 0 {
+		extras := make([]string, 0, len(byID))
+		for id := range byID {
+			extras = append(extras, id)
+		}
+		sort.Strings(extras)
+		return out, fmt.Errorf("typology_cluster_audit returned extra ids: %s", strings.Join(extras, ", "))
+	}
+	return out, nil
+}
+
+func parseClusterAuditAnswerLines(answer string, proposed []proposedMerge) ([]clusterMergeVerdict, error) {
 	blocks := splitAuditBlocks(answer)
 	byID := make(map[string]clusterMergeVerdict, len(proposed))
 	for _, block := range blocks {
@@ -329,7 +437,7 @@ func parseClusterAuditAnswer(answer string, proposed []proposedMerge) ([]cluster
 			verdict = verdictReject
 		}
 		reason := fieldLine(block, "reason")
-		evidence := splitEvidenceList(fieldLine(block, "evidence"))
+		evidence := collectEvidenceFromBlock(block)
 		if verdict == verdictAccept && len(evidence) == 0 {
 			verdict = verdictReject
 			reason = firstNonEmpty(reason, "accept without evidence quotes")
@@ -355,6 +463,7 @@ func parseClusterAuditAnswer(answer string, proposed []proposedMerge) ([]cluster
 		}
 		delete(byID, p.ID)
 		v.Packages = p.Packages
+		v = enforceAcceptEvidenceCoverage(v)
 		out = append(out, v)
 	}
 	if len(byID) > 0 {
@@ -402,6 +511,56 @@ func fieldLine(block, key string) string {
 	return ""
 }
 
+// collectEvidenceFromBlock reads evidence from an audit block. Models often emit:
+//
+//	evidence:
+//	internal/localgit: Inspector.InspectPath
+//	  - internal/remotegit: Fetch
+//
+// fieldLine alone only sees the empty rest of the evidence: line and drops quotes.
+func collectEvidenceFromBlock(block string) []string {
+	lines := strings.Split(block, "\n")
+	collecting := false
+	out := make([]string, 0, 4)
+	for _, line := range lines {
+		trim := strings.TrimSpace(line)
+		if trim == "" {
+			continue
+		}
+		lower := strings.ToLower(trim)
+		if strings.HasPrefix(lower, "evidence:") {
+			collecting = true
+			rest := strings.TrimSpace(trim[len("evidence:"):])
+			if rest != "" {
+				out = append(out, splitEvidenceList(rest)...)
+			}
+			continue
+		}
+		if !collecting {
+			continue
+		}
+		if auditBlockFieldStart(lower) {
+			break
+		}
+		item := strings.TrimSpace(strings.TrimPrefix(trim, "-"))
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func auditBlockFieldStart(lowerTrimmed string) bool {
+	for _, key := range []string{"id:", "verdict:", "reason:", "packages:", "intent:"} {
+		if strings.HasPrefix(lowerTrimmed, key) {
+			return true
+		}
+	}
+	return false
+}
+
 func splitEvidenceList(raw string) []string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -421,6 +580,33 @@ func splitEvidenceList(raw string) []string {
 	return out
 }
 
+// enforceAcceptEvidenceCoverage demotes accept to overlay when evidence does not cite every package.
+func enforceAcceptEvidenceCoverage(v clusterMergeVerdict) clusterMergeVerdict {
+	if v.Verdict != verdictAccept || len(v.Packages) < 2 {
+		return v
+	}
+	joined := strings.ToLower(strings.Join(v.Evidence, "\n"))
+	var missing []string
+	for _, pkg := range v.Packages {
+		p := strings.TrimSpace(strings.ToLower(pkg))
+		if p == "" {
+			continue
+		}
+		if !strings.Contains(joined, p) {
+			missing = append(missing, pkg)
+		}
+	}
+	if len(missing) == 0 {
+		return v
+	}
+	v.Verdict = verdictOverlay
+	v.Reason = firstNonEmpty(v.Reason, "accept without per-package evidence quotes")
+	if !strings.Contains(strings.ToLower(v.Reason), "per-package evidence") {
+		v.Reason = strings.TrimSpace(v.Reason) + "; accept without per-package evidence quotes"
+	}
+	return v
+}
+
 func newClusterAuditorFromOpts(ctx context.Context, opts Options, analysisDir string) (clusterMergeAuditor, error) {
 	if strings.TrimSpace(opts.ConfigDir) == "" || strings.TrimSpace(opts.RepoID) == "" {
 		return nil, fmt.Errorf("config-dir and repo-id required for cluster audit RLM")
@@ -433,6 +619,6 @@ func newClusterAuditorFromOpts(ctx context.Context, opts Options, analysisDir st
 	if err != nil {
 		return nil, err
 	}
-	traceDir := rlmTraceDir(analysisDir, jmodules.TaskTypologyClusterAudit)
+	traceDir := rlmTraceDir(inferenceWorkRoot(opts, analysisDir), jmodules.TaskTypologyClusterAudit)
 	return newStropClusterMergeAuditor(ctx, cfg, traceDir)
 }

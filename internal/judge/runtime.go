@@ -143,6 +143,17 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 		nil,
 		opts.RunReport,
 	)
+	// Evidence keys that must be non-empty when the CoT path runs (mirror mandatory outputs).
+	// RLM bootstrap story validates a named map before Complete; this covers legacy CoT injection.
+	interceptorSetup.RegisterRequiredInputs(jmodules.TaskBootstrapStory, []string{
+		"repo_id", "readme_snapshot",
+	})
+	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologyCluster, []string{
+		"repo_id", "package_roles", "mechanical_grouping_yaml", "readme_snapshot",
+	})
+	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologyRefine, []string{
+		"repo_id", "slice_objective_ledger_yaml", "package_roles", "readme_snapshot",
+	})
 	configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
 	genFactory := factory.NewGeneratorFactory(configurator)
 	evalFactory := factory.NewEvaluatorFactory(configurator)

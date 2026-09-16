@@ -42,7 +42,7 @@ func TestApplyReadingPath_storyAndTypology(t *testing.T) {
 	}
 	for _, name := range []string{
 		"architecture_brief.md",
-		"cluster_proposal.md",
+		"cluster_merge_proposal.yaml",
 		"journey.md",
 		"human_intervention.md",
 		"package_roles.yaml",
@@ -114,7 +114,7 @@ func TestApplyReadingPath_skipsMissingPriority(t *testing.T) {
 	if err := os.MkdirAll(evidence, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"architecture_brief.md", "cluster_proposal.md", "journey.md", "human_intervention.md"} {
+	for _, name := range []string{"architecture_brief.md", "cluster_merge_proposal.yaml", "journey.md", "human_intervention.md"} {
 		if err := os.WriteFile(filepath.Join(evidence, name), []byte("# x\n\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}

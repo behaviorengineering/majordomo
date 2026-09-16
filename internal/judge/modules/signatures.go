@@ -81,6 +81,7 @@ func bootstrapStoryModule() *dspymodules.DirectivesCoT {
 			in("typology_manifest", "Typology evidence manifest YAML"),
 			in("typology_architecture", "Post-refine Typology architecture brief or fallback architecture survey"),
 			in("typology_refined_catalog", "Refined Typology catalog YAML proposal, when available"),
+			in("slice_objective_ledger", "Evidence-first slice objective ledger YAML when refine ran"),
 			in("typology_journey", "Compressed typology journey notes and boundary debt, when available"),
 			in("repo_layout", "Top-level repo layout and notable evidence files"),
 			in("current_readme", "Current bootstrap README placeholder"),
@@ -101,17 +102,18 @@ func bootstrapStoryModule() *dspymodules.DirectivesCoT {
 			out("chronology_md", "Updated chronology markdown"),
 			out("grounding_md", "Updated agenting grounding markdown"),
 		},
-	).WithInstruction(`Seed the context branch from current evidence only.
-Write all outputs as present-tense, user-facing markdown.
-Prefer the refined Typology catalog and journey notes over raw package inventory when they are present.
-The README should describe the context branch and its seed origin.
+	).WithInstruction(`Seed the context branch for the served repository (repo_id), not Majordomo the control plane (unless repo_id is majordomo).
+Write all outputs as present-tense, user-facing markdown about that product.
+Prefer the slice objective ledger and refined Typology catalog over raw package inventory when they are present.
+The README should describe the context branch and its seed origin for the served repo.
 README MUST keep a ## Reading order section (story path then evidence/typology). Preserve <!-- majordomo-reading-toc:start --> / <!-- majordomo-reading-toc:end --> and <!-- majordomo-reading-nav:start --> / <!-- majordomo-reading-nav:end --> blocks when present; digest re-applies them if dropped.
 Mission, architecture, conventions, and weaknesses must be evidence-backed and should not mention historical events that are not in the supplied evidence.
-Architecture should describe proposed bounded contexts (slices), surfaces, and known boundary debt from the journey notes.
+Mission, architecture, and grounding MUST name the served product from evidence; MUST NOT describe Majordomo triage, digest, or context-branch process as the product.
+Architecture should describe proposed bounded contexts (slices), surfaces, and known boundary debt from the journey notes and ledger.
 Root architecture_md is the teaching story for humans and review grounding. Keep the Typology evidence brief (typology_architecture input) as source material; do not pretend it is the confirmed catalog.
-Do not copy hollow template slice objectives; paraphrase into concrete teaching language grounded in the catalog and README.
+Do not copy hollow template slice objectives; paraphrase into concrete teaching language grounded in the ledger, catalog, and README.
 Chronology must stay honest, with at most a single explicit seed marker. Do not reconstruct past decisions.
-The grounding output should summarize the accepted mission and architecture for agenting.
+The grounding output should summarize the accepted mission and architecture for agenting on the served product.
 If evidence is thin, keep the section minimal rather than inventing details.
 When validation_feedback is present, fix those issues before emitting.
 Preserve each file's markdown shape and heading conventions. Preserve majordomo-reading-nav banners when present.`)
@@ -130,15 +132,19 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges. Folder names are not evidence."),
 			in("package_capability_constraints", "Durable is/must_not capability codes per package (and filled_by from fills_dto edges). Factual; MUST NOT contradict."),
-			in("mechanical_grouping_md", "Deterministic door-walk seed: door-private vs shared vs unreached, libraries, product clumps."),
+			in("mechanical_grouping_yaml", "Deterministic door-walk seed YAML: door-private vs shared vs unreached, libraries, product clumps."),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
 			in("readme_snapshot", "Served-repo README: product purpose and delivery commands"),
 			in("validation_feedback", "Optional prior structure-validation feedback to fix"),
 		},
 		[]core.OutputField{
-			out("cluster_proposal_md", "Markdown counsel only: proposed merges narrative, renames, anti-pattern findings, boundary debt, rationale, capability constraints"),
-			out("proposed_merges_yaml", "YAML list of proposed merge rows (id, packages, intent), or [] when proposing no folds"),
+			// Flat strings (not XML arrays): empty [] fails strop mandatory validation.
+			// When proposing no folds, emit the literal "none" in each field.
+			// Go splits and zips into cluster_merge_proposal.yaml.
+			out("merge_ids", "Comma-separated merge nickname ids, or the literal none when proposing no folds"),
+			out("merge_packages", "Semicolon-separated package groups (comma-separated paths inside each group), same order as merge_ids; or none"),
+			out("merge_intents", "Comma-separated intents per merge (slice or nickname), same order as merge_ids; or none"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
 A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
@@ -147,7 +153,7 @@ package_capability_constraints is factual is/is-not prior. MUST NOT contradict i
 Order of evidence (MUST):
 1. package_roles: each package already has role + confidence + evidence from code (entrypoint, server, dto, exec_runner, aggregator, adapter, config, observability, unknown).
 2. package_capability_constraints: portable is / must_not codes and filled_by from fills_dto edges.
-3. mechanical_grouping_md: deterministic door-walk seed. It is authoritative for door-private vs shared vs unreached facts; the LLM must not silently override those sections.
+3. mechanical_grouping_yaml: deterministic door-walk seed. It is authoritative for door-private vs shared vs unreached facts; the LLM must not silently override those facts.
 4. package_contracts and readme_snapshot: supporting facts.
 5. graph_text: coupling and wiring only. Labeled edges in package_roles (fills_dto, uses_runner, serves_server, composes, reads_config) explain imports.
 6. Folder and path words (dashboard, board, cli, server) are NEVER evidence and MUST NOT relabel a node.
@@ -155,7 +161,7 @@ Order of evidence (MUST):
 Hard rules from observed roles and the door-walk seed:
 - entrypoint and server are distinct doors. MUST NOT merge them. Cross-door wiring is a note, not ownership.
 - Door-private packages may form product slices for that door only.
-- Shared-across-doors packages are library-leaning; MUST NOT invent sole ownership for one door.
+- Shared-across-doors packages must not be claimed as sole ownership for one door. Shared is not the same as library; only dto/config/exec_runner/observability (and similar technical roles) are library by role.
 - Unreached packages MUST NOT be auto-owned; argue or leave debt.
 - dto packages are shared data contracts; MUST NOT merge them into an aggregator or call them the product domain.
 - aggregator packages build page/domain data; MUST NOT label them kind: ui or "the website".
@@ -164,14 +170,17 @@ Hard rules from observed roles and the door-walk seed:
 - fills_dto edges mean adapters fill JSON types; they are NOT "forge depends on the UI".
 - uses_runner edges mean a package shells out through a runner; they are NOT "depends on the CLI domain".
 
-Grouping is optional and only when both sides are high-confidence and an evidenced import exists. Prefer recording wiring notes over inventing ownership.
-Propose companion-adapter folds when useful; folding into the refined catalog requires a later cluster_merge accept verdict. Mechanical product clumps in mechanical_grouping_md are seed hints only, not earned catalog slices.
-` + consultantCounselContract + `
+Required scan before emitting none (MUST):
+1. List every product_seeds entry in mechanical_grouping_yaml and decide fold-with-neighbour vs leave separate (singleton seeds alone are not a merge row).
+2. List same-job-family companions among adapters (and similar roles) that share an evidenced import or stem (example: localgit + remotegit). Propose those as merge rows when both sides are adapters (or both match the same high-confidence role) and an evidenced edge or shared caller exists.
+3. Only after that scan finds zero eligible folds may you emit the literal none in all three fields. none is not the default safe answer when companions exist.
 
 Apply these merge heuristics only after honoring package_roles:
-1. Same job family companions (for example two forge adapters) may be proposed when both are adapters.
+1. Same job family companions (for example two forge adapters, or local + remote git adapters) MUST be proposed when both are adapters with evidenced wiring.
 2. Split companion packages that share a stem (sa + satools -> sa).
 3. Sole importer: wiring note only; never merge-into-caller against observed roles.
+
+Mechanical product clumps in mechanical_grouping_yaml are seed hints that start the scan above; they are not earned catalog slices until a later cluster_merge accept verdict. Folding into the refined catalog requires that accept verdict.
 
 Enforce anti-patterns:
 - Do not promote capabilities to domain pillars.
@@ -180,18 +189,13 @@ Enforce anti-patterns:
 - Every draft package path must remain claimed under owns[], surfaces[], or libraries[].owns[].
 
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
-Record boundary debt with smell, alternatives, and lean. MUST NOT use hollow mitigations such as "Approve binding or refactor".
-Output cluster_proposal_md as markdown counsel with sections: Proposed merges, Proposed renames, Anti-pattern findings, Boundary debt, Rationale, Capability constraints (is / is-not).
-MUST NOT bury machine merge rows inside cluster_proposal_md.
-Output proposed_merges_yaml as YAML only (no markdown fences): a list of rows, or [].
-Each row:
-- id: <nickname>
-  packages: [<repo-relative paths>]
-  intent: slice | nickname
-Use intent: slice only when arguing a catalog fold. Use intent: nickname for teaching overlays that MUST NOT become owns[].
-Empty list [] is valid when proposing no folds.
-The Capability constraints (is / is-not) section MUST quote package paths from package_capability_constraints with their is and must_not codes.
-Do not emit catalog YAML in this step.`)
+
+Emit three parallel flat strings of the same length (or all the literal none):
+- merge_ids: comma-separated nicknames (example: git,analysis)
+- merge_packages: semicolon-separated groups; inside each group comma-separated repo-relative paths (example: internal/localgit,internal/remotegit;internal/pruneagent,internal/triage)
+- merge_intents: comma-separated slice or nickname per id (example: slice,nickname)
+When proposing no folds after the required scan, set each field to the literal none (not empty tags).
+Do not emit markdown counsel or catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)
 }
 
@@ -201,7 +205,7 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			in("repo_id", "Served repository id"),
 			in("module_scope", "Typology module scope"),
 			in("draft_catalog_yaml", "Raw Typology discover draft YAML"),
-			in("cluster_proposal_md", "Approved cluster-pass proposal markdown (after merge audit demote)"),
+			in("cluster_merge_proposal_yaml", "Proposed merges YAML composed from cluster CoT (id/packages/intent rows)"),
 			in("cluster_merge_verdicts_yaml", "Durable cluster merge audit verdicts: accept|overlay|reject per proposed package set"),
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges"),
@@ -213,11 +217,11 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			in("validation_feedback", "Optional ValidateStructure or boundary-evaluator feedback to fix"),
 		},
 		[]core.OutputField{
-			out("refined_catalog_yaml", "Full refined Typology catalog YAML proposal"),
-			out("journey_md", "Compressed journey notes including decisions and boundary debt table"),
+			// Explicit exception: full catalog stays one YAML string leaf until a follow-up splits slices into XML items.
+			out("refined_catalog_yaml", "Full refined Typology catalog as a YAML document string (not a list field)"),
 		},
-	).WithInstruction(`You are the unattended Typology refine human-writer for Majordomo context digest.
-Apply the cluster proposal to the draft catalog and emit a complete refined typology.yaml.
+	).WithInstruction(`You are the unattended Typology refine catalog writer for Majordomo context digest.
+Apply accepted cluster merges to the draft catalog and emit a complete refined typology.yaml.
 package_roles, package_capability_constraints, cluster_merge_verdicts_yaml, and slice_objective_ledger_yaml are factual. MUST NOT contradict them.
 Folder names are never evidence.
 
@@ -237,9 +241,8 @@ Placement from roles:
 - adapter / config -> owns[] or libraries[] as fits
 
 Fold packages into one slice or libraries[].owns[] ONLY when cluster_merge_verdicts_yaml marks that package set verdict: accept.
-overlay and reject rows stay separate package owners; nicknames live in cluster/journey notes only and MUST NOT disguise as libraries[].owns[].
+overlay and reject rows stay separate package owners; nicknames MUST NOT disguise as libraries[].owns[].
 MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from false ownership.
-` + consultantCounselContract + `
 
 Catalog rules:
 - Every slice MUST have a non-empty business objective that states why the bounded context exists in one concrete sentence.
@@ -251,16 +254,10 @@ Catalog rules:
 - Surfaces are ui, cli, or api interaction artefacts for user-facing delivery based on observed roles, not path words.
 - Every draft package path MUST appear under owns[], surfaces[], or libraries[].owns[].
 - Preserve real package paths from the draft and graph verbatim.
-- MUST NOT invent filesystem package folders. Put desired renames in journey debt only.
-- Journey markdown MUST include Status, decisions taken, and a Technical debt and boundary violations table.
-- Each decision MUST say what was rejected and why.
-- Each open debt row MUST carry smell, alternatives, and lean.
-- Journey MUST NOT assign synchronize_state / merge_adapters capabilities to dto-only slices.
-- When Status says complete or completed, the debt table MUST NOT contain "Merge into" actions.
-- If any debt row still says Merge into, Status MUST stay Open (not complete). Claim complete only after those Merge into rows are cleared because the catalog already reflects the merges.
+- MUST NOT invent filesystem package folders.
 - When validation_feedback is present, fix those issues before emitting.
 
-Output refined_catalog_yaml as YAML only (no markdown fences). Output journey_md as markdown.`)
+Output refined_catalog_yaml as YAML only (no markdown fences). Do not emit journey markdown.`)
 	return newGenerator(sig, TaskTypologyRefine)
 }
 
@@ -295,8 +292,9 @@ func typologyInterventionSharedInputs() []core.InputField {
 		in("repo_id", "Served repository id"),
 		in("architecture_md", "Post-refine Typology architecture brief"),
 		in("refined_catalog_yaml", "Refined Typology catalog YAML"),
-		in("journey_md", "Journey notes from typology refine or prior intervention step"),
-		in("cluster_proposal_md", "Cluster-pass proposal markdown"),
+		in("journey_md", "Journey notes from prior intervention step (may be empty on first write)"),
+		in("cluster_merge_proposal_yaml", "Cluster merge proposal YAML (membership hint)"),
+		in("cluster_merge_verdicts_yaml", "Cluster merge audit verdicts YAML"),
 		in("findings_list", "Deterministic list of open architecture findings; each must be flagged for humans"),
 		in("validation_feedback", "Optional prior validation feedback to fix"),
 	}
@@ -308,7 +306,7 @@ func typologyInterventionJourneyModule() *dspymodules.DirectivesCoT {
 		[]core.OutputField{
 			out("journey_md", "Updated journey with open Status and debt covering every finding"),
 		},
-	).WithInstruction(`You rewrite typology journey notes after refine so open architecture findings cannot hide.
+	).WithInstruction(`You write typology journey notes after refine and architecture so open findings cannot hide.
 ` + consultantCounselContract + `
 
 Rules:
@@ -316,7 +314,7 @@ Rules:
 - When findings_list is non-empty, journey Status MUST stay open (not complete/completed).
 - When debt rows still say Merge into, journey Status MUST stay open (not complete/completed).
 - Journey MUST include Status, decisions already taken, and a debt table that names every finding with smell, alternatives with a cost, and a lean.
-- MUST keep leans from refine counsel. MUST NOT flatten debt rows to hollow "Approve binding or refactor".
+- MUST NOT flatten debt rows to hollow "Approve binding or refactor".
 - MUST NOT invent catalog YAML, sliceBindings, or libraries membership.
 - Output markdown only in journey_md.
 When validation_feedback is present, fix those issues before emitting.`)

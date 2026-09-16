@@ -436,16 +436,16 @@ func newCacheCmd() *cobra.Command {
 	}
 	cmd.AddCommand(&cobra.Command{
 		Use:   "validate-branch <branch>",
-		Short: "Validate majordomo-inference-cache branch name",
+		Short: "Validate majordomo-pr-reviewer-cache branch name",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cache.ValidateInferenceCacheBranch(args[0])
+			return cache.ValidateReviewCacheBranch(args[0])
 		},
 	})
 	var remote, branch, worktree string
 	pushCmd := &cobra.Command{
 		Use:   "push",
-		Short: "Push inference-cache branch with constrained auth",
+		Short: "Push review-cache branch with constrained auth",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cache.Push(cache.PushOptions{Remote: remote, Branch: branch, Worktree: worktree})
 		},
@@ -698,6 +698,15 @@ func newCacheCmd() *cobra.Command {
 	mustMarkFlagRequired(restoreCmd, "output-dir")
 	cmd.AddCommand(restoreCmd)
 
+	cmd.AddCommand(&cobra.Command{
+		Use:   "validate-digest-branch <branch>",
+		Short: "Validate majordomo-digest-cache branch name",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return cache.ValidateDigestCacheBranch(args[0])
+		},
+	})
+
 	var (
 		digestDir         string
 		digestKind        string
@@ -817,7 +826,7 @@ func newCacheCmd() *cobra.Command {
 	var digestRemote, digestBranch, digestWorktree string
 	digestPush := &cobra.Command{
 		Use:   "digest-push",
-		Short: "Push majordomo-inference-cache branch (digest artifacts)",
+		Short: "Push majordomo-digest-cache branch",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cache.PushDigest(cache.DigestPushOptions{
 				Remote: digestRemote, Branch: digestBranch, Worktree: digestWorktree,
@@ -825,8 +834,8 @@ func newCacheCmd() *cobra.Command {
 		},
 	}
 	digestPush.Flags().StringVar(&digestRemote, "remote", "", "https remote URL")
-	digestPush.Flags().StringVar(&digestBranch, "branch", "", "inference cache branch")
-	digestPush.Flags().StringVar(&digestWorktree, "worktree", "", "inference cache worktree")
+	digestPush.Flags().StringVar(&digestBranch, "branch", "", "digest cache branch")
+	digestPush.Flags().StringVar(&digestWorktree, "worktree", "", "digest cache worktree")
 	mustMarkFlagRequired(digestPush, "remote")
 	mustMarkFlagRequired(digestPush, "branch")
 	mustMarkFlagRequired(digestPush, "worktree")
@@ -850,7 +859,7 @@ func newContextCmd() *cobra.Command {
 	}
 	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
 	mustMarkFlagRequired(validate, "dir")
-	var digestConfigDir, digestRepoID, digestWorkDir, digestOut string
+	var digestConfigDir, digestRepoID, digestWorkDir, digestOut, digestWorkStoryDir string
 	var digestTypologyBinary, digestModuleScope, digestBootstrapPolicy string
 	var skipStory, skipCompact, forceCompact bool
 	digest := &cobra.Command{
@@ -880,6 +889,7 @@ func newContextCmd() *cobra.Command {
 				SkipStory:             skipStory,
 				SkipCompact:           skipCompact,
 				ForceCompact:          forceCompact,
+				WorkStoryDir:          digestWorkStoryDir,
 				Context:               ctx,
 			})
 			if err != nil {
@@ -903,6 +913,7 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().StringVar(&digestRepoID, "repo-id", "", "served repo id")
 	digest.Flags().StringVar(&digestWorkDir, "workdir", "", "served-repo clone with origin remote")
 	digest.Flags().StringVar(&digestOut, "out", "-", "write result JSON (default stdout; logs stay on stdout)")
+	digest.Flags().StringVar(&digestWorkStoryDir, "work-story-dir", "", "durable local dump for RLM + CoT module traces + runreports (AI testing); default tmp/digest-runs/<repo>-<ts> or MAJORDOMO_DIGEST_WORK_STORY_DIR/<repo>-<ts>")
 	digest.Flags().StringVar(&digestTypologyBinary, "typology-binary", os.Getenv("MAJORDOMO_TYPOLOGY_BINARY"), "Typology executable path")
 	digest.Flags().StringVar(&digestModuleScope, "module-scope", os.Getenv("MAJORDOMO_TYPOLOGY_MODULE_SCOPE"), "Typology module scope within the served repo")
 	digest.Flags().StringVar(&digestBootstrapPolicy, "bootstrap-survey-policy", "auto", "bootstrap survey policy: auto|always|never")

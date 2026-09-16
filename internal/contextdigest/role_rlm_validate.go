@@ -19,6 +19,7 @@ import (
 	stropdspy "github.com/behaviorengineering/strop/dspy"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	typroles "github.com/behaviorengineering/typology/roles"
+	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -54,7 +55,7 @@ func (a rlmCompleteAdapter) Complete(ctx context.Context, contextPayload any, qu
 	return a.complete(ctx, contextPayload, query)
 }
 
-func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig, analysisDir string) (packageRoleRLMValidator, error) {
+func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig, workStoryDir string) (packageRoleRLMValidator, error) {
 	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyInspect)
 	if err != nil {
 		return nil, err
@@ -73,7 +74,7 @@ func newStropPackageRoleRLM(ctx context.Context, cfg config.RepoConfig, analysis
 	rlmCfg := stropdspy.RLMDefaults()
 	rlmCfg.MaxFullContextQueryChars = 24_000
 	rlmCfg.Timeout = provider.GetTimeout(3 * time.Minute)
-	rlmCfg.TraceDir = rlmTraceDir(analysisDir, jmodules.TaskTypologyInspect)
+	rlmCfg.TraceDir = rlmTraceDir(workStoryDir, jmodules.TaskTypologyInspect)
 	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ Allowed roles: entrypoint, server, dto, exec_runner, aggregator, adapter, config
 Mechanical prior: role=%s evidence=%s
 MUST NOT use the directory basename as evidence.
 Explore exports and bodies in the context; dig into private helpers only if needed.
-End with lines:
+Final answer MUST be a small YAML object (no markdown fences):
 role: <one allowed role>
 evidence: <short symbol quotes>
 Package path (not evidence): %s`, mechanicalRole, mechanicalEvidence, pkgPath)
@@ -119,6 +120,9 @@ Package path (not evidence): %s`, mechanicalRole, mechanicalEvidence, pkgPath)
 }
 
 func parseRLMRoleAnswer(text string) (role, evidence string) {
+	if r, e, ok := parseRLMRoleAnswerYAML(text); ok {
+		return r, e
+	}
 	lower := strings.ToLower(text)
 	for _, line := range strings.Split(text, "\n") {
 		trim := strings.TrimSpace(line)
@@ -144,6 +148,29 @@ func parseRLMRoleAnswer(text string) (role, evidence string) {
 		role = roleUnknown
 	}
 	return role, evidence
+}
+
+func parseRLMRoleAnswerYAML(text string) (role, evidence string, ok bool) {
+	body := strings.TrimSpace(stripCodeFence(text))
+	if body == "" {
+		return "", "", false
+	}
+	var doc struct {
+		Role     string `yaml:"role"`
+		Evidence string `yaml:"evidence"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &doc); err != nil {
+		return "", "", false
+	}
+	role = normalizeObservedRole(doc.Role)
+	evidence = strings.TrimSpace(doc.Evidence)
+	if role == "" && evidence == "" {
+		return "", "", false
+	}
+	if role == "" {
+		role = roleUnknown
+	}
+	return role, evidence, true
 }
 
 func normalizeObservedRole(s string) string {

@@ -56,12 +56,11 @@ Briefing for this digest proposal. Not the teaching-story root files and not a c
 
 1. This index ({{code "README.md"}})
 2. [{{code "architecture_brief.md"}}](architecture_brief.md) - observed map / architecture brief
-3. [{{code "cluster_proposal.md"}}](cluster_proposal.md) - optional grouping overlay
-4. [{{code "journey.md"}}](journey.md) - refine decisions and debt
-5. [{{code "human_intervention.md"}}](human_intervention.md) - operator priorities
-6. [{{code "pr_priority.md"}}](pr_priority.md) - when present; cold-reader PR counsel
-7. Per-finding PR comments - upserted on the context update PR for conversation/trace (not SCM Resolve threads)
-8. Back to the [story TOC](../../README.md)
+3. [{{code "journey.md"}}](journey.md) - refine decisions and debt
+4. [{{code "human_intervention.md"}}](human_intervention.md) - operator priorities
+5. [{{code "pr_priority.md"}}](pr_priority.md) - when present; cold-reader PR counsel
+6. Per-finding PR comments - upserted on the context update PR for conversation/trace (not SCM Resolve threads)
+7. Back to the [story TOC](../../README.md)
 
 ## Appendix (reference, no Prev/Next)
 
@@ -86,10 +85,10 @@ var StoryReadingOrder = []string{
 
 // TypologyReadingOrder is the guided briefing sequence under evidence/typology/.
 // pr_priority.md is optional and is skipped when absent.
+// Machine YAML evidence lives in TypologyAppendixFiles (not nav-bannered).
 var TypologyReadingOrder = []string{
 	TypologyReadingIndexPath,
 	TypologyArchitectureBriefPath,
-	"cluster_proposal.md",
 	"journey.md",
 	"human_intervention.md",
 	"pr_priority.md",
@@ -97,6 +96,9 @@ var TypologyReadingOrder = []string{
 
 // TypologyAppendixFiles are machine/reference artifacts listed in the typology TOC only.
 var TypologyAppendixFiles = []string{
+	"mechanical_grouping.yaml",
+	"cluster_merge_proposal.yaml",
+	"cluster_merge_verdicts.yaml",
 	"package_roles.yaml",
 	"package_capability_constraints.yaml",
 	"slice_objective_ledger.yaml",
@@ -237,6 +239,10 @@ func applyNavChain(ctxDir string, relChain []string, tocRel string, typologyLink
 		if typologyLinks && rel == "README.md" {
 			continue
 		}
+		// Reading-nav banners are markdown-only; never inject them into YAML evidence.
+		if !strings.HasSuffix(strings.ToLower(rel), ".md") {
+			continue
+		}
 		path := filepath.Join(ctxDir, filepath.FromSlash(rel))
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -276,9 +282,7 @@ func verifyReadingNav(ctxDir string, typologyPresent bool) error {
 		return nil
 	}
 	for _, rel := range StoryReadingOrder {
-		if rel == "README.md" {
-			// Root README carries the TOC section; nav is still applied.
-		}
+		// Root README carries the TOC section; nav is still applied and verified.
 		if err := check(rel); err != nil {
 			return err
 		}

@@ -38,14 +38,14 @@ type sliceObjectiveLedgerBuilder interface {
 }
 
 type sliceLedgerBuildRequest struct {
-	AnalysisDir   string
-	EvidenceDir   string
-	DraftTypo     catalog.Typology
-	Constraints   packageCapabilityConstraintsDoc
-	ClusterMD     string
-	DigestCache   *cache.DigestStore
-	DigestSkips   bool
-	DigestModelID string
+	AnalysisDir     string
+	EvidenceDir     string
+	DraftTypo       catalog.Typology
+	Constraints     packageCapabilityConstraintsDoc
+	ClusterHintYAML string
+	DigestCache     *cache.DigestStore
+	DigestSkips     bool
+	DigestModelID   string
 }
 
 type stropSliceObjectiveLedgerRLM struct {
@@ -54,7 +54,7 @@ type stropSliceObjectiveLedgerRLM struct {
 	}
 }
 
-func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig, analysisDir string) (sliceObjectiveLedgerBuilder, error) {
+func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig, workStoryDir string) (sliceObjectiveLedgerBuilder, error) {
 	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyObjectiveGrounding)
 	if err != nil || !ok {
 		// Fall back to typology_inspect when the dedicated task is unset or unknown.
@@ -81,7 +81,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig,
 		timeout = ledgerRLMTimeout
 	}
 	rlmCfg.Timeout = timeout
-	rlmCfg.TraceDir = rlmTraceDir(analysisDir, jmodules.TaskTypologyObjectiveGrounding)
+	rlmCfg.TraceDir = rlmTraceDir(workStoryDir, jmodules.TaskTypologyObjectiveGrounding)
 	module, err := stropdspy.CreateRLMModule(llm, rlmCfg)
 	if err != nil {
 		return nil, err
@@ -132,7 +132,7 @@ func newLedgerBuilderFromOpts(ctx context.Context, opts Options, analysisDir str
 	if err != nil {
 		return nil, err
 	}
-	return newStropSliceObjectiveLedgerRLM(ctx, cfg, analysisDir)
+	return newStropSliceObjectiveLedgerRLM(ctx, cfg, inferenceWorkRoot(opts, analysisDir))
 }
 
 type stubSliceLedgerCaller struct {
@@ -273,7 +273,7 @@ func buildSliceObjectiveLedger(
 				}
 				sliceFeedback := filterIssuesForSlice(lastIssues, t.id)
 				joinedCtx := strings.Join(parts, "\n\n")
-				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterMD, sliceFeedback)
+				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterHintYAML, sliceFeedback)
 				answer, _, promptTok, completionTok, totalTok, err := caller.Complete(ctx, joinedCtx, query)
 				if req.DigestCache != nil {
 					req.DigestCache.RecordLedgerMiss()
@@ -432,10 +432,10 @@ func filterIssuesForSlice(issues []string, sliceID string) string {
 	return strings.Join(out, "\n")
 }
 
-func formatSliceObjectiveLedgerQuery(sliceID string, paths []string, constraintBlock, clusterMD, validationFeedback string) string {
-	clusterNote := strings.TrimSpace(clusterMD)
+func formatSliceObjectiveLedgerQuery(sliceID string, paths []string, constraintBlock, clusterHintYAML, validationFeedback string) string {
+	clusterNote := strings.TrimSpace(clusterHintYAML)
 	if len(clusterNote) > 4000 {
-		clusterNote = clusterNote[:4000] + "\n[... cluster proposal truncated ...]\n"
+		clusterNote = clusterNote[:4000] + "\n[... cluster merge context truncated ...]\n"
 	}
 	feedbackBlock := ""
 	if fb := strings.TrimSpace(validationFeedback); fb != "" {
@@ -459,12 +459,15 @@ Cluster proposal (membership hint only; MUST NOT invent prestige meaning from it
 
 Explore the package AST context. Quote symbols, delivery flags, json/yaml tags, or filled_by facts.
 
-End with these lines in order:
-evidence: <comma-separated symbol or flag quotes>
-claims: <comma-separated portable codes only from: data_shape, synchronize_state, merge_adapters, serve_http, wire_handlers, orchestrate, own_domain_rules, fill_dto, run_cli, aggregate_views, exec_process, observability, adapt_external, config>
-objective: <one plain sentence matching the evidence; no prestige overclaim>
+End with a small YAML object (no markdown fences):
 verdict: grounded|overclaim
+evidence:
+  - <symbol or flag quote>
+claims:
+  - <portable code>
+objective: <one plain sentence matching the evidence; no prestige overclaim>
 
+Allowed claim codes only from: data_shape, synchronize_state, merge_adapters, serve_http, wire_handlers, orchestrate, own_domain_rules, fill_dto, run_cli, aggregate_views, exec_process, observability, adapt_external, config
 If you cannot support a runtime claim with symbols, either drop that claim or set verdict: overclaim.
 Claims MUST NOT intersect owned must_not codes in the constraint rows.
 When validation_feedback is present, drop or replace every claim it rejects; do not repeat the same overclaim.`,

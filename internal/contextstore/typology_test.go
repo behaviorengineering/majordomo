@@ -48,7 +48,7 @@ func TestValidateTypologyManifestRequiresHumanInterventionWhenComplete(t *testin
 		PackageCapabilityConstraintsPath: "package_capability_constraints.yaml",
 		SliceObjectiveClaimsPath:         "slice_objective_claims.yaml",
 		SliceObjectiveLedgerPath:         "slice_objective_ledger.yaml",
-		ClusterProposalPath:              "cluster_proposal.md",
+		ClusterProposalPath:              "cluster_merge_proposal.yaml",
 		RefinedSnapshotPath:              "refined_snapshot.yaml",
 		JourneyPath:                      "journey.md",
 	}

@@ -12,26 +12,44 @@ import (
 )
 
 type stubJudgeGen struct {
-	clusterMD           string
-	proposedMergesYAML  string
-	refined             string
-	journey             string
-	ledgerNeedle        string // when set, refine Generate requires this substring in the ledger field
-	calls               int
+	mergeIDs           []string
+	mergePackages      []string
+	mergeIntents       []string
+	proposedMergesYAML string
+	refined            string
+	ledgerNeedle       string // when set, refine Generate requires this substring in the ledger field
+	calls              int
+}
+
+func (s *stubJudgeGen) clusterOut() map[string]interface{} {
+	ids, pkgs, intents := append([]string(nil), s.mergeIDs...), append([]string(nil), s.mergePackages...), append([]string(nil), s.mergeIntents...)
+	if len(ids) == 0 && strings.TrimSpace(s.proposedMergesYAML) != "" {
+		merges, err := parseProposedMergesYAML(s.proposedMergesYAML)
+		if err == nil {
+			for _, m := range merges {
+				ids = append(ids, m.ID)
+				pkgs = append(pkgs, strings.Join(m.Packages, ","))
+				intents = append(intents, m.Intent)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return map[string]interface{}{
+			"merge_ids": "none", "merge_packages": "none", "merge_intents": "none",
+		}
+	}
+	return map[string]interface{}{
+		"merge_ids":      strings.Join(ids, ","),
+		"merge_packages": strings.Join(pkgs, ";"),
+		"merge_intents":  strings.Join(intents, ","),
+	}
 }
 
 func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[string]interface{}, _ int) (map[string]interface{}, error) {
 	s.calls++
 	switch task {
 	case jmodules.TaskTypologyCluster:
-		mergesYAML := strings.TrimSpace(s.proposedMergesYAML)
-		if mergesYAML == "" {
-			mergesYAML = "[]"
-		}
-		return map[string]interface{}{
-			"cluster_proposal_md":  s.clusterMD,
-			"proposed_merges_yaml": mergesYAML,
-		}, nil
+		return s.clusterOut(), nil
 	case jmodules.TaskTypologyRefine:
 		if needle := strings.TrimSpace(s.ledgerNeedle); needle != "" {
 			ledger, ok := fields["slice_objective_ledger_yaml"].(string)
@@ -41,7 +59,6 @@ func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[strin
 		}
 		return map[string]interface{}{
 			"refined_catalog_yaml": s.refined,
-			"journey_md":           s.journey,
 		}, nil
 	default:
 		return map[string]interface{}{}, nil
@@ -97,9 +114,7 @@ edges:
 		t.Fatal(err)
 	}
 	stub := &stubJudgeGen{
-		clusterMD: "# Cluster\n\nKeep board.\n\n## Proposed merges (machine)\n[]\n\n## Capability constraints (is / is-not)\n\n- `internal/board` role=dto is=[data_shape] must_not=[synchronize_state]\n",
-		refined:   refined,
-		journey:   "# Journey\n\n## Status\n\nDraft.\n\n## Technical debt and boundary violations\n\nNone.\n",
+		refined:      refined,
 		ledgerNeedle: "Shared board payload shapes",
 	}
 	ledger := stubLedgerBuilder{
@@ -115,7 +130,6 @@ edges:
 		PackageRoles:          roles,
 		CapabilityConstraints: constraints,
 		ArchitectureDraft:     "# Draft\n",
-		ClusterProposalMD:     "",
 		AnalysisDir:           dir,
 		EvidenceDir:           evidence,
 		LedgerBuilder:         ledger,
@@ -160,7 +174,6 @@ slices:
 `
 	once := &flippingLedgerBuilder{}
 	stub := &stubJudgeGen{
-		clusterMD: "# Cluster\n\nKeep board.\n\n## Proposed merges (machine)\n[]\n\n## Capability constraints (is / is-not)\n\n- `internal/board`\n",
 		refined: `id: demo
 slices:
   - id: board
@@ -169,7 +182,6 @@ slices:
       - id: board-core
         path: internal/board
 `,
-		journey: "# Journey\n\n## Status\n\nOk.\n\n## Technical debt and boundary violations\n\nNone.\n",
 	}
 	_, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
 		RepoID: "demo", ModuleScope: ".",

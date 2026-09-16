@@ -102,5 +102,5 @@ func TestValidatePackageRolesRLMGitboardStyle(t *testing.T) {
 }
 
 func osWrite(path, body string) error {
-	return writeText(path, body)
+	return writeRequiredFile(path, body)
 }
