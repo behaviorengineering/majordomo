@@ -370,25 +370,70 @@ func parseSliceObjectiveLedgerAnswer(text string) (evidence []string, claims []s
 	if e, c, o, v, yamlErr := parseSliceObjectiveLedgerAnswerYAML(text); yamlErr == nil {
 		return e, c, o, v, nil
 	}
+	return parseSliceObjectiveLedgerAnswerLines(text)
+}
+
+// parseSliceObjectiveLedgerAnswerLines accepts both same-line lists and the common
+// model shape where evidence:/claims: open a section of quoted or bare lines.
+func parseSliceObjectiveLedgerAnswerLines(text string) (evidence []string, claims []string, objective, verdict string, err error) {
+	section := "" // "", evidence, claims
 	for _, line := range strings.Split(text, "\n") {
 		trim := strings.TrimSpace(line)
 		if trim == "" {
 			continue
 		}
+		lower := strings.ToLower(trim)
 		if m := objectiveVerdictRE.FindStringSubmatch(trim); len(m) == 2 {
 			verdict = strings.ToLower(m[1])
-			continue
-		}
-		if m := ledgerEvidenceRE.FindStringSubmatch(trim); len(m) == 2 {
-			evidence = append(evidence, splitLedgerList(m[1])...)
-			continue
-		}
-		if m := ledgerClaimsRE.FindStringSubmatch(trim); len(m) == 2 {
-			claims = append(claims, splitLedgerList(m[1])...)
+			section = ""
 			continue
 		}
 		if m := ledgerObjectiveRE.FindStringSubmatch(trim); len(m) == 2 {
 			objective = strings.TrimSpace(m[1])
+			section = ""
+			continue
+		}
+		if m := ledgerEvidenceRE.FindStringSubmatch(trim); len(m) == 2 {
+			evidence = append(evidence, splitLedgerList(m[1])...)
+			section = "evidence"
+			continue
+		}
+		if strings.HasPrefix(lower, "evidence:") || strings.HasPrefix(lower, "evidence=") {
+			rest := strings.TrimSpace(trim[len("evidence")+1:])
+			if rest != "" {
+				evidence = append(evidence, splitLedgerList(rest)...)
+			}
+			section = "evidence"
+			continue
+		}
+		if m := ledgerClaimsRE.FindStringSubmatch(trim); len(m) == 2 {
+			claims = append(claims, splitLedgerList(m[1])...)
+			section = "claims"
+			continue
+		}
+		if strings.HasPrefix(lower, "claims:") || strings.HasPrefix(lower, "claims=") {
+			rest := strings.TrimSpace(trim[len("claims")+1:])
+			if rest != "" {
+				claims = append(claims, splitLedgerList(rest)...)
+			}
+			section = "claims"
+			continue
+		}
+		if strings.HasPrefix(lower, "verdict:") || strings.HasPrefix(lower, "objective:") {
+			section = ""
+			continue
+		}
+		switch section {
+		case "evidence":
+			item := strings.Trim(trim, "`\"'- ")
+			if item != "" && !strings.EqualFold(item, "none") {
+				evidence = append(evidence, item)
+			}
+		case "claims":
+			item := strings.Trim(trim, "`\"'- ")
+			if item != "" && !strings.EqualFold(item, "none") {
+				claims = append(claims, splitLedgerList(item)...)
+			}
 		}
 	}
 	return finalizeLedgerAnswer(evidence, claims, objective, verdict)
