@@ -120,13 +120,44 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	var mergeVerdicts []clusterMergeVerdict
 	var auditMeta clusterAuditResult
 	auditor := input.ClusterAuditor
+	constraintsForCluster := stringField(clusterFields, "package_capability_constraints")
+	clusterFP := cache.ClusterCoTFingerprint{
+		DraftHash:       cache.ContentSHA(input.DraftCatalogYAML),
+		RolesHash:       cache.ContentSHA(input.PackageRoles),
+		ConstraintsHash: cache.ContentSHA(constraintsForCluster),
+		MechanicalHash:  cache.ContentSHA(mechanicalGroupingYAML),
+		ModelID:         input.DigestModelID,
+		PromptVersion:   cache.DigestClusterCoTPromptV1,
+		SchemaVersion:   cache.DigestClusterCoTSchemaV1,
+	}
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
 		if attempt > 1 {
 			clusterFields["validation_feedback"] = clusterFeedback
 		}
-		clusterOut, err := gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, attempt)
-		if err != nil {
-			return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
+		var clusterOut map[string]interface{}
+		usedClusterCache := false
+		if attempt == 1 && strings.TrimSpace(clusterFeedback) == "" &&
+			input.DigestSkips && input.DigestCache != nil {
+			if hit, ok, err := input.DigestCache.LookupClusterCoT(clusterFP); err == nil && ok {
+				input.DigestCache.RecordClusterCoTHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+				logf("INFO", "digest cache hit cluster_cot")
+				clusterOut = map[string]interface{}{
+					"merge_ids":      hit.MergeIDs,
+					"merge_packages": hit.MergePackages,
+					"merge_intents":  hit.MergeIntents,
+				}
+				usedClusterCache = true
+			}
+		}
+		if clusterOut == nil {
+			if input.DigestCache != nil {
+				input.DigestCache.RecordClusterCoTMiss()
+			}
+			var err error
+			clusterOut, err = gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, attempt)
+			if err != nil {
+				return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
+			}
 		}
 		merges, parseErr := mergesFromClusterOut(clusterOut)
 		if parseErr != nil {
@@ -178,6 +209,16 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		if hasOpenClusterRejects(mergeVerdicts) && attempt < maxTypologyRefineAttempts {
 			clusterFeedback = formatClusterAuditRejectFeedback(mergeVerdicts)
 			continue
+		}
+		if !usedClusterCache && input.DigestCache != nil {
+			ids, pkgs, intents := flattenMergesForCache(proposedMerges)
+			if err := input.DigestCache.StoreClusterCoT(clusterFP, cache.ClusterCoTCached{
+				MergeIDs:      ids,
+				MergePackages: pkgs,
+				MergeIntents:  intents,
+			}); err != nil {
+				logf("WARN", "digest cache store cluster_cot failed: %v", err)
+			}
 		}
 		break
 	}
@@ -266,7 +307,39 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 	}
 
+	refineFP := cache.RefineFingerprint{
+		DraftHash:       cache.ContentSHA(input.DraftCatalogYAML),
+		RolesHash:       cache.ContentSHA(input.PackageRoles),
+		ConstraintsHash: cache.ContentSHA(constraintsYAML),
+		LedgerHash:      cache.ContentSHA(ledgerYAML),
+		VerdictsHash:    cache.ContentSHA(verdictsYAML),
+		MechanicalHash:  cache.ContentSHA(mechanicalGroupingYAML),
+		ModelID:         input.DigestModelID,
+		PromptVersion:   cache.DigestRefinePromptV1,
+		SchemaVersion:   cache.DigestRefineSchemaV1,
+	}
+	if input.DigestSkips && input.DigestCache != nil && strings.TrimSpace(feedback) == "" {
+		if hit, ok, err := input.DigestCache.LookupRefine(refineFP); err == nil && ok && strings.TrimSpace(hit.RefinedCatalogYAML) != "" {
+			if sanitized, sanErr := validateRefinedCatalogYAML(hit.RefinedCatalogYAML, input.DraftCatalogYAML, input.RepoID, input.PackageRoles); sanErr == nil {
+				input.DigestCache.RecordRefineHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+				logf("INFO", "digest cache hit refine")
+				refined = sanitized
+				return TypologyRefineOutput{
+					ClusterMergeProposalYAML: proposalYAML,
+					ClusterMergeVerdictsYAML: verdictsYAML,
+					MechanicalGroupingYAML:   mechanicalGroupingYAML,
+					RefinedCatalogYAML:       refined,
+					ObjectiveLedgerYAML:      ledgerYAML,
+					ObjectiveClaimsYAML:      claimsYAML,
+				}, nil
+			}
+		}
+	}
+
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
+		if input.DigestCache != nil && attempt == 1 {
+			input.DigestCache.RecordRefineMiss()
+		}
 		refineFields := map[string]interface{}{
 			"repo_id":                        input.RepoID,
 			"module_scope":                   input.ModuleScope,
@@ -381,6 +454,11 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			}
 			feedback = judge.EvalFeedback(agg)
 			continue
+		}
+		if input.DigestCache != nil {
+			if err := input.DigestCache.StoreRefine(refineFP, cache.RefineCached{RefinedCatalogYAML: refined}); err != nil {
+				logf("WARN", "digest cache store refine failed: %v", err)
+			}
 		}
 		break
 	}
@@ -1916,7 +1994,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		}
 	}
 
-	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen); err != nil {
+	if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen, opts); err != nil {
 		return fail(err)
 	}
 

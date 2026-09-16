@@ -15,7 +15,7 @@ keyed artifact. Re-runs with identical fingerprints MUST skip the provider call.
 
 | Store | Branch / location | Skips |
 |-------|-------------------|-------|
-| Inference cache (review + digest) | `majordomo-inference-cache/<repo-id>` with `review/` and `digest/` path prefixes | Cluster analysis; package inspect + slice ledger RLM |
+| Inference cache (review + digest) | `majordomo-inference-cache/<repo-id>` with `review/` and `digest/` path prefixes (`digest/inspect`, `ledger`, `cluster`, `refine`, `intervention`, `story`; plus `cluster_audit/`) | Review cluster analysis; digest inspect, ledger, cluster audit, cluster CoT, refine, human intervention, bootstrap story |
 | Context cursor | `majordomo-context/<repo-id>` `meta.yaml` | Whole digest job when HEAD already visited |
 
 Legacy branch names `majordomo-pr-reviewer-cache/*` and `majordomo-digest-cache/*` are
@@ -63,7 +63,7 @@ be stored as hits.
 artifact, the step MUST commit and push the cache branch **on the go** (same
 cadence as PR review `majordomo cache store` then `cache push`). MUST NOT wait
 for the whole digest or review job to succeed. A later refine, eval, or gate
-failure MUST NOT discard already-earned inspect/ledger (or cluster) hits.
+failure MUST NOT discard already-earned inspect/ledger/cluster/refine/story hits.
 
 - Enforcement: `DigestStore` Flush after Store*; digest run configures push when
   materializing `majordomo-inference-cache/<repo-id>`; final Flush on exit

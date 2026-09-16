@@ -12,6 +12,7 @@ import (
 	stropvalidation "github.com/behaviorengineering/strop/dspy/validation"
 	"github.com/behaviorengineering/strop/evaluation"
 
+	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
@@ -39,6 +40,9 @@ type BootstrapStoryInput struct {
 	CurrentChronology            string
 	CurrentGrounding             string
 	ValidationFeedback           string
+	DigestCache                  *cache.DigestStore
+	DigestSkips                  bool
+	DigestModelID                string
 }
 
 const maxBootstrapStoryAttempts = 3
@@ -156,6 +160,9 @@ func writeBootstrapStory(ctx context.Context, ctxDir, analysisDir string, at tim
 	if err != nil {
 		return err
 	}
+	input.DigestCache = opts.DigestCache
+	input.DigestSkips = opts.DigestSkips
+	input.DigestModelID = opts.DigestModelID
 	gen := opts.BootstrapStoryGenerator
 	if gen == nil {
 		rlm, rlmErr := newBootstrapStoryRLMFromOpts(ctx, opts, analysisDir)
