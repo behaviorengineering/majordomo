@@ -126,13 +126,13 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		mechIdentityHash = cache.ContentSHA(mechanicalGroupingYAML)
 	}
 	clusterFP := cache.ClusterCoTFingerprint{
-		DraftHash:       cache.ContentSHA(input.DraftCatalogYAML),
+		DraftHash:       draftCatalogIdentitySHA(input.DraftCatalogYAML),
 		RolesHash:       rolesIdentitySHA(input.PackageRoles),
 		ConstraintsHash: cache.ContentSHA(constraintsForCluster),
 		MechanicalHash:  mechIdentityHash,
 		ModelID:         input.DigestModelID,
 		PromptVersion:   cache.DigestClusterCoTPromptV1,
-		SchemaVersion:   cache.DigestClusterCoTSchemaV2,
+		SchemaVersion:   cache.DigestClusterCoTSchemaV3,
 	}
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
 		if attempt > 1 {
@@ -312,7 +312,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	}
 
 	refineFP := cache.RefineFingerprint{
-		DraftHash:       cache.ContentSHA(input.DraftCatalogYAML),
+		DraftHash:       draftCatalogIdentitySHA(input.DraftCatalogYAML),
 		RolesHash:       rolesIdentitySHA(input.PackageRoles),
 		ConstraintsHash: cache.ContentSHA(constraintsYAML),
 		LedgerHash:      cache.ContentSHA(ledgerYAML),
@@ -320,7 +320,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		MechanicalHash:  mechIdentityHash,
 		ModelID:         input.DigestModelID,
 		PromptVersion:   cache.DigestRefinePromptV1,
-		SchemaVersion:   cache.DigestRefineSchemaV2,
+		SchemaVersion:   cache.DigestRefineSchemaV3,
 	}
 	if input.DigestSkips && input.DigestCache != nil && strings.TrimSpace(feedback) == "" {
 		if hit, ok, err := input.DigestCache.LookupRefine(refineFP); err == nil && ok && strings.TrimSpace(hit.RefinedCatalogYAML) != "" {

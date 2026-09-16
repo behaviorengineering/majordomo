@@ -37,12 +37,16 @@ const (
 	// DigestClusterCoTSchemaV2 keys cluster CoT on role identity + mechanical identity
 	// (no ephemeral RLM evidence prose).
 	DigestClusterCoTSchemaV2 = "cluster-cot-v2"
+	// DigestClusterCoTSchemaV3 also normalizes draft catalog ids and binding order.
+	DigestClusterCoTSchemaV3 = "cluster-cot-v3"
 	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract.
 	DigestClusterCoTPromptV1 = "typology_cluster_cot_v1"
 	// DigestRefineSchemaV1 keys typology refine CoT catalogs (full verdicts YAML).
 	DigestRefineSchemaV1 = "refine-v1"
 	// DigestRefineSchemaV2 keys refine on role/verdict identity hashes (no duration/trace/prose).
 	DigestRefineSchemaV2 = "refine-v2"
+	// DigestRefineSchemaV3 also normalizes draft catalog ids and binding order.
+	DigestRefineSchemaV3 = "refine-v3"
 	// DigestRefinePromptV1 labels the typology_refine CoT prompt contract.
 	DigestRefinePromptV1 = "typology_refine_cot_v1"
 	// DigestInterventionSchemaV1 keys human-intervention CoT outputs (full verdicts YAML).
@@ -680,7 +684,7 @@ func (fp ClusterCoTFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestClusterCoTSchemaV2
+		schema = DigestClusterCoTSchemaV3
 	}
 	return HashDigestParts(
 		"cluster_cot", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.MechanicalHash,
@@ -695,7 +699,7 @@ func (fp RefineFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestRefineSchemaV2
+		schema = DigestRefineSchemaV3
 	}
 	return HashDigestParts(
 		"refine", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.LedgerHash, fp.VerdictsHash,

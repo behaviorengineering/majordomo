@@ -76,6 +76,53 @@ func mechanicalIdentitySHA(rolesYAML string) (string, error) {
 	return cache.ContentSHA(yamlOut), nil
 }
 
+// draftCatalogIdentitySHA hashes a draft typology catalog without ephemeral
+// worktree ids (majordomo-typology-<rand>) and with sorted sliceBindings.
+func draftCatalogIdentitySHA(draftYAML string) string {
+	raw := strings.TrimSpace(draftYAML)
+	if raw == "" {
+		return cache.ContentSHA("")
+	}
+	var doc map[string]interface{}
+	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
+		return cache.ContentSHA(raw)
+	}
+	if id, ok := doc["id"].(string); ok {
+		doc["id"] = normalizeDraftCatalogID(id)
+	}
+	if bindings, ok := doc["sliceBindings"].([]interface{}); ok {
+		sort.SliceStable(bindings, func(i, j int) bool {
+			return bindingSortKey(bindings[i]) < bindingSortKey(bindings[j])
+		})
+		doc["sliceBindings"] = bindings
+	}
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return cache.ContentSHA(raw)
+	}
+	return cache.ContentSHA(string(out))
+}
+
+func normalizeDraftCatalogID(id string) string {
+	id = strings.TrimSpace(id)
+	if strings.HasPrefix(id, "majordomo-typology-") {
+		return "majordomo-typology"
+	}
+	return id
+}
+
+func bindingSortKey(v interface{}) string {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return fmt.Sprint(v)
+	}
+	return strings.Join([]string{
+		fmt.Sprint(m["from"]),
+		fmt.Sprint(m["to"]),
+		fmt.Sprint(m["kind"]),
+	}, "\x00")
+}
+
 // clusterVerdictsIdentitySHA hashes accept/overlay/reject decisions only.
 // Duration, tokens, trace_dir, generated_at, and free-form reason/evidence are omitted.
 func clusterVerdictsIdentitySHA(verdictsYAML string) string {

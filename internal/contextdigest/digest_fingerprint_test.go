@@ -118,3 +118,49 @@ merges:
 		t.Fatal("verdicts identity hash must change when verdict changes")
 	}
 }
+
+func TestDraftCatalogIdentitySHAIgnoresWorktreeIDAndBindingOrder(t *testing.T) {
+	t.Parallel()
+	a := `id: majordomo-typology-111
+scope:
+  modules: ["."]
+slices:
+  - id: board
+    owns: [{id: b, path: internal/board}]
+sliceBindings:
+  - from: server
+    to: board
+    kind: reads
+  - from: board
+    to: config
+    kind: reads
+`
+	b := `id: majordomo-typology-999
+scope:
+  modules: ["."]
+slices:
+  - id: board
+    owns: [{id: b, path: internal/board}]
+sliceBindings:
+  - from: board
+    to: config
+    kind: reads
+  - from: server
+    to: board
+    kind: reads
+`
+	if draftCatalogIdentitySHA(a) != draftCatalogIdentitySHA(b) {
+		t.Fatal("draft identity hash must ignore typology worktree id and binding order")
+	}
+	c := `id: majordomo-typology-111
+scope:
+  modules: ["."]
+slices:
+  - id: other
+    owns: [{id: b, path: internal/board}]
+sliceBindings: []
+`
+	if draftCatalogIdentitySHA(a) == draftCatalogIdentitySHA(c) {
+		t.Fatal("draft identity hash must change when slice ids change")
+	}
+}

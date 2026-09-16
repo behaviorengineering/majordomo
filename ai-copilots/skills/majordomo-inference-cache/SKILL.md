@@ -72,12 +72,14 @@ failure MUST NOT discard already-earned inspect/ledger/cluster/refine/story hits
 **CONSTRAINT:** Digest fingerprint inputs MUST be stable across reseeds of the
 same code. Prefer package source hashes (and owned-path / constraint facts) over
 ephemeral RLM markdown or LLM cluster proposal prose. Schema bumps (`inspect-v2`,
-`ledger-v2`, `cluster-cot-v2`, `refine-v2`) invalidate old keys intentionally.
-Cluster/refine MUST hash role identity and verdict decisions (not evidence quotes,
-duration_ms, or trace_dir).
+`ledger-v2`, `cluster-cot-v3`, `refine-v3`) invalidate old keys intentionally.
+Cluster/refine MUST hash role identity, normalized draft catalogs (no worktree ids;
+sorted bindings), and verdict decisions (not evidence quotes, duration_ms, or
+trace_dir).
 
 - Enforcement: `PackageSourceHash` / `OwnedPackagesSourceHash`; ledger omits cluster hash;
-  `rolesIdentitySHA` / `clusterVerdictsIdentitySHA` / `mechanicalIdentitySHA`
+  `rolesIdentitySHA` / `draftCatalogIdentitySHA` / `clusterVerdictsIdentitySHA` /
+  `mechanicalIdentitySHA`
 - Violation: STOP, remove ephemeral inputs from the fingerprint, bump schema
 
 **CONSTRAINT:** Digest runs MUST log cache hit/miss counts and estimated tokens
