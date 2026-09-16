@@ -87,20 +87,49 @@ func draftCatalogIdentitySHA(draftYAML string) string {
 	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
 		return cache.ContentSHA(raw)
 	}
+	normalizeEphemeralCatalogDoc(doc)
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return cache.ContentSHA(raw)
+	}
+	return cache.ContentSHA(string(out))
+}
+
+// architectureIdentitySHA hashes an architecture brief without generated_at stamps.
+func architectureIdentitySHA(architectureMD string) string {
+	return cache.ContentSHA(stripGeneratedAtLines(architectureMD))
+}
+
+func stripGeneratedAtLines(raw string) string {
+	lines := strings.Split(raw, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "generated_at:") {
+			continue
+		}
+		// Ledger/claim provenance labels flip between aligned/raw across reseeds.
+		if strings.HasPrefix(trim, "source: slice_objective_rlm") {
+			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+			out = append(out, indent+"source: slice_objective_rlm")
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+func normalizeEphemeralCatalogDoc(doc map[string]interface{}) {
 	if id, ok := doc["id"].(string); ok {
 		doc["id"] = normalizeDraftCatalogID(id)
 	}
+	delete(doc, "generated_at")
 	if bindings, ok := doc["sliceBindings"].([]interface{}); ok {
 		sort.SliceStable(bindings, func(i, j int) bool {
 			return bindingSortKey(bindings[i]) < bindingSortKey(bindings[j])
 		})
 		doc["sliceBindings"] = bindings
 	}
-	out, err := yaml.Marshal(doc)
-	if err != nil {
-		return cache.ContentSHA(raw)
-	}
-	return cache.ContentSHA(string(out))
 }
 
 func normalizeDraftCatalogID(id string) string {

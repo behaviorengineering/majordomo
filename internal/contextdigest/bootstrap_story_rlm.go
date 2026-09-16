@@ -136,13 +136,13 @@ func (g rlmBootstrapStoryGenerator) Generate(ctx context.Context, input Bootstra
 		var lastErr error
 		storyFP := cache.StoryFingerprint{
 			SectionID:        sec.ID,
-			RefinedHash:      cache.ContentSHA(input.TypologyRefinedCatalog),
+			RefinedHash:      draftCatalogIdentitySHA(input.TypologyRefinedCatalog),
 			LedgerHash:       cache.ContentSHA(input.TypologySliceObjectiveLedger),
-			ArchitectureHash: cache.ContentSHA(input.TypologyArchitecture),
+			ArchitectureHash: architectureIdentitySHA(input.TypologyArchitecture),
 			ReadmeHash:       cache.ContentSHA(input.ReadmeSnapshot),
 			ModelID:          input.DigestModelID,
 			PromptVersion:    cache.DigestStoryPromptV1,
-			SchemaVersion:    cache.DigestStorySchemaV1,
+			SchemaVersion:    cache.DigestStorySchemaV2,
 		}
 		for attempt := 1; attempt <= maxBootstrapStoryAttempts; attempt++ {
 			if attempt == 1 && strings.TrimSpace(feedback) == "" &&

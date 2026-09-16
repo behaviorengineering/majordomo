@@ -78,8 +78,8 @@ sorted bindings), and verdict decisions (not evidence quotes, duration_ms, or
 trace_dir).
 
 - Enforcement: `PackageSourceHash` / `OwnedPackagesSourceHash`; ledger omits cluster hash;
-  `rolesIdentitySHA` / `draftCatalogIdentitySHA` / `clusterVerdictsIdentitySHA` /
-  `mechanicalIdentitySHA`
+  `rolesIdentitySHA` / `draftCatalogIdentitySHA` / `architectureIdentitySHA` /
+  `clusterVerdictsIdentitySHA` / `mechanicalIdentitySHA`
 - Violation: STOP, remove ephemeral inputs from the fingerprint, bump schema
 
 **CONSTRAINT:** Digest runs MUST log cache hit/miss counts and estimated tokens

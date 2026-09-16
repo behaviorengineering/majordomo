@@ -55,8 +55,10 @@ const (
 	DigestInterventionSchemaV2 = "intervention-v2"
 	// DigestInterventionPromptV1 labels the human-intervention CoT prompt contract.
 	DigestInterventionPromptV1 = "typology_intervention_cot_v1"
-	// DigestStorySchemaV1 keys bootstrap story RLM sections.
+	// DigestStorySchemaV1 keys bootstrap story RLM sections (raw architecture/refined hashes).
 	DigestStorySchemaV1 = "story-v1"
+	// DigestStorySchemaV2 strips generated_at and normalizes refined catalog ids.
+	DigestStorySchemaV2 = "story-v2"
 	// DigestStoryPromptV1 labels the bootstrap_story RLM prompt contract.
 	DigestStoryPromptV1 = "bootstrap_story_rlm_v1"
 )
@@ -729,7 +731,7 @@ func (fp StoryFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestStorySchemaV1
+		schema = DigestStorySchemaV2
 	}
 	return HashDigestParts(
 		"story", fp.SectionID, fp.RefinedHash, fp.LedgerHash, fp.ArchitectureHash, fp.ReadmeHash,

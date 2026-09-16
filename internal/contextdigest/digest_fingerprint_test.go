@@ -164,3 +164,16 @@ sliceBindings: []
 		t.Fatal("draft identity hash must change when slice ids change")
 	}
 }
+
+func TestArchitectureIdentitySHAIgnoresGeneratedAt(t *testing.T) {
+	t.Parallel()
+	a := "# Architecture\ngenerated_at: 2026-01-01T00:00:00Z\nsource: slice_objective_rlm_aligned\nbody\n"
+	b := "# Architecture\ngenerated_at: 2026-09-16T10:42:15Z\nsource: slice_objective_rlm\nbody\n"
+	if architectureIdentitySHA(a) != architectureIdentitySHA(b) {
+		t.Fatal("architecture identity hash must ignore generated_at and rlm source suffix")
+	}
+	c := "# Architecture\ngenerated_at: 2026-01-01T00:00:00Z\nsource: slice_objective_rlm_aligned\nother\n"
+	if architectureIdentitySHA(a) == architectureIdentitySHA(c) {
+		t.Fatal("architecture identity hash must change when body changes")
+	}
+}
