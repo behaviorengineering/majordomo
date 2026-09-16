@@ -407,6 +407,11 @@ func buildSliceObjectiveLedger(
 	if err := validateObjectiveLedgerDoc(doc); err != nil {
 		return sliceObjectiveLedgerDoc{}, nil, err
 	}
+	// Soft-drop claim codes outside owned is=[] (alignLedger does the same). Keeps seed
+	// from failing closed on a single over-wide RLM claim after evidence already grounded.
+	for i := range doc.Slices {
+		doc.Slices[i].Claims = filterClaimsToOwnedIs(doc.Slices[i].Claims, doc.Slices[i].OwnedPaths, byPath)
+	}
 	if consIssues := validateLedgerAgainstConstraints(doc, req.Constraints, rolesDoc); len(consIssues) > 0 {
 		return sliceObjectiveLedgerDoc{}, consIssues, nil
 	}
