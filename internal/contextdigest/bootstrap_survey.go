@@ -550,3 +550,6 @@ func cloneAnalysisRepo(ctx context.Context, sourceDir string) (string, error) {
 	}
 	return dst, nil
 }
+
+// cloneAnalysisRepoFn is the analysis-clone entry used by seed and resume (tests may swap).
+var cloneAnalysisRepoFn = cloneAnalysisRepo

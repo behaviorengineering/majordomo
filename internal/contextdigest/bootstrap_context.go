@@ -26,7 +26,7 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 		ctx = context.Background()
 	}
 
-	analysisDir, err := cloneAnalysisRepo(ctx, opts.WorkDir)
+	analysisDir, err := cloneAnalysisRepoFn(ctx, opts.WorkDir)
 	if err != nil {
 		return err
 	}
@@ -45,13 +45,8 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 	if err := runner.Survey(ctx, input); err != nil {
 		return err
 	}
-	if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, opts.Judge); err != nil {
-		return err
-	}
-	if err := writeBootstrapStory(ctx, ctxDir, analysisDir, at, sourceSHA, opts); err != nil {
-		return err
-	}
-	if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+	// Full seed walks refine (includes intervention) then story.
+	if err := runBootstrapFromStage(ctx, ctxDir, analysisDir, sourceSHA, at, opts, ResumeStageRefine); err != nil {
 		return err
 	}
 	ctxGit := &Git{Dir: ctxDir}
@@ -65,4 +60,56 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 		return fmt.Errorf("bootstrap survey produced no changes to commit")
 	}
 	return contextstore.ValidateTree(ctxDir)
+}
+
+// runBootstrapFromStage runs the post-survey seed chain starting at fromStage.
+// Resume mode skips survey; full seed calls this with refine after survey.
+//
+//	refine       → refineTypologyEvidence (includes flagHumanIntervention) → story
+//	intervention → flagHumanIntervention → story
+//	story        → writeBootstrapStory only
+func runBootstrapFromStage(ctx context.Context, ctxDir, analysisDir, sourceSHA string, at time.Time, opts Options, fromStage string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	evidenceDir := filepath.Join(ctxDir, "evidence", "typology")
+	stage := normalizeResumeStage(fromStage)
+	judgeGen := opts.Judge
+
+	switch stage {
+	case ResumeStageRefine:
+		manifest, err := contextstore.ParseTypologyManifest(filepath.Join(evidenceDir, "manifest.yaml"))
+		if err != nil {
+			return err
+		}
+		if isPRResumeMode(opts) {
+			if err := stageAnalysisDraftsFromEvidence(analysisDir, evidenceDir, manifest); err != nil {
+				return err
+			}
+		}
+		if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, judgeGen); err != nil {
+			return err
+		}
+		if err := writeBootstrapStory(ctx, ctxDir, analysisDir, at, sourceSHA, opts); err != nil {
+			return err
+		}
+	case ResumeStageIntervention:
+		if err := flagHumanIntervention(ctx, evidenceDir, opts.HumanInterventionGenerator, judgeGen, opts); err != nil {
+			return err
+		}
+		if err := writeBootstrapStory(ctx, ctxDir, analysisDir, at, sourceSHA, opts); err != nil {
+			return err
+		}
+	case ResumeStageStory:
+		if err := writeBootstrapStory(ctx, ctxDir, analysisDir, at, sourceSHA, opts); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("bootstrap from-stage %q is not supported", fromStage)
+	}
+
+	if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
+		return err
+	}
+	return nil
 }

@@ -19,7 +19,7 @@ import (
 
 // Result describes one digest run outcome.
 type Result struct {
-	Action        string            `json:"action"` // noop | skipped | seed | catchup | rewrite | rewrite_blocked | gate_regen
+	Action        string            `json:"action"` // noop | skipped | seed | catchup | rewrite | rewrite_blocked | gate_regen | resume | local
 	DefaultBranch string            `json:"default_branch,omitempty"`
 	DefaultHEAD   string            `json:"default_head,omitempty"`
 	CursorBefore  string            `json:"cursor_before,omitempty"`
@@ -31,7 +31,24 @@ type Result struct {
 	WorkStoryDir  string            `json:"work_story_dir,omitempty"` // durable RLM + runreport dump (local AI testing)
 	TraceID       string            `json:"trace_id,omitempty"`
 	LLMUsage      *llmusage.Summary `json:"llm_usage,omitempty"`
+	// Resume provenance (PR-seeded stage replay; teaching outputs local-only).
+	ResumePR    int    `json:"resume_pr,omitempty"`
+	ResumeHead  string `json:"resume_head,omitempty"`
+	FromStage   string `json:"from_stage,omitempty"`
+	LocalOutDir string `json:"local_out_dir,omitempty"` // work-story local-context dump or local seed context/
+	// Local seed workspace provenance (filesystem-only; no forge push).
+	LocalSeedDir   string `json:"local_seed_dir,omitempty"`
+	CacheMode      string `json:"cache_mode,omitempty"` // remote | local
+	SourceSHA      string `json:"source_sha,omitempty"`
+	CompletedStage string `json:"completed_stage,omitempty"`
 }
+
+// Resume stages for --from-stage (PR-seeded replay).
+const (
+	ResumeStageRefine       = "refine"
+	ResumeStageIntervention = "intervention"
+	ResumeStageStory        = "story"
+)
 
 // Options configures majordomo context digest.
 type Options struct {
@@ -61,6 +78,14 @@ type Options struct {
 	// Context nests OTEL chain spans, module TraceSession, and runreport into digest Judge/RLM work.
 	// When nil, Background is used.
 	Context context.Context
+	// ResumePR + FromStage enable PR-seeded stage replay: load that context PR head into a
+	// temp ctx dir, re-run only the requested stages, keep outputs local (no context push/PR).
+	ResumePR  int    // served-repo context PR/MR number; 0 = disabled
+	FromStage string // refine | intervention | story (also survey for local seed)
+	// LocalSeedDir enables filesystem-only seeding under this directory (no forge token / push).
+	LocalSeedDir string
+	// AllowSourceMove retargets an existing local workspace when workdir HEAD moved.
+	AllowSourceMove bool
 }
 
 func logf(level, format string, args ...any) {
@@ -102,6 +127,9 @@ func Run(opts Options) (res Result, err error) {
 	if opts.WorkDir == "" {
 		return Result{}, fmt.Errorf("--workdir required (served-repo clone with origin)")
 	}
+	if err := validateDigestModeOptions(opts); err != nil {
+		return Result{}, err
+	}
 	now := opts.Now
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -115,6 +143,11 @@ func Run(opts Options) (res Result, err error) {
 	if err != nil {
 		return Result{}, err
 	}
+
+	if isLocalSeedMode(opts) {
+		return runLocalSeed(opts, cfg, now)
+	}
+
 	scm := strings.ToLower(strings.TrimSpace(cfg.SCM))
 	if scm == "" {
 		scm = "github"
@@ -205,6 +238,10 @@ func Run(opts Options) (res Result, err error) {
 		return Result{}, err
 	}
 	defer func() { _ = os.RemoveAll(ctxDir) }()
+
+	if isPRResumeMode(opts) {
+		return runResumeFromPR(opts, cfg, forge, servedGit, token, scm, ctxDir, defaultBranch, defaultHEAD, now, digestDir, digestBranch)
+	}
 
 	baseExists, err := RemoteBranchExists(servedGit, baseBranch)
 	if err != nil {
