@@ -143,3 +143,137 @@ sliceBindings:
 		t.Fatalf("expected bindings remounted to gitboard-http, got %s", out)
 	}
 }
+
+func TestMissingGroundedObjectivesDetectsAbsent(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		ID: "demo",
+		Slices: []catalog.Slice{
+			{
+				ID:        "board",
+				Objective: "Hold board DTOs only; never sync remote state.",
+				Owns:      []catalog.Component{{ID: "board-pkg", Path: "internal/board"}},
+			},
+			{
+				ID:        "cli",
+				Objective: "Run the CLI entrypoint.",
+				Owns:      []catalog.Component{{ID: "cli-pkg", Path: "internal/cli"}},
+			},
+		},
+	}
+	constraints := packageCapabilityConstraintsDoc{
+		Packages: []packageCapabilityConstraint{
+			{Path: "internal/board", Role: roleDTO, Is: []string{capDataShape}, MustNot: []string{capSynchronizeState, capMergeAdapters}},
+			{Path: "internal/cli", Role: roleEntrypoint, Is: []string{capRunCLI}, MustNot: []string{capOwnDomainRules}},
+		},
+	}
+	arch := "# Architecture\n\nThe CLI wires commands.\n"
+	missing := missingGroundedObjectives(arch, typo, constraints)
+	if len(missing) != 2 {
+		t.Fatalf("missing=%v want 2", missing)
+	}
+	ids := map[string]string{}
+	for _, m := range missing {
+		ids[m.ID] = m.Objective
+	}
+	if ids["board"] == "" || ids["cli"] == "" {
+		t.Fatalf("ids=%v", ids)
+	}
+}
+
+func TestEnsureArchitectureMarkdownAppendsVerbatimObjectives(t *testing.T) {
+	t.Parallel()
+	refined := `id: demo
+slices:
+  - id: board
+    objective: Hold board DTOs only; never sync remote state.
+    owns:
+      - id: board-pkg
+        path: internal/board
+`
+	constraints := `packages:
+  - path: internal/board
+    role: dto
+    is: [data_shape]
+    must_not: [synchronize_state, merge_adapters]
+`
+	arch := "# Architecture\n\nOverview of the product.\n"
+	out, err := ensureArchitectureMarkdownKeepsGroundedObjectives(arch, refined, constraints)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Hold board DTOs only; never sync remote state.") {
+		t.Fatalf("expected verbatim objective, got %q", out)
+	}
+	if !strings.Contains(out, "## Grounded slice objectives") {
+		t.Fatalf("expected grounded section, got %q", out)
+	}
+	if !strings.Contains(out, "- **board**: Hold board DTOs only; never sync remote state.") {
+		t.Fatalf("expected board bullet, got %q", out)
+	}
+}
+
+func TestEnsureArchitectureMarkdownIdempotentWhenPresent(t *testing.T) {
+	t.Parallel()
+	obj := "Hold board DTOs only; never sync remote state."
+	refined := `id: demo
+slices:
+  - id: board
+    objective: ` + obj + `
+    owns:
+      - id: board-pkg
+        path: internal/board
+`
+	constraints := `packages:
+  - path: internal/board
+    role: dto
+    is: [data_shape]
+    must_not: [synchronize_state]
+`
+	arch := "# Architecture\n\nTeaching note: " + obj + "\n"
+	out, err := ensureArchitectureMarkdownKeepsGroundedObjectives(arch, refined, constraints)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != arch {
+		t.Fatalf("expected unchanged markdown when objective already present")
+	}
+	if strings.Count(out, obj) != 1 {
+		t.Fatalf("duplicate objective count=%d in %q", strings.Count(out, obj), out)
+	}
+	again, err := ensureArchitectureMarkdownKeepsGroundedObjectives(out, refined, constraints)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != out {
+		t.Fatalf("second ensure should be idempotent")
+	}
+}
+
+func TestValidateBootstrapStorySectionArchitectureMissingObjectives(t *testing.T) {
+	t.Parallel()
+	input := BootstrapStoryInput{
+		RepoID: "gitboard",
+		TypologyRefinedCatalog: `id: demo
+slices:
+  - id: board
+    objective: Hold board DTOs only; never sync remote state.
+    owns:
+      - id: board-pkg
+        path: internal/board
+`,
+		TypologyPackageCapabilityConstraints: `packages:
+  - path: internal/board
+    role: dto
+    is: [data_shape]
+    must_not: [synchronize_state]
+`,
+	}
+	err := validateBootstrapStorySection(input, "architecture", "# Architecture\n\nNo objectives here.\n")
+	if err == nil {
+		t.Fatal("expected missing grounded objectives error")
+	}
+	if !strings.Contains(err.Error(), "board") {
+		t.Fatalf("feedback should name slice id: %v", err)
+	}
+}

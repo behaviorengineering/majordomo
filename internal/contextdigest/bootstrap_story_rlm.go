@@ -143,16 +143,25 @@ func (g rlmBootstrapStoryGenerator) Generate(ctx context.Context, input Bootstra
 			ReadmeHash:       cache.ContentSHA(input.ReadmeSnapshot),
 			ModelID:          input.DigestModelID,
 			PromptVersion:    cache.DigestStoryPromptV1,
-			SchemaVersion:    cache.DigestStorySchemaV2,
+			SchemaVersion:    cache.DigestStorySchemaV3,
 		}
 		for attempt := 1; attempt <= maxBootstrapStoryAttempts; attempt++ {
 			if attempt == 1 && strings.TrimSpace(feedback) == "" &&
 				input.DigestSkips && input.DigestCache != nil {
 				if hit, ok, err := input.DigestCache.LookupStory(storyFP); err == nil && ok && strings.TrimSpace(hit.Markdown) != "" {
-					if err := validateBootstrapStorySection(input.RepoID, sec.ID, hit.Markdown); err == nil {
+					cachedMD := hit.Markdown
+					if sec.ID == "architecture" {
+						ensured, ensureErr := ensureArchitectureMarkdownKeepsGroundedObjectives(
+							cachedMD, input.TypologyRefinedCatalog, input.TypologyPackageCapabilityConstraints,
+						)
+						if ensureErr == nil {
+							cachedMD = ensured
+						}
+					}
+					if err := validateBootstrapStorySection(input, sec.ID, cachedMD); err == nil {
 						input.DigestCache.RecordStoryHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
 						logf("INFO", "digest cache hit story section=%s", sec.ID)
-						sec.Setter(&out, hit.Markdown)
+						sec.Setter(&out, cachedMD)
 						feedback = ""
 						lastErr = nil
 						break
@@ -186,16 +195,45 @@ func (g rlmBootstrapStoryGenerator) Generate(ctx context.Context, input Bootstra
 				continue
 			}
 			sec.Setter(&out, markdown)
-			tmp := out
-			if err := validateBootstrapStorySection(input.RepoID, sec.ID, sec.Getter(tmp)); err != nil {
+			if err := validateBootstrapStorySection(input, sec.ID, markdown); err != nil {
 				lastErr = err
-				if attempt == maxBootstrapStoryAttempts {
+				if attempt < maxBootstrapStoryAttempts {
+					feedback = err.Error()
+					continue
+				}
+				// Last attempt: for architecture, Go appends missing grounded objectives.
+				if sec.ID != "architecture" {
 					sectionErr = err
 					observability.EndSpanWithStatus(span, &sectionErr)
 					return BootstrapStoryOutput{}, sectionErr
 				}
-				feedback = err.Error()
-				continue
+			}
+			if sec.ID == "architecture" {
+				ensured, ensureErr := ensureArchitectureMarkdownKeepsGroundedObjectives(
+					markdown, input.TypologyRefinedCatalog, input.TypologyPackageCapabilityConstraints,
+				)
+				if ensureErr != nil {
+					lastErr = ensureErr
+					if attempt < maxBootstrapStoryAttempts {
+						feedback = ensureErr.Error()
+						continue
+					}
+					sectionErr = ensureErr
+					observability.EndSpanWithStatus(span, &sectionErr)
+					return BootstrapStoryOutput{}, sectionErr
+				}
+				markdown = ensured
+				sec.Setter(&out, markdown)
+				if err := validateBootstrapStorySection(input, sec.ID, markdown); err != nil {
+					lastErr = err
+					if attempt < maxBootstrapStoryAttempts {
+						feedback = err.Error()
+						continue
+					}
+					sectionErr = err
+					observability.EndSpanWithStatus(span, &sectionErr)
+					return BootstrapStoryOutput{}, sectionErr
+				}
 			}
 			if input.DigestCache != nil {
 				if err := input.DigestCache.StoreStory(storyFP, cache.StoryCached{
@@ -317,14 +355,44 @@ func parseBootstrapStoryMarkdownAnswer(answer string) (string, error) {
 	return "", fmt.Errorf("bootstrap story answer missing markdown field")
 }
 
-func validateBootstrapStorySection(repoID, id, text string) error {
+func validateBootstrapStorySection(input BootstrapStoryInput, id, text string) error {
 	if strings.TrimSpace(text) == "" {
 		return fmt.Errorf("bootstrap story output %s is required", id)
 	}
-	if err := rejectMajordomoAsProduct(repoID, id, text); err != nil {
+	if err := rejectMajordomoAsProduct(input.RepoID, id, text); err != nil {
 		return err
 	}
+	if id == "architecture" {
+		return validateArchitectureGroundedObjectives(input, text)
+	}
 	return nil
+}
+
+// validateArchitectureGroundedObjectives fail-closes when architecture prose drops
+// constrained-slice catalog objectives. Requires refined catalog + constraints when
+// either is present (seed refine evidence).
+func validateArchitectureGroundedObjectives(input BootstrapStoryInput, text string) error {
+	catalogYAML := strings.TrimSpace(input.TypologyRefinedCatalog)
+	constraintsYAML := strings.TrimSpace(input.TypologyPackageCapabilityConstraints)
+	if catalogYAML == "" && constraintsYAML == "" {
+		return nil
+	}
+	if catalogYAML == "" || constraintsYAML == "" {
+		return fmt.Errorf("bootstrap story architecture grounded check requires refined catalog and package capability constraints")
+	}
+	typo, err := loadTypologyFromYAML(catalogYAML)
+	if err != nil {
+		return fmt.Errorf("bootstrap story architecture grounded check: %w", err)
+	}
+	constraints, err := parseCapabilityConstraintsYAML(constraintsYAML)
+	if err != nil {
+		return fmt.Errorf("bootstrap story architecture grounded check: %w", err)
+	}
+	missing := missingGroundedObjectives(text, typo, constraints)
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("%s", formatMissingGroundedObjectivesFeedback(missing))
 }
 
 // majordomoReadingMarkerRE matches required context-branch HTML comment markers.

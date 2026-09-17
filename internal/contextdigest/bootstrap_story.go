@@ -20,29 +20,30 @@ import (
 
 // BootstrapStoryInput carries the evidence pack into the bootstrap LLM task.
 type BootstrapStoryInput struct {
-	RepoID                       string
-	SourceSHA                    string
-	GeneratedAt                  time.Time
-	EvidenceMode                 string
-	ModuleScope                  string
-	ReadmeSnapshot               string
-	TypologyManifest             string
-	TypologyArchitecture         string
-	TypologyRefinedCatalog       string
-	TypologyJourney              string
-	TypologySliceObjectiveLedger string
-	RepoLayout                   string
-	CurrentReadme                string
-	CurrentMission               string
-	CurrentArchitecture          string
-	CurrentConventions           string
-	CurrentWeaknesses            string
-	CurrentChronology            string
-	CurrentGrounding             string
-	ValidationFeedback           string
-	DigestCache                  *cache.DigestStore
-	DigestSkips                  bool
-	DigestModelID                string
+	RepoID                               string
+	SourceSHA                            string
+	GeneratedAt                          time.Time
+	EvidenceMode                         string
+	ModuleScope                          string
+	ReadmeSnapshot                       string
+	TypologyManifest                     string
+	TypologyArchitecture                 string
+	TypologyRefinedCatalog               string
+	TypologyJourney                      string
+	TypologySliceObjectiveLedger         string
+	TypologyPackageCapabilityConstraints string
+	RepoLayout                           string
+	CurrentReadme                        string
+	CurrentMission                       string
+	CurrentArchitecture                  string
+	CurrentConventions                   string
+	CurrentWeaknesses                    string
+	CurrentChronology                    string
+	CurrentGrounding                     string
+	ValidationFeedback                   string
+	DigestCache                          *cache.DigestStore
+	DigestSkips                          bool
+	DigestModelID                        string
 }
 
 const maxBootstrapStoryAttempts = 3
@@ -225,6 +226,14 @@ func loadBootstrapStoryInput(ctxDir, analysisDir string, at time.Time, sourceSHA
 	}
 	if strings.TrimSpace(manifest.SliceObjectiveLedgerPath) != "" {
 		input.TypologySliceObjectiveLedger = readText(filepath.Join(ctxDir, "evidence", "typology", manifest.SliceObjectiveLedgerPath))
+	}
+	constraintsRel := strings.TrimSpace(manifest.PackageCapabilityConstraintsPath)
+	if constraintsRel == "" {
+		constraintsRel = packageCapabilityConstraintsRel
+	}
+	constraintsPath := filepath.Join(ctxDir, "evidence", "typology", constraintsRel)
+	if fileExists(constraintsPath) {
+		input.TypologyPackageCapabilityConstraints = readText(constraintsPath)
 	}
 	if err := requireBootstrapStoryEvidence(input, manifest); err != nil {
 		return BootstrapStoryInput{}, err
