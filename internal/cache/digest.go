@@ -60,6 +60,8 @@ const (
 	DigestStorySchemaV1 = "story-v1"
 	// DigestStorySchemaV2 strips generated_at and normalizes refined catalog ids.
 	DigestStorySchemaV2 = "story-v2"
+	// DigestStorySchemaV3 folds grounded-objective preserve into architecture sections.
+	DigestStorySchemaV3 = "story-v3"
 	// DigestStoryPromptV1 labels the bootstrap_story RLM prompt contract.
 	DigestStoryPromptV1 = "bootstrap_story_rlm_v1"
 )
@@ -461,20 +463,20 @@ type LedgerFingerprint struct {
 
 // InspectCachedRole is the durable inspect payload.
 type InspectCachedRole struct {
-	Path              string   `json:"path"`
-	Role              string   `json:"role"`
-	Confidence        float64  `json:"confidence"`
-	Evidence          []string `json:"evidence"`
-	InspectedStage    int      `json:"inspected_stage"`
-	Language          string   `json:"language,omitempty"`
-	CandidateRole     string   `json:"candidate_role,omitempty"`
-	MechanicalRole    string   `json:"mechanical_role,omitempty"`
-	LLMRole           string   `json:"llm_role,omitempty"`
-	Agreement         string   `json:"agreement,omitempty"`
-	RLMIterations     int      `json:"rlm_iterations,omitempty"`
-	PromptTokens      int      `json:"prompt_tokens,omitempty"`
-	CompletionTokens  int      `json:"completion_tokens,omitempty"`
-	TotalTokens       int      `json:"total_tokens,omitempty"`
+	Path             string   `json:"path"`
+	Role             string   `json:"role"`
+	Confidence       float64  `json:"confidence"`
+	Evidence         []string `json:"evidence"`
+	InspectedStage   int      `json:"inspected_stage"`
+	Language         string   `json:"language,omitempty"`
+	CandidateRole    string   `json:"candidate_role,omitempty"`
+	MechanicalRole   string   `json:"mechanical_role,omitempty"`
+	LLMRole          string   `json:"llm_role,omitempty"`
+	Agreement        string   `json:"agreement,omitempty"`
+	RLMIterations    int      `json:"rlm_iterations,omitempty"`
+	PromptTokens     int      `json:"prompt_tokens,omitempty"`
+	CompletionTokens int      `json:"completion_tokens,omitempty"`
+	TotalTokens      int      `json:"total_tokens,omitempty"`
 }
 
 // LedgerCachedEntry is the durable grounded ledger payload.
@@ -732,7 +734,7 @@ func (fp StoryFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestStorySchemaV2
+		schema = DigestStorySchemaV3
 	}
 	return HashDigestParts(
 		"story", fp.SectionID, fp.RefinedHash, fp.LedgerHash, fp.ArchitectureHash, fp.ReadmeHash,

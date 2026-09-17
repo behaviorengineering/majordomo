@@ -5,11 +5,26 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	"github.com/behaviorengineering/typology/catalog"
 )
+
+// groundedSliceObjective is a constrained catalog slice with a non-empty objective.
+type groundedSliceObjective struct {
+	ID        string
+	Objective string
+}
+
+const groundedObjectivesAppendTmpl = `
+## Grounded slice objectives
+
+{{range .}}- **{{.ID}}**: {{.Objective}}
+{{end}}`
+
+var groundedObjectivesAppendTemplate = template.Must(template.New("groundedObjectives").Parse(groundedObjectivesAppendTmpl))
 
 // appendEvidenceGroundingIssues adds fail-closed catalog checks for ownership shape.
 func appendEvidenceGroundingIssues(typo catalog.Typology, issues []string) []string {
@@ -322,6 +337,82 @@ func assertEvidenceGroundingBeforeStory(ctxDir string) error {
 	return assertEvidenceGroundingYAML(string(refined), rolesYAML)
 }
 
+// constrainedSlicesWithObjectives lists catalog slices that own constrained
+// packages (non-empty must_not union) and declare a non-empty objective.
+func constrainedSlicesWithObjectives(typo catalog.Typology, constraints packageCapabilityConstraintsDoc) []groundedSliceObjective {
+	byPath := constraintsByPath(constraints)
+	var out []groundedSliceObjective
+	for _, s := range typo.Slices {
+		id := strings.TrimSpace(s.ID)
+		obj := strings.TrimSpace(s.Objective)
+		if id == "" || obj == "" {
+			continue
+		}
+		if len(sliceMustNotUnion(slicePackagePaths(s), byPath)) == 0 {
+			continue
+		}
+		out = append(out, groundedSliceObjective{ID: id, Objective: obj})
+	}
+	return out
+}
+
+// missingGroundedObjectives returns constrained-slice objectives absent from archText.
+func missingGroundedObjectives(archText string, typo catalog.Typology, constraints packageCapabilityConstraintsDoc) []groundedSliceObjective {
+	var missing []groundedSliceObjective
+	for _, g := range constrainedSlicesWithObjectives(typo, constraints) {
+		if !strings.Contains(archText, g.Objective) {
+			missing = append(missing, g)
+		}
+	}
+	return missing
+}
+
+func formatMissingGroundedObjectivesFeedback(missing []groundedSliceObjective) string {
+	if len(missing) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(missing))
+	for _, m := range missing {
+		parts = append(parts, fmt.Sprintf("%s (%q)", m.ID, m.Objective))
+	}
+	return fmt.Sprintf(
+		"%s: architecture missing grounded objectives for constrained slices: %s; preserve catalog objectives verbatim",
+		typologypack.CriterionIDRoleGrounding, strings.Join(parts, "; "),
+	)
+}
+
+// ensureArchitectureMarkdownKeepsGroundedObjectives appends a short markdown
+// block for any constrained-slice catalog objectives still missing from archMD.
+// Idempotent when objectives are already present.
+func ensureArchitectureMarkdownKeepsGroundedObjectives(archMD, refinedYAML, constraintsYAML string) (string, error) {
+	refinedYAML = strings.TrimSpace(refinedYAML)
+	constraintsYAML = strings.TrimSpace(constraintsYAML)
+	if refinedYAML == "" || constraintsYAML == "" {
+		return archMD, nil
+	}
+	typo, err := loadTypologyFromYAML(refinedYAML)
+	if err != nil {
+		return "", fmt.Errorf("architecture grounding load catalog: %w", err)
+	}
+	constraints, err := parseCapabilityConstraintsYAML(constraintsYAML)
+	if err != nil {
+		return "", fmt.Errorf("architecture grounding parse constraints: %w", err)
+	}
+	missing := missingGroundedObjectives(archMD, typo, constraints)
+	if len(missing) == 0 {
+		return archMD, nil
+	}
+	var block strings.Builder
+	if err := groundedObjectivesAppendTemplate.Execute(&block, missing); err != nil {
+		return "", fmt.Errorf("architecture grounding render objectives: %w", err)
+	}
+	out := strings.TrimRight(archMD, "\n") + "\n" + block.String()
+	if still := missingGroundedObjectives(out, typo, constraints); len(still) > 0 {
+		return "", fmt.Errorf("%s", formatMissingGroundedObjectivesFeedback(still))
+	}
+	return out, nil
+}
+
 // assertArchitectureKeepsGroundedObjectives fail-closes catch-up story when
 // root architecture.md drops a constrained slice's grounded catalog objective.
 func assertArchitectureKeepsGroundedObjectives(ctxDir string) error {
@@ -374,25 +465,14 @@ func assertArchitectureKeepsGroundedObjectives(ctxDir string) error {
 	if err != nil {
 		return fmt.Errorf("catch-up grounding read architecture: %w", err)
 	}
-	archText := string(arch)
-	byPath := constraintsByPath(constraints)
-	for _, s := range typo.Slices {
-		obj := strings.TrimSpace(s.Objective)
-		if obj == "" {
-			continue
-		}
-		mustNot := sliceMustNotUnion(slicePackagePaths(s), byPath)
-		if len(mustNot) == 0 {
-			continue
-		}
-		if !strings.Contains(archText, obj) {
-			return fmt.Errorf(
-				"%s: architecture.md dropped grounded objective for constrained slice %q; catch-up must preserve catalog objectives",
-				typologypack.CriterionIDRoleGrounding, s.ID,
-			)
-		}
+	missing := missingGroundedObjectives(string(arch), typo, constraints)
+	if len(missing) == 0 {
+		return nil
 	}
-	return nil
+	return fmt.Errorf(
+		"%s: architecture.md dropped grounded objective for constrained slice %q; catch-up must preserve catalog objectives",
+		typologypack.CriterionIDRoleGrounding, missing[0].ID,
+	)
 }
 
 func fileExists(path string) bool {
