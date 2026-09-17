@@ -142,7 +142,7 @@ func (g rlmBootstrapStoryGenerator) Generate(ctx context.Context, input Bootstra
 			ArchitectureHash: architectureIdentitySHA(input.TypologyArchitecture),
 			ReadmeHash:       cache.ContentSHA(input.ReadmeSnapshot),
 			ModelID:          input.DigestModelID,
-			PromptVersion:    cache.DigestStoryPromptV1,
+			PromptVersion:    cache.DigestStoryPromptV2,
 			SchemaVersion:    cache.DigestStorySchemaV3,
 		}
 		for attempt := 1; attempt <= maxBootstrapStoryAttempts; attempt++ {
@@ -266,7 +266,7 @@ func bootstrapStorySections(input BootstrapStoryInput) []bootstrapStorySection {
 	return []bootstrapStorySection{
 		{ID: "readme", Current: input.CurrentReadme, Instruction: "Context-branch README: seed origin and reading order for the served repo. Keep ## Reading order and majordomo reading markers when present. README may mention the context branch; do not rewrite the product mission as Majordomo.", Setter: func(o *BootstrapStoryOutput, s string) { o.ReadmeMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.ReadmeMD }},
 		{ID: "mission", Current: input.CurrentMission, Instruction: "Mission markdown: present-tense purpose of the served product from README + typology + slice objective ledger. MUST NOT invent a Majordomo/control-plane mission.", Setter: func(o *BootstrapStoryOutput, s string) { o.MissionMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.MissionMD }},
-		{ID: "architecture", Current: input.CurrentArchitecture, Instruction: "Teaching architecture for the served product. Prefer slice objective ledger jobs and doors (entrypoint vs server). MUST NOT invent a glamorous core-value slice; MUST NOT claim confirmed .typology/.", Setter: func(o *BootstrapStoryOutput, s string) { o.ArchitectureMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.ArchitectureMD }},
+		{ID: "architecture", Current: input.CurrentArchitecture, Instruction: "Teaching architecture for the served product. Use refined catalog slice ids and ledger objectives by name. Mention CLI/server entrypoints only when evidence labels them; MUST NOT invent a Jobs, Doors, or product-pillar taxonomy. MUST NOT invent a glamorous core-value slice; MUST NOT claim confirmed .typology/.", Setter: func(o *BootstrapStoryOutput, s string) { o.ArchitectureMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.ArchitectureMD }},
 		{ID: "conventions", Current: input.CurrentConventions, Instruction: "Conventions markdown grounded in evidence for the served product.", Setter: func(o *BootstrapStoryOutput, s string) { o.ConventionsMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.ConventionsMD }},
 		{ID: "weaknesses", Current: input.CurrentWeaknesses, Instruction: "Weaknesses markdown from typology debt and findings; no invented history.", Setter: func(o *BootstrapStoryOutput, s string) { o.WeaknessesMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.WeaknessesMD }},
 		{ID: "chronology", Current: input.CurrentChronology, Instruction: "Honest chronology with at most one explicit seed marker; do not reconstruct past decisions.", Setter: func(o *BootstrapStoryOutput, s string) { o.ChronologyMD = s }, Getter: func(o BootstrapStoryOutput) string { return o.ChronologyMD }},
@@ -327,9 +327,8 @@ Section id: %s
 Current draft (may be a placeholder; improve from evidence):
 %s
 
-Final answer MUST be a small YAML object (no markdown fences):
-markdown: |
-  <full markdown body for this section only>
+Final answer MUST be the full markdown body for this section only (start with a heading).
+Do not wrap in YAML, code fences, or a markdown: | envelope.
 
 Write present-tense, evidence-backed prose. Prefer slice objective ledger and refined Typology catalog over raw inventory.
 Do not invent history. Preserve majordomo-reading markers when rewriting README.
@@ -348,11 +347,52 @@ func parseBootstrapStoryMarkdownAnswer(answer string) (string, error) {
 	if err := yaml.Unmarshal([]byte(body), &doc); err == nil && strings.TrimSpace(doc.Markdown) != "" {
 		return strings.TrimSpace(doc.Markdown), nil
 	}
-	// Fallback: treat the whole answer as markdown when models skip the YAML wrapper.
-	if strings.Contains(body, "\n") || strings.HasPrefix(body, "#") {
-		return body, nil
+	// Models sometimes leak the old YAML envelope with an unindented body that
+	// yaml.Unmarshal cannot recover. Strip common shapes, then fail closed.
+	stripped := strings.TrimSpace(stripLeakedStoryMarkdownEnvelope(body))
+	if stripped == "" || looksLikeStoryMarkdownEnvelope(stripped) {
+		return "", fmt.Errorf("bootstrap story answer looks like a YAML/markdown envelope; return the raw markdown body for this section (start with a heading)")
 	}
-	return "", fmt.Errorf("bootstrap story answer missing markdown field")
+	if strings.Contains(stripped, "\n") || strings.HasPrefix(stripped, "#") {
+		return stripped, nil
+	}
+	return "", fmt.Errorf("bootstrap story answer missing markdown body")
+}
+
+// stripLeakedStoryMarkdownEnvelope removes common bad wrappers: a leading "yaml"
+// language tag and a "markdown: |" / "markdown:" line with an unindented body.
+func stripLeakedStoryMarkdownEnvelope(body string) string {
+	s := strings.TrimSpace(body)
+	if first, rest, ok := strings.Cut(s, "\n"); ok && strings.EqualFold(strings.TrimSpace(first), "yaml") {
+		s = strings.TrimSpace(rest)
+	}
+	first, rest, ok := strings.Cut(s, "\n")
+	firstTrim := strings.TrimSpace(first)
+	lower := strings.ToLower(firstTrim)
+	if lower == "markdown: |" || lower == "markdown:|" || lower == "markdown:" {
+		if !ok {
+			return ""
+		}
+		return strings.TrimSpace(rest)
+	}
+	return s
+}
+
+func looksLikeStoryMarkdownEnvelope(body string) bool {
+	s := strings.TrimSpace(body)
+	if s == "" {
+		return false
+	}
+	first, _, _ := strings.Cut(s, "\n")
+	first = strings.TrimSpace(first)
+	lower := strings.ToLower(first)
+	if lower == "yaml" {
+		return true
+	}
+	if lower == "markdown: |" || lower == "markdown:|" || strings.HasPrefix(lower, "markdown:") {
+		return true
+	}
+	return false
 }
 
 func validateBootstrapStorySection(input BootstrapStoryInput, id, text string) error {

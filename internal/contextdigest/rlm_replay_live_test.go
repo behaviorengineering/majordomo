@@ -110,6 +110,7 @@ func TestRLMReplayFixturesOffline(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				assertBootstrapStoryMarkdownUnwrapped(t, md)
 				section := doc.Label
 				if section == "" {
 					section = "readme"
@@ -141,6 +142,61 @@ func TestRLMReplayFixturesOffline(t *testing.T) {
 	}
 	if found == 0 {
 		t.Fatal("expected at least one rlm_replay fixture under testdata/rlm_replay/")
+	}
+}
+
+// TestBootstrapStoryEnvelopeFixturesOffline parses every bootstrap_story span
+// fixture (main readme + *_envelope_span.json) and asserts YAML/markdown
+// wrappers never survive parseBootstrapStoryMarkdownAnswer.
+func TestBootstrapStoryEnvelopeFixturesOffline(t *testing.T) {
+	pattern := filepath.Join("testdata", "rlm_replay", "gitboard_bootstrap_story*_span.json")
+	paths, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("expected at least one fixture matching %s", pattern)
+	}
+	for _, path := range paths {
+		path := path
+		name := filepath.Base(path)
+		t.Run(name, func(t *testing.T) {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			var doc rlmReplayFixture
+			if err := json.Unmarshal(raw, &doc); err != nil {
+				t.Fatalf("decode %s: %v", path, err)
+			}
+			if strings.TrimSpace(doc.RecordedFinalAnswer) == "" {
+				t.Fatal("recorded_final_answer empty")
+			}
+			md, err := parseBootstrapStoryMarkdownAnswer(doc.RecordedFinalAnswer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertBootstrapStoryMarkdownUnwrapped(t, md)
+			t.Logf("label=%s markdown_len=%d", doc.Label, len(md))
+		})
+	}
+}
+
+func assertBootstrapStoryMarkdownUnwrapped(t *testing.T, md string) {
+	t.Helper()
+	trimmed := strings.TrimSpace(md)
+	if trimmed == "" {
+		t.Fatal("parsed markdown empty")
+	}
+	if strings.Contains(md, "markdown: |") {
+		t.Fatalf("parsed markdown still contains envelope marker markdown: |; got head=%q", truncateReplayLog(md, 160))
+	}
+	firstLine, _, _ := strings.Cut(trimmed, "\n")
+	if strings.EqualFold(strings.TrimSpace(firstLine), "yaml") {
+		t.Fatalf("parsed markdown still starts with yaml line; got head=%q", truncateReplayLog(md, 160))
+	}
+	if !strings.HasPrefix(trimmed, "#") && !strings.Contains(md, "\n#") {
+		t.Fatalf("parsed markdown missing heading; got head=%q", truncateReplayLog(md, 160))
 	}
 }
 
@@ -201,6 +257,7 @@ func TestLiveDigestRLMReplay(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				assertBootstrapStoryMarkdownUnwrapped(t, md)
 				section := doc.Label
 				if section == "" {
 					section = "readme"
@@ -208,9 +265,7 @@ func TestLiveDigestRLMReplay(t *testing.T) {
 				if err := validateBootstrapStorySection(BootstrapStoryInput{RepoID: "gitboard"}, section, md); err != nil {
 					t.Logf("section validation (truncated context may cause soft fail): %v", err)
 				}
-				if strings.TrimSpace(md) == "" {
-					t.Fatal("live markdown empty")
-				}
+				t.Logf("markdown_len=%d", len(md))
 			case jmodules.TaskTypologyClusterAudit:
 				proposed := proposedFromRLMReplay(doc)
 				rows, err := parseClusterAuditAnswer(answer, proposed)

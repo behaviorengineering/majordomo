@@ -1,0 +1,13 @@
+{
+  "source": "tmp/digest-runs/gitboard-local-seed-20260917-041109Z/work-story/rlm-traces/bootstrap_story/rlm_inputs.jsonl",
+  "task": "bootstrap_story",
+  "repo_id": "gitboard",
+  "label": "mission",
+  "context": "# Bootstrap story evidence (truncated stub for offline parser coverage)\n\nrepo_id: gitboard\n",
+  "query": "Write one teaching-story markdown section for served repository gitboard.\nSubject is that product repo, not Majordomo the control plane (unless repo_id is majordomo).\nSection id: mission\nMission markdown: present-tense purpose of the served product from README + typology + slice objective ledger. MUST NOT invent a Majordomo/control-plane mission.\n\nFinal answer MUST be the full markdown body for this section only (start with a heading).\nDo not wrap in YAML, code fences, or a markdown: | envelope.",
+  "context_truncated": true,
+  "recorded_final_answer": "markdown: |\n# Mission\n<!-- majordomo-reading-nav:start -->\nReading path: [Prev: README.md](README.md) · [Next: architecture.md](architecture.md) · [TOC](README.md)\n<!-- majordomo-reading-nav:end -->\ngitboard provides a centralized interface for managing project synchronization, triage, and repository oversight. Through its dashboard and command-line capabilities, the system orchestrates project synchronization (`syncproj`), manages triage workflows, and provides observability into repository states via integrated board and dashboard components.",
+  "recorded_final_answer_synthetic": false,
+  "proposed": [],
+  "note": "query aligned to bootstrap_story_rlm_v2 raw-markdown contract; recorded_final_answer kept for offline unwrap"
+}

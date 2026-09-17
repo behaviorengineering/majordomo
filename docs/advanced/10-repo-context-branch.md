@@ -348,14 +348,66 @@ Selection MUST stay small. If an area pack does not match the task, it MUST NOT 
 
 Teaching files live on `majordomo-context/<repo-id>`. A reseed may delete those
 refs. Fingerprint-keyed LLM/RLM outputs live on a **separate** inference-cache branch.
-Aborted seed resume means cache hits on the next run, not a partial teaching-tree commit
+Aborted seed resume means cache hits on the next **full** run, not a partial teaching-tree commit
 (the seed still clones a fresh temp context until the final bootstrap commit).
+
+### PR-seeded stage replay (local-only)
+
+Operators can re-run later seed stages from an existing context PR without pushing:
+
+```bash
+majordomo context digest --repo-id <id> --workdir <clone> \
+  --resume-pr <N> --from-stage refine|intervention|story \
+  --work-story-dir <durable-dir>
+```
+
+- Loads that PR's head tree into a temp context dir (evidence + teaching files).
+- Skips survey; starts at `--from-stage` (`refine` includes human-intervention then story;
+  `intervention` then story; `story` alone).
+- Inference-cache Lookup/Store and skip stats still apply (same fingerprints as a full seed).
+- **Local-only:** does not push `majordomo-context/*`, does not open/update the context PR.
+  Result JSON includes `action=resume`, `resume_pr`, `resume_head`, `from_stage`, and
+  `local_out_dir` (copy under the work-story dump) plus `resume_provenance.json`.
+- Fail-closed when the PR tree lacks stage inputs (story needs refined snapshot + ledger).
+
+This is distinct from cache-hit soft resume on a normal digest: cache hits skip LLM calls
+inside a full chain; `--resume-pr` skips earlier stages entirely and keeps teaching output local.
+
+### Filesystem local seed workspace (no forge)
+
+For testing and interrupted seed iteration without branches or PRs:
+
+```bash
+majordomo context digest --repo-id <id> --workdir <clone> \
+  --local-seed-dir /path/to/seeds/<id>
+
+majordomo context digest --repo-id <id> --workdir <clone> \
+  --local-seed-dir /path/to/seeds/<id> --from-stage intervention
+```
+
+Workspace layout:
+
+```text
+<local-seed-dir>/
+  workspace.yaml       # repo, source SHA, completed stage
+  context/             # teaching tree (validate with majordomo context validate --dir …/context)
+  analysis/            # persisted draft catalog + architecture inputs
+  inference-cache/     # DigestStore files; Flush never configures a remote
+  work-story/          # RLM + module traces (default when --work-story-dir omitted)
+  local.diff
+```
+
+- No forge token, origin fetch for context, context push, or inference-cache branch push.
+- LLM provider credentials and typology binary are still required for stages that call them.
+- Pins `repo_id` + workdir `HEAD` in `workspace.yaml`. Moved HEAD fails closed unless `--allow-source-move`.
+- Promotion to a context PR stays manual in v1. Discard by deleting the directory.
+- Operator skill: `ai-copilots/skills/majordomo-local-seed/SKILL.md`.
 
 - Branch: `majordomo-inference-cache/<repo-id>` (`config.InferenceCacheBranch`; `DigestCacheBranch` aliases it). Legacy `majordomo-digest-cache/*` is cold-start superseded.
 - Artifacts under `digest/`: `inspect/`, `ledger/`, `cluster/`, `refine/`, `intervention/`, `story/` (plus legacy `cluster_audit/` for full-list audits)
 - Hit when stable evidence hashes + model/prompt/schema match; do not key on ephemeral RLM prose
 - End-of-run log line reports hit/miss counts (including cluster_cot, refine, intervention, story) and `estimated_tokens_saved`
-- **Push on the go:** each successful Store commits and pushes the cache branch immediately. Do not wait for job success; a failed reseed must still leave durable hits.
+- **Push on the go:** each successful Store commits and pushes the cache branch immediately. Do not wait for job success; a failed reseed must still leave durable hits. **Exception:** `--local-seed-dir` uses a filesystem DigestStore with no push configuration.
 - Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
 - Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete `majordomo-inference-cache/*`
 

@@ -892,7 +892,9 @@ func newContextCmd() *cobra.Command {
 	mustMarkFlagRequired(validate, "dir")
 	var digestConfigDir, digestRepoID, digestWorkDir, digestOut, digestWorkStoryDir string
 	var digestTypologyBinary, digestModuleScope, digestBootstrapPolicy string
-	var skipStory, skipCompact, forceCompact bool
+	var digestFromStage, digestLocalSeedDir string
+	var digestResumePR int
+	var skipStory, skipCompact, forceCompact, digestAllowSourceMove bool
 	digest := &cobra.Command{
 		Use:   "digest",
 		Short: "Catch up the served-repo context branch when the cursor is behind default HEAD",
@@ -922,6 +924,10 @@ func newContextCmd() *cobra.Command {
 				ForceCompact:          forceCompact,
 				WorkStoryDir:          digestWorkStoryDir,
 				Context:               ctx,
+				ResumePR:              digestResumePR,
+				FromStage:             digestFromStage,
+				LocalSeedDir:          digestLocalSeedDir,
+				AllowSourceMove:       digestAllowSourceMove,
 			})
 			if err != nil {
 				return err
@@ -944,10 +950,14 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().StringVar(&digestRepoID, "repo-id", "", "served repo id")
 	digest.Flags().StringVar(&digestWorkDir, "workdir", "", "served-repo clone with origin remote")
 	digest.Flags().StringVar(&digestOut, "out", "-", "write result JSON (default stdout; logs stay on stdout)")
-	digest.Flags().StringVar(&digestWorkStoryDir, "work-story-dir", "", "durable local dump for RLM + CoT module traces + runreports (AI testing); default tmp/digest-runs/<repo>-<ts> or MAJORDOMO_DIGEST_WORK_STORY_DIR/<repo>-<ts>")
+	digest.Flags().StringVar(&digestWorkStoryDir, "work-story-dir", "", "durable local dump for RLM + CoT module traces + runreports (AI testing); default tmp/digest-runs/<repo>-<ts> or MAJORDOMO_DIGEST_WORK_STORY_DIR/<repo>-<ts>; with --local-seed-dir defaults to <seed>/work-story")
 	digest.Flags().StringVar(&digestTypologyBinary, "typology-binary", os.Getenv("MAJORDOMO_TYPOLOGY_BINARY"), "Typology executable path")
 	digest.Flags().StringVar(&digestModuleScope, "module-scope", os.Getenv("MAJORDOMO_TYPOLOGY_MODULE_SCOPE"), "Typology module scope within the served repo")
 	digest.Flags().StringVar(&digestBootstrapPolicy, "bootstrap-survey-policy", "auto", "bootstrap survey policy: auto|always|never")
+	digest.Flags().IntVar(&digestResumePR, "resume-pr", 0, "PR-seeded stage replay: load this context PR head as local evidence (requires --from-stage; never pushes context/PR)")
+	digest.Flags().StringVar(&digestFromStage, "from-stage", "", "stage start: refine|intervention|story (with --resume-pr); survey|refine|intervention|story (with --local-seed-dir)")
+	digest.Flags().StringVar(&digestLocalSeedDir, "local-seed-dir", "", "filesystem-only seed workspace (no forge token, no context/cache branch push); conflicts with --resume-pr")
+	digest.Flags().BoolVar(&digestAllowSourceMove, "allow-source-move", false, "with --local-seed-dir, retarget workspace when workdir HEAD differs from workspace.yaml source_sha")
 	digest.Flags().BoolVar(&skipStory, "skip-story", false, "cursor/meta only; skip story and agenting updates")
 	digest.Flags().BoolVar(&skipCompact, "skip-compact", false, "skip chronology compaction")
 	digest.Flags().BoolVar(&forceCompact, "force-compact", false, "run compaction even under entry threshold")

@@ -17,6 +17,8 @@ keyed artifact. Re-runs with identical fingerprints MUST skip the provider call.
 |-------|-------------------|-------|
 | Inference cache (review + digest) | `majordomo-inference-cache/<repo-id>` with `review/` and `digest/` path prefixes (`digest/inspect`, `ledger`, `cluster`, `refine`, `intervention`, `story`; plus `cluster_audit/`) | Review cluster analysis; digest inspect, ledger, cluster audit, cluster CoT, refine, human intervention, bootstrap story |
 | Context cursor | `majordomo-context/<repo-id>` `meta.yaml` | Whole digest job when HEAD already visited |
+| PR-seeded stage replay | Temp ctx dir from `--resume-pr` head; outputs under work-story `local-context/` | Same digest Lookup/Store skips for `refineTypologyEvidence`, `flagHumanIntervention`, `writeBootstrapStory`; **never** pushes `majordomo-context/*` or opens/updates the context PR |
+| Local seed workspace | `<local-seed-dir>/inference-cache/` DigestStore (filesystem only) | Same digest fingerprints/skips; **Flush MUST NOT** configure a remote or push `majordomo-inference-cache/*` |
 
 Legacy branch names `majordomo-pr-reviewer-cache/*` and `majordomo-digest-cache/*` are
 cold-start superseded. Poll still excludes them so orphaned refs stay non-product.
@@ -64,10 +66,13 @@ artifact, the step MUST commit and push the cache branch **on the go** (same
 cadence as PR review `majordomo cache store` then `cache push`). MUST NOT wait
 for the whole digest or review job to succeed. A later refine, eval, or gate
 failure MUST NOT discard already-earned inspect/ledger/cluster/refine/story hits.
+**Exception:** `--local-seed-dir` DigestStore MUST omit `ConfigurePush` so Flush
+is a no-op for remotes (filesystem artifacts only).
 
 - Enforcement: `DigestStore` Flush after Store*; digest run configures push when
-  materializing `majordomo-inference-cache/<repo-id>`; final Flush on exit
-- Violation: STOP, wire push-on-store (or phase flush), re-verify
+  materializing `majordomo-inference-cache/<repo-id>`; local seed logs
+  `cache_mode=local` and never calls ConfigurePush; final Flush on exit
+- Violation: STOP, wire push-on-store for remote mode or strip push for local mode
 
 **CONSTRAINT:** Digest fingerprint inputs MUST be stable across reseeds of the
 same code. Prefer package source hashes (and owned-path / constraint facts) over
@@ -94,6 +99,15 @@ Context wipe (`majordomo-context/*`) is allowed; inference reuse must survive it
 
 - Enforcement: reseed scripts only target context refs; docs list the exclusion
 - Violation: STOP, restore inference-cache branch policy
+
+**CONSTRAINT:** PR-seeded stage replay (`majordomo context digest --resume-pr --from-stage`)
+MUST keep teaching outputs local. MUST NOT push `majordomo-context/*` or call
+`OpenUpdatePR` / merge for that run. Inference-cache push-on-store MAY still run.
+Resume entry points: `refineTypologyEvidence` (includes intervention),
+`flagHumanIntervention`, `writeBootstrapStory`.
+
+- Enforcement: `isResumeMode` early return in `Run`; unit tests for flags + stage gate
+- Violation: STOP, strip context push/PR from the resume path
 
 CORRECT:
 ```go
@@ -122,6 +136,12 @@ fp.ContextSHA = cache.ContentSHA(clusterProposalMD)
 if digestSucceeded {
   _ = store.StoreInspect(fp, out)
   _ = pushDigestCache(...)
+}
+
+// Resume-from-PR that pushes the teaching context branch
+if opts.ResumePR > 0 {
+  _ = Push(ctxGit, updateBranch)
+  _, _ = forge.OpenUpdatePR(base, update, title, body)
 }
 ```
 
