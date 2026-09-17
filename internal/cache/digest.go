@@ -62,8 +62,10 @@ const (
 	DigestStorySchemaV2 = "story-v2"
 	// DigestStorySchemaV3 folds grounded-objective preserve into architecture sections.
 	DigestStorySchemaV3 = "story-v3"
-	// DigestStoryPromptV1 labels the bootstrap_story RLM prompt contract.
+	// DigestStoryPromptV1 labels the bootstrap_story RLM prompt contract (YAML markdown envelope).
 	DigestStoryPromptV1 = "bootstrap_story_rlm_v1"
+	// DigestStoryPromptV2 labels raw-markdown final answers (no YAML envelope).
+	DigestStoryPromptV2 = "bootstrap_story_rlm_v2"
 )
 
 // ValidateDigestCacheBranch is an alias for ValidateInferenceCacheBranch.
@@ -730,7 +732,7 @@ func (fp InterventionFingerprint) key() string {
 func (fp StoryFingerprint) key() string {
 	prompt := fp.PromptVersion
 	if prompt == "" {
-		prompt = DigestStoryPromptV1
+		prompt = DigestStoryPromptV2
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {

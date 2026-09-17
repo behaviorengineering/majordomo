@@ -20,6 +20,94 @@ func TestFormatBootstrapStorySectionQueryServedRepoNotMajordomoBootstrap(t *test
 	if !strings.Contains(q, "gitboard") {
 		t.Fatalf("query missing served repo id: %s", q)
 	}
+	if strings.Contains(q, "small YAML object") || strings.Contains(q, "markdown: |\n  <full markdown") {
+		t.Fatalf("query still asks for YAML markdown envelope: %s", q)
+	}
+	if !strings.Contains(q, "full markdown body for this section only") {
+		t.Fatalf("query missing raw markdown contract: %s", q)
+	}
+}
+
+func TestBootstrapStorySectionsArchitectureInstruction(t *testing.T) {
+	secs := bootstrapStorySections(BootstrapStoryInput{})
+	var arch string
+	for _, s := range secs {
+		if s.ID == "architecture" {
+			arch = s.Instruction
+			break
+		}
+	}
+	if arch == "" {
+		t.Fatal("architecture section missing")
+	}
+	if strings.Contains(strings.ToLower(arch), "jobs and doors") {
+		t.Fatalf("architecture instruction still prefers jobs and doors: %s", arch)
+	}
+}
+
+func TestParseBootstrapStoryMarkdownAnswer(t *testing.T) {
+	t.Run("valid YAML indented markdown field", func(t *testing.T) {
+		in := "markdown: |\n  # Title\n  body line\n"
+		got, err := parseBootstrapStoryMarkdownAnswer(in)
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if strings.Contains(got, "markdown:") {
+			t.Fatalf("returned wrapper: %q", got)
+		}
+		if !strings.HasPrefix(got, "# Title") {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("unindented markdown pipe leak", func(t *testing.T) {
+		in := "markdown: |\n# Title\nbody line\n"
+		got, err := parseBootstrapStoryMarkdownAnswer(in)
+		if err != nil {
+			// Fail-closed is acceptable when strip cannot recover.
+			if strings.Contains(err.Error(), "envelope") {
+				return
+			}
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if strings.Contains(got, "markdown: |") {
+			t.Fatalf("must not return envelope: %q", got)
+		}
+		if !strings.Contains(got, "# Title") {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("leading yaml markdown pipe leak", func(t *testing.T) {
+		in := "yaml\nmarkdown: |\n# Title\nbody line\n"
+		got, err := parseBootstrapStoryMarkdownAnswer(in)
+		if err != nil {
+			if strings.Contains(err.Error(), "envelope") {
+				return
+			}
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if strings.Contains(got, "markdown: |") {
+			t.Fatalf("must not return envelope: %q", got)
+		}
+		if !strings.Contains(got, "# Title") {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("raw heading markdown", func(t *testing.T) {
+		in := "# Title\nbody line\n"
+		got, err := parseBootstrapStoryMarkdownAnswer(in)
+		if err != nil {
+			t.Fatalf("unexpected err: %v", err)
+		}
+		if got != strings.TrimSpace(in) {
+			t.Fatalf("got %q", got)
+		}
+	})
+	t.Run("pure markdown pipe empty", func(t *testing.T) {
+		_, err := parseBootstrapStoryMarkdownAnswer("markdown: |")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func TestRejectMajordomoAsProduct(t *testing.T) {

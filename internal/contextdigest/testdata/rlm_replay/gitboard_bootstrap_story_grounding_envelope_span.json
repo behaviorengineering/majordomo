@@ -1,0 +1,13 @@
+{
+  "source": "tmp/digest-runs/gitboard-local-seed-20260917-041109Z/work-story/rlm-traces/bootstrap_story/rlm_inputs.jsonl",
+  "task": "bootstrap_story",
+  "repo_id": "gitboard",
+  "label": "grounding",
+  "context": "# Bootstrap story evidence (truncated stub for offline parser coverage)\n\nrepo_id: gitboard\n",
+  "query": "Write one teaching-story markdown section for served repository gitboard.\nSubject is that product repo, not Majordomo the control plane (unless repo_id is majordomo).\nSection id: grounding\nAgenting GROUNDING.md: cold-reader map of the served product for agents. Prefer ledger objectives. MUST NOT read as Majordomo agent-bootstrap meta or invent agent taxonomies.\n\nFinal answer MUST be the full markdown body for this section only (start with a heading).\nDo not wrap in YAML, code fences, or a markdown: | envelope.",
+  "context_truncated": true,
+  "recorded_final_answer": "markdown: |\n# Overview\nHigh-level project grounding for review. Digest expands this from mission.md and architecture.md.\n## Grounding\nGitboard serves as a local orchestration interface for developer workflows involving GitLab and GitHub. It maps the state of remote forge activities—including CI/CD status, open Merge Requests, and job failures—directly to the local developer's worktree and checkout state.\nThe system operates via a structured typology of local and remote entities, organized through the following core components:\nSlice Objective Ledger: Defines the primary operational goals and state transitions for local repository synchronization and dashboard updates.\nRefined Typology Catalog: Categorizes the various forge entities (Issues, MRs, Pipelines, Worktrees) and their corresponding local representations.\nAgents interacting with Gitboard should focus on the ledger objectives to ensure local state remains synchronized with remote forge realities.",
+  "recorded_final_answer_synthetic": false,
+  "proposed": [],
+  "note": "query aligned to bootstrap_story_rlm_v2 raw-markdown contract; recorded_final_answer kept for offline unwrap"
+}
