@@ -18,16 +18,22 @@ import (
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
-	stropdspy "github.com/behaviorengineering/strop/dspy"
 	"github.com/behaviorengineering/strop/dspy/factory"
 	"github.com/behaviorengineering/typology/catalog"
 	typroles "github.com/behaviorengineering/typology/roles"
+	"github.com/XiaoConstantine/dspy-go/pkg/core"
+	dspymod "github.com/XiaoConstantine/dspy-go/pkg/modules"
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	maxLedgerSlices  = 24
-	ledgerRLMWorkers = 2
-	ledgerRLMTimeout = 15 * time.Minute
+	maxLedgerSlices         = 24
+	ledgerRLMWorkers        = 2
+	ledgerRLMTimeout        = 15 * time.Minute
+	ledgerEvidenceTimeout   = 90 * time.Second
+	ledgerSynthesisTimeout  = 5 * time.Minute
+	ledgerMaxContextChars   = 24_000
+	ledgerPlanRelDir        = "tmp/typology/ledger_plans"
 )
 
 var objectiveVerdictRE = regexp.MustCompile(`(?i)\bverdict\s*[:=]\s*(grounded|overclaim)\b`)
@@ -54,6 +60,22 @@ type stropSliceObjectiveLedgerRLM struct {
 	}
 }
 
+func newObjectiveLedgerPredictModule(llm core.LLM) *dspymod.Predict {
+	sig := core.NewSignature(
+		[]core.InputField{
+			{Field: core.NewField("context", core.WithDescription("Distilled per-package evidence notes for one teaching slice"))},
+			{Field: core.NewField("query", core.WithDescription("Grounding instructions, constraints, and claim policy"))},
+		},
+		[]core.OutputField{
+			{Field: core.NewField("answer", core.WithDescription("YAML ledger object: verdict, evidence, claims, objective"))},
+		},
+	).WithInstruction(`You write one grounded Typology teaching-slice ledger entry from distilled evidence.
+Follow the query exactly. Emit only the YAML object described there (no markdown fences, no REPL, no tool use).`)
+	predict := dspymod.NewPredict(sig).WithName(jmodules.TaskTypologyObjectiveGrounding)
+	predict.SetLLM(llm)
+	return predict
+}
+
 func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig, workStoryDir string) (sliceObjectiveLedgerBuilder, error) {
 	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyObjectiveGrounding)
 	if err != nil || !ok {
@@ -67,44 +89,46 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig,
 		}
 	}
 	stropProvider := provider.ToStrop()
-	llmFactory := factory.NewLLMFactory(nil, ledgerRLMTimeout)
+	timeout := provider.GetTimeout(ledgerSynthesisTimeout)
+	if timeout < ledgerSynthesisTimeout {
+		timeout = ledgerSynthesisTimeout
+	}
+	llmFactory := factory.NewLLMFactory(nil, timeout)
 	llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
 	llm, err := llmFactory.CreateLLM(ctx, stropProvider)
 	if err != nil {
-		return nil, fmt.Errorf("typology_objective_grounding RLM LLM: %w", err)
+		return nil, fmt.Errorf("typology_objective_grounding Predict LLM: %w", err)
 	}
 	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
-	rlmCfg := stropdspy.RLMDefaults()
-	rlmCfg.LLM = llm
-	rlmCfg.MaxFullContextQueryChars = 24_000
-	timeout := provider.GetTimeout(ledgerRLMTimeout)
-	if timeout < ledgerRLMTimeout {
-		timeout = ledgerRLMTimeout
-	}
-	rlmCfg.Timeout = timeout
-	rlmCfg.TraceDir = rlmTraceDir(workStoryDir, jmodules.TaskTypologyObjectiveGrounding)
-	module, err := rlmCfg.CreateModule()
-	if err != nil {
-		return nil, err
-	}
+	module := newObjectiveLedgerPredictModule(llm)
+	_ = workStoryDir
 	return stropSliceObjectiveLedgerRLM{
 		module: rlmCompleteAdapter{complete: func(ctx context.Context, contextPayload any, query string) (string, int, int, int, int, error) {
-			answer, result, err := stropdspy.RLMComplete(ctx, module, contextPayload, query)
+			ctxStr, _ := contextPayload.(string)
+			if ctxStr == "" && contextPayload != nil {
+				ctxStr = fmt.Sprint(contextPayload)
+			}
+			stepCtx, cancel := context.WithTimeout(ctx, timeout)
+			defer cancel()
+			out, err := module.Process(stepCtx, map[string]any{
+				"context": ctxStr,
+				"query":   query,
+			})
 			if err != nil {
 				return "", 0, 0, 0, 0, err
 			}
-			iters := 0
-			prompt, completion, total := 0, 0, 0
-			if result != nil {
-				iters = result.Iterations
-				prompt = result.Usage.PromptTokens
-				completion = result.Usage.CompletionTokens
-				total = result.Usage.TotalTokens
-				llmusage.FromContext(ctx).AddTokenUsageValue(jmodules.TaskTypologyObjectiveGrounding, result.Usage)
-			} else {
-				llmusage.FromContext(ctx).Add(jmodules.TaskTypologyObjectiveGrounding, 0, 0, 0)
+			answer := ""
+			if out != nil {
+				if s, ok := out["answer"].(string); ok {
+					answer = s
+				} else if s, ok := out["Answer"].(string); ok {
+					answer = s
+				} else if s, ok := out["completion"].(string); ok {
+					answer = s
+				}
 			}
-			return answer, iters, prompt, completion, total, nil
+			llmusage.FromContext(ctx).Add(jmodules.TaskTypologyObjectiveGrounding, 0, 0, 0)
+			return strings.TrimSpace(answer), 1, 0, 0, 0, nil
 		}},
 	}, nil
 }
@@ -141,8 +165,30 @@ type stubSliceLedgerCaller struct {
 	err    error
 }
 
-func (s stubSliceLedgerCaller) Complete(context.Context, any, string) (string, int, int, int, int, error) {
+func (s stubSliceLedgerCaller) Complete(_ context.Context, _ any, query string) (string, int, int, int, int, error) {
+	if strings.Contains(query, "extract grounding evidence for one package") {
+		return "evidence:\n  - StubSymbol\nnotes: stub package notes\n", 1, 0, 0, 0, s.err
+	}
 	return s.answer, 1, 0, 0, 0, s.err
+}
+
+type ledgerSliceTarget struct {
+	id    string
+	paths []string
+}
+
+// sliceLedgerStepPlan is the mechanical per-slice visit order (no LLM planning).
+type sliceLedgerStepPlan struct {
+	SliceID  string   `yaml:"slice_id"`
+	Packages []string `yaml:"packages"`
+	Steps    []string `yaml:"steps"`
+}
+
+// packageEvidenceNote is distilled evidence from one package visit.
+type packageEvidenceNote struct {
+	Path     string   `yaml:"path"`
+	Evidence []string `yaml:"evidence"`
+	Notes    string   `yaml:"notes"`
 }
 
 func buildSliceObjectiveLedger(
@@ -157,18 +203,14 @@ func buildSliceObjectiveLedger(
 		)}, nil
 	}
 	byPath := constraintsByPath(req.Constraints)
-	type target struct {
-		id    string
-		paths []string
-	}
-	var allTargets []target
+	var allTargets []ledgerSliceTarget
 	for _, s := range req.DraftTypo.Slices {
 		id := strings.TrimSpace(s.ID)
 		paths := slicePackagePaths(s)
 		if id == "" || len(paths) == 0 {
 			continue
 		}
-		allTargets = append(allTargets, target{id: id, paths: paths})
+		allTargets = append(allTargets, ledgerSliceTarget{id: id, paths: paths})
 	}
 	sort.Slice(allTargets, func(i, j int) bool { return allTargets[i].id < allTargets[j].id })
 	if len(allTargets) == 0 {
@@ -192,7 +234,7 @@ func buildSliceObjectiveLedger(
 	kept := map[string]sliceObjectiveLedgerEntry{}
 	var lastIssues []string
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
-		var pending []target
+		var pending []ledgerSliceTarget
 		for _, t := range allTargets {
 			if _, ok := kept[t.id]; ok {
 				continue
@@ -213,165 +255,13 @@ func buildSliceObjectiveLedger(
 		var wg sync.WaitGroup
 		for i, t := range pending {
 			wg.Add(1)
-			go func(i int, t target) {
+			go func(i int, t ledgerSliceTarget) {
 				defer wg.Done()
 				sem <- struct{}{}
 				defer func() { <-sem }()
 
-				var parts []string
-				for _, p := range t.paths {
-					ctxMD := packageRLMContextSnippet(string(wholeContext), p)
-					if strings.TrimSpace(ctxMD) == "" {
-						built, err := typroles.FormatPackageRLMContextForPath(req.AnalysisDir, p, nil)
-						if err == nil {
-							ctxMD = built
-						}
-					}
-					if strings.TrimSpace(ctxMD) != "" {
-						parts = append(parts, ctxMD)
-					}
-				}
-				if len(parts) == 0 {
-					results[i] = result{issue: fmt.Sprintf(
-						"%s: slice %q owned packages have empty RLM context; cannot ground objective",
-						typologypack.CriterionIDRoleGrounding, t.id,
-					)}
-					return
-				}
-				constraintBlock := formatConstraintRowsForPaths(t.paths, byPath)
-				ownedSrc, srcErr := cache.OwnedPackagesSourceHash(req.AnalysisDir, t.paths)
-				if srcErr != nil {
-					results[i] = result{issue: fmt.Sprintf(
-						"%s: slice %q owned package source hash failed: %v",
-						typologypack.CriterionIDRoleGrounding, t.id, srcErr,
-					)}
-					return
-				}
-				fp := cache.LedgerFingerprint{
-					SliceID:         t.id,
-					OwnedPathsHash:  cache.OwnedPathsHash(t.paths),
-					ContextSHA:      ownedSrc,
-					ConstraintsHash: cache.ContentSHA(constraintBlock),
-					ModelID:         req.DigestModelID,
-					PromptVersion:   cache.DigestLedgerPromptV1,
-					SchemaVersion:   cache.DigestLedgerSchemaV2,
-				}
-				if req.DigestSkips && req.DigestCache != nil {
-					if hit, ok, err := req.DigestCache.LookupLedger(fp); err == nil && ok && hit.Verdict == ledgerVerdictGrounded {
-						req.DigestCache.RecordLedgerHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
-						logf("INFO", "digest cache hit ledger slice=%s", t.id)
-						results[i] = result{entry: sliceObjectiveLedgerEntry{
-							ID:         hit.ID,
-							OwnedPaths: append([]string(nil), hit.OwnedPaths...),
-							Evidence:   append([]string(nil), hit.Evidence...),
-							Claims:     append([]string(nil), hit.Claims...),
-							Objective:  hit.Objective,
-							Verdict:    hit.Verdict,
-							Source:     firstNonEmpty(hit.Source, "digest_cache"),
-						}}
-						return
-					}
-				}
-				sliceFeedback := filterIssuesForSlice(lastIssues, t.id)
-				joinedCtx := strings.Join(parts, "\n\n")
-				query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterHintYAML, sliceFeedback)
-				answer, _, promptTok, completionTok, totalTok, err := caller.Complete(ctx, joinedCtx, query)
-				if req.DigestCache != nil {
-					req.DigestCache.RecordLedgerMiss()
-				}
-				if err != nil {
-					if ctx.Err() != nil {
-						results[i] = result{err: fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
-							typologypack.CriterionIDRoleGrounding, t.id, err)}
-						return
-					}
-					// Provider timeouts / 502s are per-slice retry fuel, not a full abort.
-					results[i] = result{issue: fmt.Sprintf(
-						"%s: slice %q objective ledger RLM failed: %v",
-						typologypack.CriterionIDRoleGrounding, t.id, err,
-					)}
-					return
-				}
-				evidence, claims, objective, verdict, err := parseSliceObjectiveLedgerAnswer(answer)
-				if err != nil {
-					results[i] = result{issue: fmt.Sprintf(
-						"%s: slice %q objective ledger parse failed: %v",
-						typologypack.CriterionIDRoleGrounding, t.id, err,
-					)}
-					return
-				}
-				unclaimedOK := sliceAllCapabilityCodesMustNot(t.paths, byPath)
-				if verdict == ledgerVerdictOverclaim {
-					if !unclaimedOK {
-						results[i] = result{issue: fmt.Sprintf(
-							"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
-							typologypack.CriterionIDRoleGrounding, t.id,
-						)}
-						return
-					}
-					if strings.TrimSpace(objective) == "" {
-						objective = ledgerUnclaimedObjective
-					}
-					if len(evidence) == 0 {
-						evidence = []string{"role:unknown"}
-					}
-					claims = nil
-					verdict = ledgerVerdictGrounded
-				}
-				if verdict == ledgerVerdictGrounded && len(claims) == 0 {
-					if !unclaimedOK {
-						results[i] = result{issue: fmt.Sprintf(
-							"%s: slice %q grounded answer missing claims",
-							typologypack.CriterionIDRoleGrounding, t.id,
-						)}
-						return
-					}
-					if strings.TrimSpace(objective) == "" {
-						objective = ledgerUnclaimedObjective
-					}
-				}
-				source := ledgerSourceRLM
-				if len(claims) == 0 {
-					source = ledgerSourceUnclaimed
-				}
-				entry := sliceObjectiveLedgerEntry{
-					ID:         t.id,
-					OwnedPaths: append([]string(nil), t.paths...),
-					Evidence:   evidence,
-					Claims:     claims,
-					Objective:  objective,
-					Verdict:    verdict,
-					Source:     source,
-				}
-				if hit := intersectStrings(claims, sliceMustNotUnion(t.paths, byPath)); len(hit) > 0 {
-					results[i] = result{issue: fmt.Sprintf(
-						"%s: slice %q ledger claims %v intersect must_not %v",
-						typologypack.CriterionIDRoleGrounding, t.id, claims, hit,
-					)}
-					return
-				}
-				if entailIssues := rejectUnentailedClaims(t.id, claims, t.paths, req.Constraints, rolesDoc); len(entailIssues) > 0 {
-					results[i] = result{issue: strings.Join(entailIssues, "\n")}
-					return
-				}
-				if req.DigestCache != nil && entry.Verdict == ledgerVerdictGrounded {
-					if err := req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
-						ID:               entry.ID,
-						OwnedPaths:       append([]string(nil), entry.OwnedPaths...),
-						Evidence:         append([]string(nil), entry.Evidence...),
-						Claims:           append([]string(nil), entry.Claims...),
-						Objective:        entry.Objective,
-						Verdict:          entry.Verdict,
-						Source:           entry.Source,
-						PromptTokens:     promptTok,
-						CompletionTokens: completionTok,
-						TotalTokens:      totalTok,
-					}); err != nil {
-						results[i] = result{err: fmt.Errorf("store slice %q objective ledger cache: %w", t.id, err)}
-						return
-					}
-				}
-				results[i] = result{entry: entry}
+				entry, issue, err := groundOneSliceLedger(ctx, caller, req, t, string(wholeContext), byPath, rolesDoc, filterIssuesForSlice(lastIssues, t.id))
+				results[i] = result{entry: entry, issue: issue, err: err}
 			}(i, t)
 		}
 		wg.Wait()
@@ -422,6 +312,485 @@ func buildSliceObjectiveLedger(
 	return doc, nil, nil
 }
 
+// groundOneSliceLedger runs the mechanical package-visit plan, then one synthesis call.
+// Evidence steps are sequential within the slice; callers may still parallelize across slices.
+func groundOneSliceLedger(
+	ctx context.Context,
+	caller sliceLedgerRLMCaller,
+	req sliceLedgerBuildRequest,
+	t ledgerSliceTarget,
+	wholeContext string,
+	byPath map[string]packageCapabilityConstraint,
+	rolesDoc packageRolesDoc,
+	sliceFeedback string,
+) (sliceObjectiveLedgerEntry, string, error) {
+	plan := buildSliceLedgerStepPlan(t.id, t.paths)
+	if err := persistSliceLedgerStepPlan(req.AnalysisDir, plan); err != nil {
+		logf("WARN", "ledger plan persist slice=%s: %v", t.id, err)
+	}
+
+	constraintBlock := formatConstraintRowsForPaths(t.paths, byPath)
+	ownedSrc, srcErr := cache.OwnedPackagesSourceHash(req.AnalysisDir, t.paths)
+	if srcErr != nil {
+		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
+			"%s: slice %q owned package source hash failed: %v",
+			typologypack.CriterionIDRoleGrounding, t.id, srcErr,
+		), nil
+	}
+	fp := cache.LedgerFingerprint{
+		SliceID:         t.id,
+		OwnedPathsHash:  cache.OwnedPathsHash(t.paths),
+		ContextSHA:      ownedSrc,
+		ConstraintsHash: cache.ContentSHA(constraintBlock),
+		ModelID:         req.DigestModelID,
+		PromptVersion:   cache.DigestLedgerPromptV1,
+		SchemaVersion:   cache.DigestLedgerSchemaV2,
+	}
+	if req.DigestSkips && req.DigestCache != nil {
+		if hit, ok, err := req.DigestCache.LookupLedger(fp); err == nil && ok && hit.Verdict == ledgerVerdictGrounded {
+			req.DigestCache.RecordLedgerHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
+			logf("INFO", "digest cache hit ledger slice=%s", t.id)
+			return sliceObjectiveLedgerEntry{
+				ID:         hit.ID,
+				OwnedPaths: append([]string(nil), hit.OwnedPaths...),
+				Evidence:   append([]string(nil), hit.Evidence...),
+				Claims:     append([]string(nil), hit.Claims...),
+				Objective:  hit.Objective,
+				Verdict:    hit.Verdict,
+				Source:     firstNonEmpty(hit.Source, "digest_cache"),
+			}, "", nil
+		}
+	}
+
+	notes, issue := gatherSlicePackageEvidence(ctx, caller, req, t, wholeContext, byPath)
+	if issue != "" {
+		return sliceObjectiveLedgerEntry{}, issue, nil
+	}
+	if len(notes) == 0 {
+		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
+			"%s: slice %q owned packages have empty RLM context; cannot ground objective",
+			typologypack.CriterionIDRoleGrounding, t.id,
+		), nil
+	}
+
+	distilled := formatDistilledPackageEvidence(notes)
+	if len(distilled) > ledgerMaxContextChars {
+		distilled = truncateToLedgerBudget(distilled, "\n[... distilled evidence truncated ...]\n")
+	}
+	query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterHintYAML, sliceFeedback)
+	synthCtx, cancel := context.WithTimeout(ctx, ledgerSynthesisTimeout)
+	defer cancel()
+	answer, _, promptTok, completionTok, totalTok, err := caller.Complete(synthCtx, distilled, query)
+	if req.DigestCache != nil {
+		req.DigestCache.RecordLedgerMiss()
+	}
+	if err != nil {
+		if ctx.Err() != nil {
+			return sliceObjectiveLedgerEntry{}, "", fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
+				typologypack.CriterionIDRoleGrounding, t.id, err)
+		}
+		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
+			"%s: slice %q objective ledger synthesis failed: %v",
+			typologypack.CriterionIDRoleGrounding, t.id, err,
+		), nil
+	}
+	evidence, claims, objective, verdict, err := parseSliceObjectiveLedgerAnswer(answer)
+	if err != nil {
+		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
+			"%s: slice %q objective ledger parse failed: %v",
+			typologypack.CriterionIDRoleGrounding, t.id, err,
+		), nil
+	}
+	unclaimedOK := sliceAllCapabilityCodesMustNot(t.paths, byPath)
+	if verdict == ledgerVerdictOverclaim {
+		if !unclaimedOK {
+			return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
+				"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
+				typologypack.CriterionIDRoleGrounding, t.id,
+			), nil
+		}
+		if strings.TrimSpace(objective) == "" {
+			objective = ledgerUnclaimedObjective
+		}
+		if len(evidence) == 0 {
+			evidence = []string{"role:unknown"}
+		}
+		claims = nil
+		verdict = ledgerVerdictGrounded
+	}
+	if verdict == ledgerVerdictGrounded && len(claims) == 0 {
+		if !unclaimedOK {
+			return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
+				"%s: slice %q grounded answer missing claims",
+				typologypack.CriterionIDRoleGrounding, t.id,
+			), nil
+		}
+		if strings.TrimSpace(objective) == "" {
+			objective = ledgerUnclaimedObjective
+		}
+	}
+	source := ledgerSourceRLM
+	// Keep claims allowed by at least one owned package is=[] prior. must_not union is too
+	// strict for multi-role slices (one unknown package would forbid every portable code).
+	dropped := claimsNotAllowedByOwnedIs(claims, t.paths, byPath)
+	claims = filterClaimsToOwnedIs(claims, t.paths, byPath)
+	if verdict == ledgerVerdictGrounded && len(claims) == 0 {
+		if !unclaimedOK {
+			msg := fmt.Sprintf(
+				"%s: slice %q has no claims allowed by owned package is=[]",
+				typologypack.CriterionIDRoleGrounding, t.id,
+			)
+			if len(dropped) > 0 {
+				msg = fmt.Sprintf("%s (dropped %v not allowed by owned package is=)", msg, dropped)
+			}
+			return sliceObjectiveLedgerEntry{}, msg, nil
+		}
+		if strings.TrimSpace(objective) == "" {
+			objective = ledgerUnclaimedObjective
+		}
+		source = ledgerSourceUnclaimed
+	} else if len(claims) == 0 {
+		source = ledgerSourceUnclaimed
+	}
+	entry := sliceObjectiveLedgerEntry{
+		ID:         t.id,
+		OwnedPaths: append([]string(nil), t.paths...),
+		Evidence:   evidence,
+		Claims:     claims,
+		Objective:  objective,
+		Verdict:    verdict,
+		Source:     source,
+	}
+	if entailIssues := rejectUnentailedClaims(t.id, claims, t.paths, req.Constraints, rolesDoc); len(entailIssues) > 0 {
+		return sliceObjectiveLedgerEntry{}, strings.Join(entailIssues, "\n"), nil
+	}
+	if req.DigestCache != nil && entry.Verdict == ledgerVerdictGrounded {
+		if err := req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
+			ID:               entry.ID,
+			OwnedPaths:       append([]string(nil), entry.OwnedPaths...),
+			Evidence:         append([]string(nil), entry.Evidence...),
+			Claims:           append([]string(nil), entry.Claims...),
+			Objective:        entry.Objective,
+			Verdict:          entry.Verdict,
+			Source:           entry.Source,
+			PromptTokens:     promptTok,
+			CompletionTokens: completionTok,
+			TotalTokens:      totalTok,
+		}); err != nil {
+			return sliceObjectiveLedgerEntry{}, "", fmt.Errorf("store slice %q objective ledger cache: %w", t.id, err)
+		}
+	}
+	return entry, "", nil
+}
+
+func buildSliceLedgerStepPlan(sliceID string, paths []string) sliceLedgerStepPlan {
+	ordered := append([]string(nil), paths...)
+	sort.Strings(ordered)
+	steps := make([]string, 0, len(ordered)+1)
+	for _, p := range ordered {
+		steps = append(steps, "evidence:"+p)
+	}
+	steps = append(steps, "synthesis")
+	return sliceLedgerStepPlan{
+		SliceID:  sliceID,
+		Packages: ordered,
+		Steps:    steps,
+	}
+}
+
+func persistSliceLedgerStepPlan(analysisDir string, plan sliceLedgerStepPlan) error {
+	if strings.TrimSpace(analysisDir) == "" || strings.TrimSpace(plan.SliceID) == "" {
+		return nil
+	}
+	dir := filepath.Join(analysisDir, filepath.FromSlash(ledgerPlanRelDir))
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	body, err := yamlMarshalLedgerPlan(plan)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, plan.SliceID+".yaml"), body, 0o644)
+}
+
+func yamlMarshalLedgerPlan(plan sliceLedgerStepPlan) ([]byte, error) {
+	var b strings.Builder
+	b.WriteString("slice_id: ")
+	b.WriteString(plan.SliceID)
+	b.WriteByte('\n')
+	b.WriteString("packages:\n")
+	for _, p := range plan.Packages {
+		b.WriteString("  - ")
+		b.WriteString(p)
+		b.WriteByte('\n')
+	}
+	b.WriteString("steps:\n")
+	for _, s := range plan.Steps {
+		b.WriteString("  - ")
+		b.WriteString(s)
+		b.WriteByte('\n')
+	}
+	return []byte(b.String()), nil
+}
+
+func gatherSlicePackageEvidence(
+	ctx context.Context,
+	caller sliceLedgerRLMCaller,
+	req sliceLedgerBuildRequest,
+	t ledgerSliceTarget,
+	wholeContext string,
+	byPath map[string]packageCapabilityConstraint,
+) ([]packageEvidenceNote, string) {
+	ordered := append([]string(nil), t.paths...)
+	sort.Strings(ordered)
+	notes := make([]packageEvidenceNote, 0, len(ordered))
+	for _, p := range ordered {
+		if ctx.Err() != nil {
+			return nil, fmt.Sprintf(
+				"%s: slice %q evidence cancelled: %v",
+				typologypack.CriterionIDRoleGrounding, t.id, ctx.Err(),
+			)
+		}
+		ctxMD := packageRLMContextSnippet(wholeContext, p)
+		if strings.TrimSpace(ctxMD) == "" {
+			built, err := typroles.FormatPackageRLMContextForPath(req.AnalysisDir, p, nil)
+			if err == nil {
+				ctxMD = built
+			}
+		}
+		if strings.TrimSpace(ctxMD) == "" {
+			continue
+		}
+		// Prefer deterministic distillation from the package snippet. RLM exploration
+		// on these already-small contexts burns iterations without emitting YAML.
+		note := mechanicalPackageEvidenceNote(p, ctxMD)
+		if len(note.Evidence) == 0 {
+			pkgConstraints := formatConstraintRowsForPaths([]string{p}, byPath)
+			payload := strings.TrimSpace(ctxMD)
+			if pkgConstraints != "" {
+				payload = payload + "\n\n" + pkgConstraints
+			}
+			if len(payload) > ledgerMaxContextChars {
+				payload = truncateToLedgerBudget(payload, "\n[... package context truncated ...]\n")
+			}
+			query := formatPackageEvidenceQuery(t.id, p)
+			stepCtx, cancel := context.WithTimeout(ctx, ledgerEvidenceTimeout)
+			answer, _, _, _, _, err := caller.Complete(stepCtx, payload, query)
+			cancel()
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil, fmt.Sprintf(
+						"%s: slice %q package %q evidence cancelled: %v",
+						typologypack.CriterionIDRoleGrounding, t.id, p, err,
+					)
+				}
+				logf("WARN", "ledger evidence RLM soft-fail slice=%s pkg=%s: %v; using empty mechanical note", t.id, p, err)
+			} else if parsed, parseErr := parsePackageEvidenceAnswer(p, answer); parseErr == nil {
+				note = parsed
+			} else {
+				logf("WARN", "ledger evidence parse soft-fail slice=%s pkg=%s: %v", t.id, p, parseErr)
+			}
+		}
+		if len(note.Evidence) == 0 && strings.TrimSpace(note.Notes) == "" {
+			note = packageEvidenceNote{
+				Path:     p,
+				Evidence: []string{"package:" + filepath.Base(p)},
+				Notes:    "Package present in owned slice; symbols not extracted.",
+			}
+		}
+		notes = append(notes, note)
+	}
+	return notes, ""
+}
+
+func mechanicalPackageEvidenceNote(pkgPath, ctxMD string) packageEvidenceNote {
+	var evidence []string
+	notes := ""
+	for _, line := range strings.Split(ctxMD, "\n") {
+		trim := strings.TrimSpace(line)
+		if trim == "" {
+			continue
+		}
+		lower := strings.ToLower(trim)
+		switch {
+		case strings.HasPrefix(lower, "- packagedoc:"):
+			notes = strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			notes = strings.Trim(notes, "`\" ")
+		case strings.HasPrefix(lower, "- mechanicalrole:"):
+			role := strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			if role != "" && !strings.EqualFold(role, "unknown") {
+				evidence = append(evidence, "mechanicalRole:"+role)
+			}
+		case strings.HasPrefix(lower, "- mechanicalevidence:"):
+			ev := strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			if ev != "" && !strings.EqualFold(ev, "(none)") {
+				evidence = append(evidence, "mechanicalEvidence:"+ev)
+			}
+		case strings.HasPrefix(lower, "- deliveryhint:"):
+			hint := strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			if hint != "" {
+				evidence = append(evidence, "deliveryHint:"+hint)
+			}
+		case strings.HasPrefix(lower, "- jsontags:") && strings.Contains(lower, "true"):
+			evidence = append(evidence, "jsonTags:true")
+		case strings.HasPrefix(lower, "- hasmain:") && strings.Contains(lower, "true"):
+			evidence = append(evidence, "hasMain:true")
+		case strings.HasPrefix(lower, "- importsosexec:") && strings.Contains(lower, "true"):
+			evidence = append(evidence, "importsOsExec:true")
+		case strings.HasPrefix(lower, "- importsnethttp:") && strings.Contains(lower, "true"):
+			evidence = append(evidence, "importsNetHTTP:true")
+		case strings.HasPrefix(lower, "- importsotel:") && strings.Contains(lower, "true"):
+			evidence = append(evidence, "importsOtel:true")
+		case strings.HasPrefix(lower, "- exportedfuncs:"):
+			rest := strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			if rest != "" && !strings.EqualFold(rest, "(none)") {
+				for _, part := range strings.Split(rest, ",") {
+					part = strings.TrimSpace(part)
+					if part != "" {
+						evidence = append(evidence, part)
+					}
+				}
+			}
+		case strings.HasPrefix(lower, "- exportedmethods:"):
+			rest := strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			if rest != "" && !strings.EqualFold(rest, "(none)") {
+				for _, part := range strings.Split(rest, ",") {
+					part = strings.TrimSpace(part)
+					if part != "" {
+						evidence = append(evidence, part)
+					}
+				}
+			}
+		case strings.HasPrefix(lower, "- exporteddecls:"):
+			rest := strings.TrimSpace(trim[strings.Index(trim, ":")+1:])
+			if rest != "" && !strings.EqualFold(rest, "(none)") {
+				parts := strings.Split(rest, ",")
+				limit := 8
+				if len(parts) < limit {
+					limit = len(parts)
+				}
+				for _, part := range parts[:limit] {
+					part = strings.TrimSpace(part)
+					if part != "" {
+						evidence = append(evidence, part)
+					}
+				}
+			}
+		}
+	}
+	evidence = normalizeEvidenceList(evidence)
+	if len(evidence) > 12 {
+		evidence = evidence[:12]
+	}
+	return packageEvidenceNote{Path: pkgPath, Evidence: evidence, Notes: notes}
+}
+
+func formatPackageEvidenceQuery(sliceID, pkgPath string) string {
+	return fmt.Sprintf(`You extract grounding evidence for one package that belongs to Typology teaching slice %q.
+The context payload IS already this package's AST snippet. Do NOT explore, FindRelevant, Query, SubRLM, or write REPL loops.
+Immediately FINAL with the YAML object below. Path basenames are never evidence.
+
+Package path: %s
+
+YAML object (no markdown fences):
+evidence:
+  - <symbol or flag quote>
+notes: <one plain sentence about what this package does>`, sliceID, pkgPath)
+}
+
+func parsePackageEvidenceAnswer(pkgPath, text string) (packageEvidenceNote, error) {
+	body := strings.TrimSpace(stripCodeFence(text))
+	if body == "" {
+		return packageEvidenceNote{}, fmt.Errorf("empty evidence answer")
+	}
+	var doc struct {
+		Evidence []string `yaml:"evidence"`
+		Notes    string   `yaml:"notes"`
+	}
+	if err := yaml.Unmarshal([]byte(body), &doc); err == nil {
+		ev := normalizeEvidenceList(doc.Evidence)
+		if len(ev) == 0 && strings.TrimSpace(doc.Notes) == "" {
+			return packageEvidenceNote{}, fmt.Errorf("evidence answer missing evidence and notes")
+		}
+		return packageEvidenceNote{Path: pkgPath, Evidence: ev, Notes: strings.TrimSpace(doc.Notes)}, nil
+	}
+	// Line fallback: evidence: ... and notes: ...
+	var evidence []string
+	notes := ""
+	section := ""
+	for _, line := range strings.Split(body, "\n") {
+		trim := strings.TrimSpace(line)
+		if trim == "" {
+			continue
+		}
+		lower := strings.ToLower(trim)
+		if strings.HasPrefix(lower, "evidence:") {
+			rest := strings.TrimSpace(trim[len("evidence")+1:])
+			if rest != "" {
+				evidence = append(evidence, splitLedgerList(rest)...)
+			}
+			section = "evidence"
+			continue
+		}
+		if strings.HasPrefix(lower, "notes:") {
+			notes = strings.TrimSpace(trim[len("notes")+1:])
+			section = ""
+			continue
+		}
+		if section == "evidence" {
+			item := strings.Trim(trim, "`\"'- ")
+			if item != "" && !strings.EqualFold(item, "none") {
+				evidence = append(evidence, item)
+			}
+		}
+	}
+	evidence = normalizeEvidenceList(evidence)
+	if len(evidence) == 0 && notes == "" {
+		return packageEvidenceNote{}, fmt.Errorf("could not parse package evidence answer")
+	}
+	return packageEvidenceNote{Path: pkgPath, Evidence: evidence, Notes: notes}, nil
+}
+
+func truncateToLedgerBudget(payload, marker string) string {
+	if len(payload) <= ledgerMaxContextChars {
+		return payload
+	}
+	cut := ledgerMaxContextChars - len(marker)
+	if cut < 0 {
+		cut = 0
+	}
+	if cut > len(payload) {
+		cut = len(payload)
+	}
+	return payload[:cut] + marker
+}
+
+func formatDistilledPackageEvidence(notes []packageEvidenceNote) string {
+	var b strings.Builder
+	b.WriteString("# Distilled per-package evidence for slice synthesis\n")
+	for _, n := range notes {
+		b.WriteString("\n## ")
+		b.WriteString(n.Path)
+		b.WriteByte('\n')
+		if strings.TrimSpace(n.Notes) != "" {
+			b.WriteString("notes: ")
+			b.WriteString(strings.TrimSpace(n.Notes))
+			b.WriteByte('\n')
+		}
+		if len(n.Evidence) == 0 {
+			b.WriteString("evidence: []\n")
+			continue
+		}
+		b.WriteString("evidence:\n")
+		for _, e := range n.Evidence {
+			b.WriteString("  - ")
+			b.WriteString(e)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
 // filterIssuesForSlice returns prior-attempt issues that mention this slice id.
 func filterIssuesForSlice(issues []string, sliceID string) string {
 	sliceID = strings.TrimSpace(sliceID)
@@ -453,6 +822,8 @@ validation_feedback (from a prior failed attempt; MUST fix before emitting):
 	}
 	return fmt.Sprintf(`You write the grounded meaning for one Typology teaching slice.
 Cite evidence BEFORE claims BEFORE the objective. Path basenames are never evidence.
+Context is distilled per-package evidence notes (not the full AST); cite those notes.
+Do NOT explore, FindRelevant, Query, SubRLM, or write REPL loops. Immediately FINAL with the YAML object.
 
 Slice id: %s
 Owned package paths: %s
@@ -463,9 +834,7 @@ Owned package paths: %s
 Cluster proposal (membership hint only; MUST NOT invent prestige meaning from it):
 %s
 
-Explore the package AST context. Quote symbols, delivery flags, json/yaml tags, or filled_by facts.
-
-End with a small YAML object (no markdown fences):
+YAML object (no markdown fences):
 verdict: grounded|overclaim
 evidence:
   - <symbol or flag quote>
@@ -474,8 +843,8 @@ claims:
 objective: <one plain sentence matching the evidence; no prestige overclaim>
 
 Allowed claim codes only from: data_shape, synchronize_state, merge_adapters, serve_http, wire_handlers, orchestrate, own_domain_rules, fill_dto, run_cli, aggregate_views, exec_process, observability, adapt_external, config
+Prefer claim codes that already appear in owned package is=[] rows.
 If you cannot support a runtime claim with symbols, either drop that claim or set verdict: overclaim.
-Claims MUST NOT intersect owned must_not codes in the constraint rows.
 When validation_feedback is present, drop or replace every claim it rejects; do not repeat the same overclaim.`,
 		sliceID, strings.Join(paths, ", "), constraintBlock, feedbackBlock, claimPolicyPromptRules(), clusterNote)
 }

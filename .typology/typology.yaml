@@ -39,6 +39,12 @@ slices:
         - id: internal-judge-evaluation-tech
           path: ./internal/judge/evaluation/tech
           layer: domain
+        - id: internal-judge-evaluation-bootstrap
+          path: ./internal/judge/evaluation/bootstrap
+          layer: domain
+        - id: internal-judge-evaluation-typology
+          path: ./internal/judge/evaluation/typology
+          layer: domain
         - id: internal-judge-modules
           path: ./internal/judge/modules
           layer: domain
@@ -62,6 +68,9 @@ slices:
           layer: domain
         - id: internal-status
           path: ./internal/status
+          layer: domain
+        - id: internal-llmusage
+          path: ./internal/llmusage
           layer: domain
       docs:
         pages:

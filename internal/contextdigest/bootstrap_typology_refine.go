@@ -795,7 +795,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 	if err != nil {
 		return "", annotateCatalogYAMLError("typology refine load catalog", raw, err)
 	}
-	draft, allowed, err := loadDraftCatalog(draftYAML)
+	draft, draftAllowed, err := loadDraftCatalog(draftYAML)
 	if err != nil {
 		return "", err
 	}
@@ -805,6 +805,15 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 		cur := strings.TrimSpace(typo.ID)
 		if cur == "" || strings.HasPrefix(cur, "majordomo-typology-") || strings.Contains(cur, "/") {
 			typo.ID = id
+		}
+	}
+	allowed := make(map[string]struct{}, len(draftAllowed)+len(roles))
+	for p := range draftAllowed {
+		allowed[p] = struct{}{}
+	}
+	for p := range roles {
+		if norm := normalizeRolePath(p); norm != "" {
+			allowed[norm] = struct{}{}
 		}
 	}
 	if len(allowed) > 0 {
@@ -834,7 +843,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 	if err := rejectInventedCatalogPaths(typo, allowed); err != nil {
 		return "", err
 	}
-	if err := rejectMissingDraftPackages(typo, allowed); err != nil {
+	if err := rejectMissingDraftPackages(typo, draftAllowed); err != nil {
 		return "", err
 	}
 	return string(sanitized), nil
@@ -1017,6 +1026,9 @@ func uniqueNearestDraftPath(invented string, allowed []string) string {
 	for _, a := range allowed {
 		aBase := filepath.Base(a)
 		if aBase == "" || base == "" {
+			continue
+		}
+		if len(aBase) < 3 || len(base) < 3 {
 			continue
 		}
 		if strings.Contains(aBase, base) || strings.Contains(base, aBase) {

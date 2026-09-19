@@ -142,9 +142,9 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			// Flat strings (not XML arrays): empty [] fails strop mandatory validation.
 			// When proposing no folds, emit the literal "none" in each field.
 			// Go splits and zips into cluster_merge_proposal.yaml.
-			out("merge_ids", "Comma-separated merge nickname ids, or the literal none when proposing no folds"),
+			out("merge_ids", "Comma-separated free-form merge nickname ids, or the literal none when proposing no folds"),
 			out("merge_packages", "Semicolon-separated package groups (comma-separated paths inside each group), same order as merge_ids; or none"),
-			out("merge_intents", "Comma-separated intents per merge (slice or nickname), same order as merge_ids; or none"),
+			out("merge_intents", "Comma-separated intents: each value MUST be exactly the literal slice or nickname (same order as merge_ids; never repeat the merge id); or none"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
 A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
@@ -188,9 +188,9 @@ Enforce anti-patterns:
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
 
 Emit three parallel flat strings of the same length (or all the literal none):
-- merge_ids: comma-separated nicknames, or the literal none (example when no folds: none)
+- merge_ids: comma-separated free-form nicknames, or the literal none (example when no folds: none; positive example: git-adapters)
 - merge_packages: semicolon-separated groups; inside each group comma-separated repo-relative paths, or the literal none (example when no folds: none; positive example: internal/adaptera,internal/adapterb)
-- merge_intents: comma-separated slice or nickname per id, or the literal none (example when no folds: none; positive example: nickname)
+- merge_intents: comma-separated; each token MUST be exactly the literal slice or nickname (not a purpose label or package stem). Never repeat the merge id or nickname here. For example: if merge_ids is "judge-eval", merge_intents must be "slice" (never "judge-eval"). Example when folds exist: nickname,slice. Or the literal none when no folds.
 When proposing no folds, set each field to the literal none (not empty tags).
 Do not emit markdown counsel or catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)

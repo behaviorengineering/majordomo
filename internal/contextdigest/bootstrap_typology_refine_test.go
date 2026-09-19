@@ -356,6 +356,41 @@ slices:
 	}
 }
 
+func TestValidateRefinedCatalogYAMLAllowsRolePackagesMissingFromDraft(t *testing.T) {
+	draft := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: core
+        path: internal/core
+`
+	roles := `schema_version: 1
+packages:
+  - path: internal/core
+    role: domain
+  - path: internal/extra
+    role: domain
+`
+	refined := `id: demo
+slices:
+  - id: demo
+    objective: Demo bounded context for refine tests.
+    owns:
+      - id: core
+        path: internal/core
+      - id: extra
+        path: internal/extra
+`
+	out, err := validateRefinedCatalogYAML(refined, draft, "demo", roles)
+	if err != nil {
+		t.Fatalf("expected role packages to be allowed even if missing from draft, got error: %v", err)
+	}
+	if !strings.Contains(out, "internal/extra") {
+		t.Fatalf("expected internal/extra to be present in sanitized output: %s", out)
+	}
+}
+
 func TestEvaluateTypologyBoundariesRequiresDebtWhenFindings(t *testing.T) {
 	refined := `id: demo
 slices:
