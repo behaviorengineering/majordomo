@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "7bab8235c48e148d78effe1da73c63d57b3b81672191c64b7251326361db708a",
+  "created_at": "2026-09-20T15:26:32Z",
+  "payload": {
+    "path": "internal/judge/evaluation/digest",
+    "role": "unknown",
+    "confidence": 0,
+    "evidence": [
+      "rlm:\"CriterionIDEvidencedOnly\", \"Register\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "unknown",
+    "agreement": "abstain",
+    "rlm_iterations": 6,
+    "prompt_tokens": 9987,
+    "completion_tokens": 4395,
+    "total_tokens": 14382
+  }
+}
