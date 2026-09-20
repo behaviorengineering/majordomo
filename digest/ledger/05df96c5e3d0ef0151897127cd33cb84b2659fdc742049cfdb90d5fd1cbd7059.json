@@ -1,0 +1,55 @@
+{
+  "kind": "ledger",
+  "fingerprint": "05df96c5e3d0ef0151897127cd33cb84b2659fdc742049cfdb90d5fd1cbd7059",
+  "created_at": "2026-09-20T15:27:51Z",
+  "payload": {
+    "id": "review",
+    "owned_paths": [
+      "internal/staging",
+      "internal/cluster",
+      "internal/diff",
+      "internal/sa",
+      "internal/satools",
+      "internal/orchestrate",
+      "internal/filereview",
+      "internal/reviewrun",
+      "internal/judge",
+      "internal/judge/evaluation/digest",
+      "internal/judge/evaluation/summary",
+      "internal/judge/evaluation/tech",
+      "internal/judge/evaluation/bootstrap",
+      "internal/judge/evaluation/typology",
+      "internal/judge/modules",
+      "internal/agent",
+      "internal/workspace",
+      "internal/workspace/opencode",
+      "internal/report",
+      "internal/cache",
+      "internal/publish",
+      "internal/status",
+      "internal/llmusage"
+    ],
+    "evidence": [
+      "internal/staging notes: Package staging ports git-diff-prep: classify, cluster, batch, write manifest.",
+      "internal/cluster evidence: UnionFind, BuildCorpusIndex, ClusterDocs, ClusterFiles",
+      "internal/diff notes: Package diff builds combined diffs from staging manifests.",
+      "internal/sa notes: Package sa runs staticAnalysis tools from central config against changed files.",
+      "internal/orchestrate evidence: BatchEntry, BatchPlan, StageFinalize, StagePrep, StageProse, StageReport, StageSynth",
+      "internal/filereview notes: Package filereview is the Prepare → Judge → Validate → Assemble state machine for per-file PR review batches.",
+      "internal/judge notes: Package judge is the Majordomo boundary onto strop JobRunner and evaluation packs.",
+      "internal/reviewrun notes: Package reviewrun is the local/CI review job: clone, SA, orchestrate, optional publish.",
+      "internal/report notes: Package report converts review findings to JUnit XML and Markdown reports to HTML.",
+      "internal/publish notes: Package publish posts PR/MR summaries via forge CLIs (gh, glab) or Bitbucket HTTP."
+    ],
+    "claims": [
+      "exec_process",
+      "data_shape",
+      "aggregate_views",
+      "adapt_external",
+      "fill_dto"
+    ],
+    "objective": "The review slice manages the end-to-end lifecycle of code reviews by executing static analysis, orchestrating review stages, aggregating evaluation results, and adapting findings into reports or published summaries.",
+    "verdict": "grounded",
+    "source": "slice_objective_rlm"
+  }
+}
