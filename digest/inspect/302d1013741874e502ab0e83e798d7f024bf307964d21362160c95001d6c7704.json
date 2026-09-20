@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "302d1013741874e502ab0e83e798d7f024bf307964d21362160c95001d6c7704",
+  "created_at": "2026-09-20T15:23:00Z",
+  "payload": {
+    "path": "internal/cache",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"DigestStore.StoreLedger\", \"DigestStore.LookupClusterAudit\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 4,
+    "prompt_tokens": 5271,
+    "completion_tokens": 736,
+    "total_tokens": 6007
+  }
+}
