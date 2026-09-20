@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "654d968d5bd052d1914165c2e271501ef990ff42d284f64549ed10067f792213",
+  "created_at": "2026-09-20T15:20:44Z",
+  "payload": {
+    "path": "internal/workspace/opencode",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"Package opencode is the OpenCode CLI adapter for workspace.Port.\", \"type Adapter\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 2,
+    "prompt_tokens": 1971,
+    "completion_tokens": 276,
+    "total_tokens": 2247
+  }
+}
