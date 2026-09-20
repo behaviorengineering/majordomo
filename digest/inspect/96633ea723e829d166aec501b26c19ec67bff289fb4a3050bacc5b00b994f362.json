@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "96633ea723e829d166aec501b26c19ec67bff289fb4a3050bacc5b00b994f362",
+  "created_at": "2026-09-20T15:25:19Z",
+  "payload": {
+    "path": "internal/judge/modules",
+    "role": "aggregator",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"BootstrapStoryModule\", \"DigestStoryModule\", \"FileReviewModule\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "aggregator",
+    "agreement": "match",
+    "rlm_iterations": 12,
+    "prompt_tokens": 25905,
+    "completion_tokens": 4911,
+    "total_tokens": 30816
+  }
+}
