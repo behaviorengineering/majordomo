@@ -171,13 +171,13 @@ func TestRunLocalSeedFreshAndResumeNoPush(t *testing.T) {
 				RefineStatus:     contextstore.TypologyRefinePending,
 				GraphPath:        "graph.txt", PackageContractsPath: "package_contracts.md",
 				PackageRolesPath: "package_roles.yaml", RefinedSnapshotPath: "refined_snapshot.yaml",
-				JourneyPath: "journey.md", ClusterProposalPath: "cluster_merge_proposal.yaml",
+				JourneyPath: "journey.md", ClusterProposalPath: "slice_grouping_proposal.yaml",
 			}
 			return writeTypologyManifest(in.EvidenceDir, manifest)
 		}),
-		TypologyRefineGenerator: typologyRefineGeneratorFunc(func(context.Context, TypologyRefineInput) (TypologyRefineOutput, error) {
+		TypologySlicePipeline: typologySlicePipelineFunc(func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 			refineCalls.Add(1)
-			return TypologyRefineOutput{
+			return TypologySlicePipelineOutput{
 				MechanicalGroupingYAML:   "entrypoint_paths: []\n",
 				ClusterMergeProposalYAML: "[]\n",
 				RefinedCatalogYAML:       "id: demo\nslices:\n  - id: demo\n    owns:\n      - path: internal/demo\n",
@@ -221,9 +221,9 @@ func TestRunLocalSeedFreshAndResumeNoPush(t *testing.T) {
 	// First run: survey only by using policy always and interrupting after survey via SkipStory +
 	// replace refine with failure? Use FromStage survey and mock refine that records then we save checkpoint mid-way.
 	opts.SkipStory = true
-	opts.TypologyRefineGenerator = typologyRefineGeneratorFunc(func(context.Context, TypologyRefineInput) (TypologyRefineOutput, error) {
+	opts.TypologySlicePipeline = typologySlicePipelineFunc(func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 		refineCalls.Add(1)
-		return TypologyRefineOutput{}, context.Canceled
+		return TypologySlicePipelineOutput{}, context.Canceled
 	})
 	_, err := runLocalSeed(opts, cfg, now)
 	if err == nil {
@@ -243,9 +243,9 @@ func TestRunLocalSeedFreshAndResumeNoPush(t *testing.T) {
 	// Resume from refine with working refine/story stubs.
 	opts.FromStage = LocalStageRefine
 	opts.SkipStory = false
-	opts.TypologyRefineGenerator = typologyRefineGeneratorFunc(func(context.Context, TypologyRefineInput) (TypologyRefineOutput, error) {
+	opts.TypologySlicePipeline = typologySlicePipelineFunc(func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 		refineCalls.Add(1)
-		return TypologyRefineOutput{
+		return TypologySlicePipelineOutput{
 			MechanicalGroupingYAML:   "entrypoint_paths: []\n",
 			ClusterMergeProposalYAML: "[]\n",
 			RefinedCatalogYAML:       "id: demo\nslices:\n  - id: demo\n    owns:\n      - path: internal/demo\n",

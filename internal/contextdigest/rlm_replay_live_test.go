@@ -45,8 +45,8 @@ func digestRLMReplayTasks() []string {
 	return []string{
 		jmodules.TaskTypologyInspect,
 		jmodules.TaskBootstrapStory,
-		jmodules.TaskTypologyClusterAudit,
-		jmodules.TaskTypologyObjectiveGrounding,
+		jmodules.TaskTypologySliceGroupingAudit,
+		jmodules.TaskTypologySliceMeaning,
 	}
 }
 
@@ -119,7 +119,7 @@ func TestRLMReplayFixturesOffline(t *testing.T) {
 					t.Fatal(err)
 				}
 				t.Logf("section=%s markdown_len=%d", section, len(md))
-			case jmodules.TaskTypologyClusterAudit:
+			case jmodules.TaskTypologySliceGroupingAudit:
 				proposed := proposedFromRLMReplay(doc)
 				if len(proposed) == 0 {
 					t.Fatal("fixture proposed merges empty")
@@ -266,7 +266,7 @@ func TestLiveDigestRLMReplay(t *testing.T) {
 					t.Logf("section validation (truncated context may cause soft fail): %v", err)
 				}
 				t.Logf("markdown_len=%d", len(md))
-			case jmodules.TaskTypologyClusterAudit:
+			case jmodules.TaskTypologySliceGroupingAudit:
 				proposed := proposedFromRLMReplay(doc)
 				rows, err := parseClusterAuditAnswer(answer, proposed)
 				if err != nil {
@@ -308,7 +308,7 @@ func liveRLMComplete(ctx context.Context, cfg config.RepoConfig, task, workStory
 	if !ok {
 		// Match production fallbacks.
 		switch task {
-		case jmodules.TaskTypologyClusterAudit, jmodules.TaskTypologyObjectiveGrounding:
+		case jmodules.TaskTypologySliceGroupingAudit, jmodules.TaskTypologySliceMeaning:
 			provider, ok, err = cfg.ResolveTaskProvider(jmodules.TaskTypologyInspect)
 			if err != nil {
 				return "", 0, "", err

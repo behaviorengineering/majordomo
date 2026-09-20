@@ -102,7 +102,7 @@ func TestLiveTypologyRefineEvaluateReplay(t *testing.T) {
 		t.Fatal("Polypus not reachable at http://127.0.0.1:1320/v1/models")
 	}
 
-	refine, ok := loadGeneratorReplayFixture(t, jmodules.TaskTypologyRefine)
+	refine, ok := loadGeneratorReplayFixture(t, jmodules.TaskTypologySliceCatalog)
 	if !ok {
 		t.Fatal("missing refine generator fixture")
 	}
@@ -126,7 +126,7 @@ func TestLiveTypologyRefineEvaluateReplay(t *testing.T) {
 	ctx, closeTrace, err := stropdspy.AttachModuleTrace(context.Background(), traceDir, map[string]any{
 		"pipeline": "evaluator-replay-test",
 		"repo_id":  refine.RepoID,
-		"task":     jmodules.TaskTypologyRefine,
+		"task":     jmodules.TaskTypologySliceCatalog,
 	})
 	if err != nil {
 		t.Fatalf("attach module trace: %v", err)
@@ -134,13 +134,13 @@ func TestLiveTypologyRefineEvaluateReplay(t *testing.T) {
 	defer func() { _ = closeTrace() }()
 
 	rt, err := judge.NewRuntime(ctx, cfg, judge.RuntimeOptions{
-		Tasks: []string{jmodules.TaskTypologyRefine},
+		Tasks: []string{jmodules.TaskTypologySliceCatalog},
 	})
 	if err != nil {
 		t.Fatalf("judge runtime: %v", err)
 	}
 
-	agg, err := rt.Evaluate(ctx, jmodules.TaskTypologyRefine, refine.Fields, refine.RecordedOutputs, 1)
+	agg, err := rt.Evaluate(ctx, jmodules.TaskTypologySliceCatalog, refine.Fields, refine.RecordedOutputs, 1)
 	if err != nil {
 		t.Fatalf("evaluate typology_refine: %v", err)
 	}

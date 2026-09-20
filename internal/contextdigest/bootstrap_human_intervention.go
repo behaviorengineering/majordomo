@@ -83,8 +83,8 @@ func (g JudgeHumanInterventionGenerator) Generate(ctx context.Context, input Hum
 		"architecture_md":             input.ArchitectureMD,
 		"refined_catalog_yaml":        input.RefinedCatalogYAML,
 		"journey_md":                  input.JourneyMD,
-		"cluster_merge_proposal_yaml": input.ClusterMergeProposalYAML,
-		"cluster_merge_verdicts_yaml": input.ClusterMergeVerdictsYAML,
+		"slice_grouping_proposal_yaml": input.ClusterMergeProposalYAML,
+		"slice_grouping_verdicts_yaml": input.ClusterMergeVerdictsYAML,
 		"findings_list":               input.FindingsList,
 	}
 

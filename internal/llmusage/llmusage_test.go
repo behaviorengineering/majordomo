@@ -11,10 +11,10 @@ import (
 func TestCollectorAggregatesAndFormats(t *testing.T) {
 	t.Parallel()
 	c := New()
-	c.Add("typology_refine", 100, 40, 140)
-	c.Add("typology_refine", 50, 10, 60)
+	c.Add("typology_slice_catalog", 100, 40, 140)
+	c.Add("typology_slice_catalog", 50, 10, 60)
 	c.Add("file_review", 20, 5, 25)
-	c.AddFromTokenUsage("typology_cluster", nil)
+	c.AddFromTokenUsage("typology_slice_grouping", nil)
 
 	s := c.Snapshot()
 	if s.Calls != 4 || s.PromptTokens != 170 || s.CompletionTokens != 55 || s.TotalTokens != 225 {
@@ -27,7 +27,7 @@ func TestCollectorAggregatesAndFormats(t *testing.T) {
 		t.Fatalf("tasks=%+v", s.Tasks)
 	}
 	text := Format(s)
-	if !strings.Contains(text, "LLM usage total:") || !strings.Contains(text, "typology_refine:") {
+	if !strings.Contains(text, "LLM usage total:") || !strings.Contains(text, "typology_slice_catalog:") {
 		t.Fatalf("format=%q", text)
 	}
 	if !strings.Contains(text, "missing_usage_calls=1") {

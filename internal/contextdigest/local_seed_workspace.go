@@ -17,7 +17,8 @@ const (
 	localSeedSchemaVersion = 1
 
 	LocalStageSurvey       = "survey"
-	LocalStageRefine       = "refine"
+	LocalStageCatalog      = "catalog"
+	LocalStageRefine       = "refine" // legacy alias for catalog (one release)
 	LocalStageIntervention = "intervention"
 	LocalStageStory        = "story"
 
@@ -367,7 +368,7 @@ func stageOrder(stage string) int {
 	switch normalizeResumeStage(stage) {
 	case LocalStageSurvey:
 		return 1
-	case LocalStageRefine:
+	case LocalStageCatalog:
 		return 2
 	case LocalStageIntervention:
 		return 3
@@ -384,19 +385,19 @@ func localStageReady(completed, want string) error {
 	switch want {
 	case "", LocalStageSurvey:
 		return nil
-	case LocalStageRefine:
+	case LocalStageCatalog:
 		if stageOrder(completed) < stageOrder(LocalStageSurvey) {
-			return fmt.Errorf("local seed resume from refine requires completed survey (have %q)", completed)
+			return fmt.Errorf("local seed resume from catalog requires completed survey (have %q)", completed)
 		}
 		return nil
 	case LocalStageIntervention:
-		if stageOrder(completed) < stageOrder(LocalStageRefine) {
-			return fmt.Errorf("local seed resume from intervention requires completed refine (have %q)", completed)
+		if stageOrder(completed) < stageOrder(LocalStageCatalog) {
+			return fmt.Errorf("local seed resume from intervention requires completed catalog (have %q)", completed)
 		}
 		return nil
 	case LocalStageStory:
-		if stageOrder(completed) < stageOrder(LocalStageRefine) {
-			return fmt.Errorf("local seed resume from story requires completed refine (have %q)", completed)
+		if stageOrder(completed) < stageOrder(LocalStageCatalog) {
+			return fmt.Errorf("local seed resume from story requires completed catalog (have %q)", completed)
 		}
 		return nil
 	default:

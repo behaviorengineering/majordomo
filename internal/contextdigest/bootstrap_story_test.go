@@ -150,14 +150,14 @@ func TestRequireBootstrapStoryEvidenceNeedsLedgerAfterRefine(t *testing.T) {
 		Mode:                     contextstore.TypologyModeDiscover,
 		RefineStatus:             contextstore.TypologyRefineComplete,
 		RefinedSnapshotPath:      "refined_snapshot.yaml",
-		SliceObjectiveLedgerPath: "slice_objective_ledger.yaml",
+		SliceObjectiveLedgerPath: "slice_meaning_ledger.yaml",
 		ArchitecturePath:         "architecture_brief.md",
 	}
 	err := requireBootstrapStoryEvidence(input, manifest)
 	if err == nil {
 		t.Fatal("expected missing ledger body to fail")
 	}
-	if !strings.Contains(err.Error(), "slice_objective_ledger") {
+	if !strings.Contains(err.Error(), "slice_meaning_ledger") {
 		t.Fatalf("error=%v", err)
 	}
 	input.TypologySliceObjectiveLedger = "slices:\n  - id: board\n    objective: dto types\n"

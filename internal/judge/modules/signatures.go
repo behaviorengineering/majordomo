@@ -81,7 +81,7 @@ func bootstrapStoryModule() *dspymodules.DirectivesCoT {
 			in("typology_manifest", "Typology evidence manifest YAML"),
 			in("typology_architecture", "Post-refine Typology architecture brief or fallback architecture survey"),
 			in("typology_refined_catalog", "Refined Typology catalog YAML proposal, when available"),
-			in("slice_objective_ledger", "Evidence-first slice objective ledger YAML when refine ran"),
+			in("slice_meaning_ledger", "Evidence-first slice meaning ledger YAML when catalog assemble ran"),
 			in("typology_journey", "Compressed typology journey notes and boundary debt, when available"),
 			in("repo_layout", "Top-level repo layout and notable evidence files"),
 			in("current_readme", "Current bootstrap README placeholder"),
@@ -141,13 +141,13 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 		[]core.OutputField{
 			// Flat strings (not XML arrays): empty [] fails strop mandatory validation.
 			// When proposing no folds, emit the literal "none" in each field.
-			// Go splits and zips into cluster_merge_proposal.yaml.
+			// Go splits and zips into slice_grouping_proposal.yaml.
 			out("merge_ids", "Comma-separated free-form merge nickname ids, or the literal none when proposing no folds"),
 			out("merge_packages", "Semicolon-separated package groups (comma-separated paths inside each group), same order as merge_ids; or none"),
 			out("merge_intents", "Comma-separated intents: each value MUST be exactly the literal slice or nickname (same order as merge_ids; never repeat the merge id); or none"),
 		},
-	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
-A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
+	).WithInstruction(`You are the unattended Typology slice-grouping pass for Majordomo context digest.
+A discover draft is package-level inventory. package_roles is the factual observed topology. Grouping is an optional overlay and MUST NOT contradict package_roles.
 package_capability_constraints is factual is/is-not prior. MUST NOT contradict it.
 
 Order of evidence (MUST):
@@ -193,7 +193,7 @@ Emit three parallel flat strings of the same length (or all the literal none):
 - merge_intents: comma-separated; each token MUST be exactly the literal slice or nickname (not a purpose label or package stem). Never repeat the merge id or nickname here. For example: if merge_ids is "judge-eval", merge_intents must be "slice" (never "judge-eval"). Example when folds exist: nickname,slice. Or the literal none when no folds.
 When proposing no folds, set each field to the literal none (not empty tags).
 Do not emit markdown counsel or catalog YAML in this step.`)
-	return newGenerator(sig, TaskTypologyCluster)
+	return newGenerator(sig, TaskTypologySliceGrouping)
 }
 
 func typologyRefineModule() *dspymodules.DirectivesCoT {
@@ -202,12 +202,12 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			in("repo_id", "Served repository id"),
 			in("module_scope", "Typology module scope"),
 			in("draft_catalog_yaml", "Raw Typology discover draft YAML"),
-			in("cluster_merge_proposal_yaml", "Proposed merges YAML composed from cluster CoT (id/packages/intent rows)"),
-			in("cluster_merge_verdicts_yaml", "Durable cluster merge audit verdicts: accept|overlay|reject per proposed package set"),
+			in("slice_grouping_proposal_yaml", "Proposed merges YAML composed from cluster CoT (id/packages/intent rows)"),
+			in("slice_grouping_verdicts_yaml", "Durable cluster merge audit verdicts: accept|overlay|reject per proposed package set"),
 			in("package_contracts", "Per-package public contracts from typology contracts"),
 			in("package_roles", "Observed package role topology YAML: role, confidence, evidence, labeled edges"),
 			in("package_capability_constraints", "Durable is/must_not capability codes per package; factual; MUST NOT contradict"),
-			in("slice_objective_ledger_yaml", "Authoritative evidence-first ledger: slice id, evidence quotes, claims, objective; copy objectives verbatim"),
+			in("slice_meaning_ledger_yaml", "Authoritative evidence-first ledger: slice id, evidence quotes, claims, objective; copy objectives verbatim"),
 			in("architecture_draft", "Architecture brief for the raw draft"),
 			in("repo_layout", "Top-level layout names"),
 			in("readme_snapshot", "Served-repo README: product purpose and delivery commands"),
@@ -217,12 +217,12 @@ func typologyRefineModule() *dspymodules.DirectivesCoT {
 			// Explicit exception: full catalog stays one YAML string leaf until a follow-up splits slices into XML items.
 			out("refined_catalog_yaml", "Full refined Typology catalog as a YAML document string (not a list field)"),
 		},
-	).WithInstruction(`You are the unattended Typology refine catalog writer for Majordomo context digest.
-Apply accepted cluster merges to the draft catalog and emit a complete refined typology.yaml.
-package_roles, package_capability_constraints, cluster_merge_verdicts_yaml, and slice_objective_ledger_yaml are factual. MUST NOT contradict them.
+	).WithInstruction(`You are the unattended Typology slice catalog writer for Majordomo context digest.
+Apply accepted slice-grouping merges to the draft catalog and emit a complete refined typology.yaml.
+package_roles, package_capability_constraints, slice_grouping_verdicts_yaml, and slice_meaning_ledger_yaml are factual. MUST NOT contradict them.
 Folder names are never evidence.
 
-slice_objective_ledger_yaml already settled each owned slice's meaning (evidence, claims, objective).
+slice_meaning_ledger_yaml already settled each owned slice's meaning (evidence, claims, objective).
 For every ledger slice id that still owns packages, copy the ledger objective into the catalog verbatim.
 When you merge draft neighborhoods into one refined slice, copy ONE contributing ledger objective verbatim (do not invent a prestige blend).
 MUST NOT invent prestige objectives beyond the ledger. MUST NOT escalate data_shape slices into synchronize_state or merge_adapters stories.
@@ -237,7 +237,7 @@ Placement from roles:
 - observability -> owns[] or libraries[]; NEVER config
 - adapter / config -> owns[] or libraries[] as fits
 
-Fold packages into one slice or libraries[].owns[] ONLY when cluster_merge_verdicts_yaml marks that package set verdict: accept.
+Fold packages into one slice or libraries[].owns[] ONLY when slice_grouping_verdicts_yaml marks that package set verdict: accept.
 overlay and reject rows stay separate package owners; nicknames MUST NOT disguise as libraries[].owns[].
 MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from false ownership.
 
@@ -256,7 +256,7 @@ Catalog rules:
 - When validation_feedback is present, fix those issues before emitting.
 
 Output refined_catalog_yaml as YAML only (no markdown fences). Do not emit journey markdown.`)
-	return newGenerator(sig, TaskTypologyRefine)
+	return newGenerator(sig, TaskTypologySliceCatalog)
 }
 
 func typologyInspectModule() *dspymodules.DirectivesCoT {
@@ -291,8 +291,8 @@ func typologyInterventionSharedInputs() []core.InputField {
 		in("architecture_md", "Post-refine Typology architecture brief"),
 		in("refined_catalog_yaml", "Refined Typology catalog YAML"),
 		in("journey_md", "Journey notes from prior intervention step (may be empty on first write)"),
-		in("cluster_merge_proposal_yaml", "Cluster merge proposal YAML (membership hint)"),
-		in("cluster_merge_verdicts_yaml", "Cluster merge audit verdicts YAML"),
+		in("slice_grouping_proposal_yaml", "Cluster merge proposal YAML (membership hint)"),
+		in("slice_grouping_verdicts_yaml", "Cluster merge audit verdicts YAML"),
 		in("findings_list", "Deterministic list of open architecture findings; each must be flagged for humans"),
 		in("validation_feedback", "Optional prior validation feedback to fix"),
 	}

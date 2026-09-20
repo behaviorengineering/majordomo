@@ -28,13 +28,13 @@ const (
 	maxReadmeSnapshotRunes    = 12000
 )
 
-// TypologyRefineGenerator runs the unattended cluster + refine LLM loop.
-type TypologyRefineGenerator interface {
-	Refine(ctx context.Context, input TypologyRefineInput) (TypologyRefineOutput, error)
+// TypologySlicePipeline runs unattended slice grouping, meaning, and catalog assemble.
+type TypologySlicePipeline interface {
+	Assemble(ctx context.Context, input TypologySlicePipelineInput) (TypologySlicePipelineOutput, error)
 }
 
-// TypologyRefineInput is the evidence pack for typology_cluster / typology_refine.
-type TypologyRefineInput struct {
+// TypologySlicePipelineInput is the evidence pack for slice grouping / meaning / catalog.
+type TypologySlicePipelineInput struct {
 	RepoID                string
 	ModuleScope           string
 	DraftCatalogYAML      string
@@ -55,9 +55,9 @@ type TypologyRefineInput struct {
 	DigestModelID         string
 }
 
-// TypologyRefineOutput is the refined catalog and durable cluster evidence YAML.
+// TypologySlicePipelineOutput is the assembled catalog and durable grouping/meaning evidence YAML.
 // Journey markdown is written later by human-intervention (after architecture).
-type TypologyRefineOutput struct {
+type TypologySlicePipelineOutput struct {
 	MechanicalGroupingYAML   string
 	ClusterMergeProposalYAML string
 	ClusterMergeVerdictsYAML string
@@ -66,28 +66,28 @@ type TypologyRefineOutput struct {
 	ObjectiveClaimsYAML      string
 }
 
-// JudgeTypologyRefineGenerator uses typology_cluster then typology_refine tasks.
-type JudgeTypologyRefineGenerator struct {
+// JudgeTypologySlicePipeline runs typology_slice_grouping then typology_slice_catalog tasks.
+type JudgeTypologySlicePipeline struct {
 	Gen judge.Generator
 }
 
-// Refine runs cluster-pass then generate→sanitize→deterministic gate→LLM eval refine attempts.
-func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input TypologyRefineInput) (TypologyRefineOutput, error) {
+// Assemble runs grouping, then meaning ledger, then catalog generate→sanitize→gate→LLM eval attempts.
+func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 	gen := g.Gen
 	if gen == nil {
 		if !judge.StoryLLMAvailable() {
-			return TypologyRefineOutput{}, fmt.Errorf("LLM typology refine unavailable")
+			return TypologySlicePipelineOutput{}, fmt.Errorf("LLM typology slice catalog unavailable")
 		}
 		gen = packageJudgeGenerator{}
 	}
 	rolesDoc := mustParseRoles(input.PackageRoles)
 	mechanicalGroupingYAML, err := mechanicalPreClusterYAML(rolesDoc)
 	if err != nil {
-		return TypologyRefineOutput{}, err
+		return TypologySlicePipelineOutput{}, err
 	}
 	constraintsDoc, constraintsErr := parseCapabilityConstraintsYAML(input.CapabilityConstraints)
 	if constraintsErr != nil && strings.TrimSpace(input.CapabilityConstraints) != "" {
-		return TypologyRefineOutput{}, fmt.Errorf("typology refine capability constraints: %w", constraintsErr)
+		return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine capability constraints: %w", constraintsErr)
 	}
 	if constraintsErr != nil {
 		constraintsDoc = buildCapabilityConstraints(rolesDoc)
@@ -110,7 +110,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	if strings.TrimSpace(input.CapabilityConstraints) == "" {
 		encoded, err := marshalConstraints(constraintsDoc)
 		if err != nil {
-			return TypologyRefineOutput{}, err
+			return TypologySlicePipelineOutput{}, err
 		}
 		clusterFields["package_capability_constraints"] = encoded
 	}
@@ -158,15 +158,15 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 				input.DigestCache.RecordClusterCoTMiss()
 			}
 			var err error
-			clusterOut, err = gen.Generate(ctx, jmodules.TaskTypologyCluster, clusterFields, attempt)
+			clusterOut, err = gen.Generate(ctx, jmodules.TaskTypologySliceGrouping, clusterFields, attempt)
 			if err != nil {
-				return TypologyRefineOutput{}, fmt.Errorf("typology cluster: %w", err)
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology cluster: %w", err)
 			}
 		}
 		merges, parseErr := mergesFromClusterOut(clusterOut)
 		if parseErr != nil {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology cluster merge fields failed after %d attempts: %w", maxTypologyRefineAttempts, parseErr)
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology cluster merge fields failed after %d attempts: %w", maxTypologyRefineAttempts, parseErr)
 			}
 			clusterFeedback = parseErr.Error()
 			continue
@@ -174,7 +174,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		merges = scrubForbiddenHTTPEntrypointMergeRows(merges, input.PackageRoles)
 		pending, frozen := sticky.applySticky(merges)
 		if len(pending) > 0 && auditor == nil {
-			return TypologyRefineOutput{}, fmt.Errorf("typology_cluster_audit RLM is required for proposed merges but no cluster auditor is configured")
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology_cluster_audit RLM is required for proposed merges but no cluster auditor is configured")
 		}
 		constraintsForAudit := stringField(clusterFields, "package_capability_constraints")
 		auditStart := time.Now()
@@ -196,7 +196,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			})
 			if auditErr != nil {
 				if attempt == maxTypologyRefineAttempts {
-					return TypologyRefineOutput{}, fmt.Errorf("typology cluster audit failed after %d attempts: %w", maxTypologyRefineAttempts, auditErr)
+					return TypologySlicePipelineOutput{}, fmt.Errorf("typology cluster audit failed after %d attempts: %w", maxTypologyRefineAttempts, auditErr)
 				}
 				clusterFeedback = auditErr.Error()
 				continue
@@ -229,7 +229,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	proposedMerges = demoteRejectedMergesList(proposedMerges, mergeVerdicts)
 	proposalYAML, err := marshalClusterMergeProposal(proposedMerges)
 	if err != nil {
-		return TypologyRefineOutput{}, err
+		return TypologySlicePipelineOutput{}, err
 	}
 	verdictsDoc := clusterMergeVerdictsDoc{
 		Attempt:       maxTypologyRefineAttempts,
@@ -244,7 +244,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	}
 	verdictsYAML, err := marshalClusterMergeVerdicts(verdictsDoc)
 	if err != nil {
-		return TypologyRefineOutput{}, err
+		return TypologySlicePipelineOutput{}, err
 	}
 
 	var refined string
@@ -255,14 +255,14 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 	if strings.TrimSpace(constraintsYAML) == "" {
 		encoded, err := marshalConstraints(constraintsDoc)
 		if err != nil {
-			return TypologyRefineOutput{}, err
+			return TypologySlicePipelineOutput{}, err
 		}
 		constraintsYAML = encoded
 	}
 
 	draftTypo, err := loadTypologyFromYAML(input.DraftCatalogYAML)
 	if err != nil {
-		return TypologyRefineOutput{}, fmt.Errorf("typology refine load draft catalog: %w", err)
+		return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine load draft catalog: %w", err)
 	}
 	needsLedger := false
 	for _, s := range draftTypo.Slices {
@@ -272,7 +272,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 	}
 	if needsLedger && input.LedgerBuilder == nil {
-		return TypologyRefineOutput{}, fmt.Errorf("%s: slice_objective_ledger RLM is required for owned packages but no ledger builder is configured",
+		return TypologySlicePipelineOutput{}, fmt.Errorf("%s: slice_objective_ledger RLM is required for owned packages but no ledger builder is configured",
 			typologypack.CriterionIDRoleGrounding)
 	}
 
@@ -293,21 +293,21 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			DigestModelID:   input.DigestModelID,
 		})
 		if buildErr != nil {
-			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed: %w", buildErr)
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine objective ledger failed: %w", buildErr)
 		}
 		if len(issues) > 0 {
-			return TypologyRefineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s",
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine objective ledger failed after %d attempts:\n%s",
 				maxTypologyRefineAttempts, strings.Join(issues, "\n"))
 		}
 		ledgerDoc = built
 		var err error
 		ledgerYAML, err = marshalLedger(ledgerDoc)
 		if err != nil {
-			return TypologyRefineOutput{}, err
+			return TypologySlicePipelineOutput{}, err
 		}
 		claimsYAML, err = marshalClaims(claimsDocFromLedger(ledgerDoc))
 		if err != nil {
-			return TypologyRefineOutput{}, err
+			return TypologySlicePipelineOutput{}, err
 		}
 	}
 
@@ -328,7 +328,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 				input.DigestCache.RecordRefineHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
 				logf("INFO", "digest cache hit refine")
 				refined = sanitized
-				return TypologyRefineOutput{
+				return TypologySlicePipelineOutput{
 					ClusterMergeProposalYAML: proposalYAML,
 					ClusterMergeVerdictsYAML: verdictsYAML,
 					MechanicalGroupingYAML:   mechanicalGroupingYAML,
@@ -348,29 +348,29 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			"repo_id":                        input.RepoID,
 			"module_scope":                   input.ModuleScope,
 			"draft_catalog_yaml":             input.DraftCatalogYAML,
-			"cluster_merge_proposal_yaml":    proposalYAML,
-			"cluster_merge_verdicts_yaml":    verdictsYAML,
+			"slice_grouping_proposal_yaml":    proposalYAML,
+			"slice_grouping_verdicts_yaml":    verdictsYAML,
 			"package_contracts":              input.PackageContracts,
 			"package_roles":                  input.PackageRoles,
 			"package_capability_constraints": constraintsYAML,
-			"slice_objective_ledger_yaml":    ledgerYAML,
+			"slice_meaning_ledger_yaml":    ledgerYAML,
 			"architecture_draft":             input.ArchitectureDraft,
 			"repo_layout":                    input.RepoLayout,
 			"readme_snapshot":                input.ReadmeSnapshot,
 			"validation_feedback":            feedback,
 		}
-		out, err := gen.Generate(ctx, jmodules.TaskTypologyRefine, refineFields, attempt)
+		out, err := gen.Generate(ctx, jmodules.TaskTypologySliceCatalog, refineFields, attempt)
 		if err != nil {
-			return TypologyRefineOutput{}, fmt.Errorf("typology refine: %w", err)
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine: %w", err)
 		}
 		refined = stripCodeFence(stringField(out, "refined_catalog_yaml"))
 		if refined == "" {
-			return TypologyRefineOutput{}, fmt.Errorf("typology refine: refined_catalog_yaml is required")
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine: refined_catalog_yaml is required")
 		}
 		sanitized, err := validateRefinedCatalogYAML(refined, input.DraftCatalogYAML, input.RepoID, input.PackageRoles)
 		if err != nil {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, err
+				return TypologySlicePipelineOutput{}, err
 			}
 			feedback = err.Error()
 			continue
@@ -378,7 +378,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		refined = sanitized
 		if ok, evalFeedback := evaluateTypologyCatalogBoundaries(refined, input.PackageRoles); !ok {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, evalFeedback)
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, evalFeedback)
 			}
 			feedback = evalFeedback
 			continue
@@ -386,7 +386,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		typo, err := loadTypologyFromYAML(refined)
 		if err != nil {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, err
+				return TypologySlicePipelineOutput{}, err
 			}
 			feedback = err.Error()
 			continue
@@ -399,11 +399,11 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			}
 			split, changed := splitIllegalMembershipToDraftOwners(typo, draftTypo, mergeVerdicts)
 			if !changed {
-				return TypologyRefineOutput{}, fmt.Errorf("typology refine membership gate failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine membership gate failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
 			}
 			encoded, encErr := yaml.Marshal(&split)
 			if encErr != nil {
-				return TypologyRefineOutput{}, fmt.Errorf("typology refine membership split encode: %w", encErr)
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine membership split encode: %w", encErr)
 			}
 			refined = string(encoded)
 			typo = split
@@ -413,7 +413,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			if len(alignIssues) > 0 {
 				fb := strings.Join(alignIssues, "\n")
 				if attempt == maxTypologyRefineAttempts {
-					return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+					return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
 				}
 				feedback = fb
 				continue
@@ -422,18 +422,18 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 			var marshalErr error
 			ledgerYAML, marshalErr = marshalLedger(ledgerDoc)
 			if marshalErr != nil {
-				return TypologyRefineOutput{}, marshalErr
+				return TypologySlicePipelineOutput{}, marshalErr
 			}
 			claimsDoc := alignedClaims
 			claimsYAML, marshalErr = marshalClaims(claimsDoc)
 			if marshalErr != nil {
-				return TypologyRefineOutput{}, marshalErr
+				return TypologySlicePipelineOutput{}, marshalErr
 			}
 			claimIssues := appendConstraintClaimIssues(typo, constraintsDoc, claimsDoc, nil)
 			if len(claimIssues) > 0 {
 				fb := strings.Join(claimIssues, "\n")
 				if attempt == maxTypologyRefineAttempts {
-					return TypologyRefineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+					return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
 				}
 				feedback = fb
 				continue
@@ -441,20 +441,20 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		}
 		evalOut := map[string]interface{}{
 			"refined_catalog_yaml":        refined,
-			"slice_objective_ledger_yaml": ledgerYAML,
+			"slice_meaning_ledger_yaml": ledgerYAML,
 			"objective_claims_yaml":       claimsYAML,
 		}
-		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologyRefine, refineFields, evalOut, attempt)
+		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologySliceCatalog, refineFields, evalOut, attempt)
 		if err != nil {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology refine LLM evaluation: %w", err)
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine LLM evaluation: %w", err)
 			}
 			feedback = err.Error()
 			continue
 		}
 		if !judge.EvalPassed(agg) {
 			if attempt == maxTypologyRefineAttempts {
-				return TypologyRefineOutput{}, fmt.Errorf("typology refine LLM evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, judge.EvalFeedback(agg))
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine LLM evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, judge.EvalFeedback(agg))
 			}
 			feedback = judge.EvalFeedback(agg)
 			continue
@@ -467,7 +467,7 @@ func (g JudgeTypologyRefineGenerator) Refine(ctx context.Context, input Typology
 		break
 	}
 
-	return TypologyRefineOutput{
+	return TypologySlicePipelineOutput{
 		MechanicalGroupingYAML:   mechanicalGroupingYAML,
 		ClusterMergeProposalYAML: proposalYAML,
 		ClusterMergeVerdictsYAML: verdictsYAML,
@@ -1801,7 +1801,7 @@ func completeEvidencedLibraryBindings(localCatalogPath, architecturePath string)
 	return true, nil
 }
 
-func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evidenceDir string, gen TypologyRefineGenerator, judgeGen judge.Generator) error {
+func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evidenceDir string, gen TypologySlicePipeline, judgeGen judge.Generator) error {
 	manifestPath := filepath.Join(evidenceDir, "manifest.yaml")
 	manifest, err := contextstore.ParseTypologyManifest(manifestPath)
 	if err != nil {
@@ -1847,7 +1847,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	}
 
 	if gen == nil {
-		gen = JudgeTypologyRefineGenerator{Gen: judgeGen}
+		gen = JudgeTypologySlicePipeline{Gen: judgeGen}
 	}
 	rolesUpdated := string(rolesText)
 	if validator, err := newRLMValidatorFromOpts(ctx, opts, analysisDir); err != nil {
@@ -1903,7 +1903,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		return err
 	}
 
-	out, err := gen.Refine(ctx, TypologyRefineInput{
+	out, err := gen.Assemble(ctx, TypologySlicePipelineInput{
 		RepoID:                manifest.RepoID,
 		ModuleScope:           manifest.ModuleScope,
 		DraftCatalogYAML:      string(draftYAML),

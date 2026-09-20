@@ -63,14 +63,14 @@ type stropClusterMergeAuditor struct {
 }
 
 func newStropClusterMergeAuditor(ctx context.Context, cfg config.RepoConfig, traceDir string) (clusterMergeAuditor, error) {
-	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyClusterAudit)
+	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologySliceGroupingAudit)
 	if err != nil || !ok {
 		provider, ok, err = cfg.ResolveTaskProvider(jmodules.TaskTypologyInspect)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("typology_cluster_audit provider not configured")
+			return nil, fmt.Errorf("typology_slice_grouping_audit provider not configured")
 		}
 	}
 	stropProvider := provider.ToStrop()
@@ -78,7 +78,7 @@ func newStropClusterMergeAuditor(ctx context.Context, cfg config.RepoConfig, tra
 	llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
 	llm, err := llmFactory.CreateLLM(ctx, stropProvider)
 	if err != nil {
-		return nil, fmt.Errorf("typology_cluster_audit RLM LLM: %w", err)
+		return nil, fmt.Errorf("typology_slice_grouping_audit RLM LLM: %w", err)
 	}
 	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	rlmCfg := stropdspy.RLMDefaults()
@@ -108,9 +108,9 @@ func newStropClusterMergeAuditor(ctx context.Context, cfg config.RepoConfig, tra
 				prompt = result.Usage.PromptTokens
 				completion = result.Usage.CompletionTokens
 				total = result.Usage.TotalTokens
-				llmusage.FromContext(ctx).AddTokenUsageValue(jmodules.TaskTypologyClusterAudit, result.Usage)
+				llmusage.FromContext(ctx).AddTokenUsageValue(jmodules.TaskTypologySliceGroupingAudit, result.Usage)
 			} else {
-				llmusage.FromContext(ctx).Add(jmodules.TaskTypologyClusterAudit, 0, 0, 0)
+				llmusage.FromContext(ctx).Add(jmodules.TaskTypologySliceGroupingAudit, 0, 0, 0)
 			}
 			return answer, iters, prompt, completion, total, nil
 		}},
@@ -625,6 +625,6 @@ func newClusterAuditorFromOpts(ctx context.Context, opts Options, analysisDir st
 	if err != nil {
 		return nil, err
 	}
-	traceDir := rlmTraceDir(inferenceWorkRoot(opts, analysisDir), jmodules.TaskTypologyClusterAudit)
+	traceDir := rlmTraceDir(inferenceWorkRoot(opts, analysisDir), jmodules.TaskTypologySliceGroupingAudit)
 	return newStropClusterMergeAuditor(ctx, cfg, traceDir)
 }

@@ -129,7 +129,7 @@ majordomo context digest --local-seed-dir tmp/seeds/gitboard --resume-pr 41
 
 1. Start: `--local-seed-dir <dir>` (optional `--from-stage survey`).
 2. Interrupt: leave the directory; `completed_stage` stays at the last success.
-3. Resume: same `--local-seed-dir` with `--from-stage refine|intervention|story`.
+3. Resume: same `--local-seed-dir` with `--from-stage catalog|intervention|story`.
 4. Inspect: `local.diff`, `workspace.yaml`, `majordomo context validate --dir <dir>/context`.
 5. Promote later: copy or re-seed into the normal digest publish path (manual).
 6. Discard: `rm -rf <dir>` (no destructive CLI flag in v1).

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	sliceObjectiveLedgerRel  = "slice_objective_ledger.yaml"
-	ledgerVerdictGrounded    = "grounded"
+	sliceObjectiveLedgerRel       = "slice_meaning_ledger.yaml"
+	legacySliceObjectiveLedgerRel = "slice_objective_ledger.yaml"
+	ledgerVerdictGrounded         = "grounded"
 	ledgerVerdictOverclaim   = "overclaim"
 	ledgerSourceRLM          = "slice_objective_rlm"
 	ledgerSourceUnclaimed    = "slice_objective_rlm_unclaimed"
@@ -68,11 +69,11 @@ func marshalLedger(doc sliceObjectiveLedgerDoc) (string, error) {
 func parseObjectiveLedgerYAML(raw string) (sliceObjectiveLedgerDoc, error) {
 	raw = strings.TrimSpace(stripCodeFence(raw))
 	if raw == "" {
-		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_objective_ledger_yaml is required")
+		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_meaning_ledger_yaml is required")
 	}
 	var doc sliceObjectiveLedgerDoc
 	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
-		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_objective_ledger_yaml decode: %w", err)
+		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_meaning_ledger_yaml decode: %w", err)
 	}
 	if err := validateObjectiveLedgerDoc(doc); err != nil {
 		return sliceObjectiveLedgerDoc{}, err
@@ -82,27 +83,27 @@ func parseObjectiveLedgerYAML(raw string) (sliceObjectiveLedgerDoc, error) {
 
 func validateObjectiveLedgerDoc(doc sliceObjectiveLedgerDoc) error {
 	if len(doc.Slices) == 0 {
-		return fmt.Errorf("slice_objective_ledger_yaml has no slices")
+		return fmt.Errorf("slice_meaning_ledger_yaml has no slices")
 	}
 	known := knownCapabilityCodes()
 	for i, s := range doc.Slices {
 		id := strings.TrimSpace(s.ID)
 		if id == "" {
-			return fmt.Errorf("slice_objective_ledger_yaml slice[%d] missing id", i)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice[%d] missing id", i)
 		}
 		if strings.TrimSpace(s.Objective) == "" {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q missing objective", id)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice %q missing objective", id)
 		}
 		verdict := strings.ToLower(strings.TrimSpace(s.Verdict))
 		if verdict != ledgerVerdictGrounded {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q verdict %q is not grounded", id, s.Verdict)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice %q verdict %q is not grounded", id, s.Verdict)
 		}
 		if len(normalizeEvidenceList(s.Evidence)) == 0 {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty evidence", id)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice %q has empty evidence", id)
 		}
 		if len(s.Claims) == 0 {
 			if strings.TrimSpace(s.Source) != ledgerSourceUnclaimed {
-				return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty claims", id)
+				return fmt.Errorf("slice_meaning_ledger_yaml slice %q has empty claims", id)
 			}
 		} else {
 			for _, c := range s.Claims {
@@ -111,7 +112,7 @@ func validateObjectiveLedgerDoc(doc sliceObjectiveLedgerDoc) error {
 					continue
 				}
 				if _, ok := known[c]; !ok {
-					return fmt.Errorf("slice_objective_ledger_yaml slice %q unknown claim code %q", id, c)
+					return fmt.Errorf("slice_meaning_ledger_yaml slice %q unknown claim code %q", id, c)
 				}
 			}
 		}

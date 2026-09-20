@@ -34,13 +34,13 @@ func TestGeneratorReplayFixturesOffline(t *testing.T) {
 				t.Fatal("recorded_outputs empty")
 			}
 			switch task {
-			case jmodules.TaskTypologyCluster:
+			case jmodules.TaskTypologySliceGrouping:
 				rows, err := mergesFromClusterOut(doc.RecordedOutputs)
 				if err != nil {
 					t.Fatal(err)
 				}
 				t.Logf("recorded merge rows=%d", len(rows))
-			case jmodules.TaskTypologyRefine:
+			case jmodules.TaskTypologySliceCatalog:
 				if stringField(doc.RecordedOutputs, "refined_catalog_yaml") == "" {
 					t.Fatal("recorded refined_catalog_yaml empty")
 				}
@@ -123,13 +123,13 @@ func TestLiveDigestGeneratorReplay(t *testing.T) {
 			}
 
 			switch task {
-			case jmodules.TaskTypologyCluster:
+			case jmodules.TaskTypologySliceGrouping:
 				rows, err := mergesFromClusterOut(out)
 				if err != nil {
 					t.Fatalf("zip merges: %v", err)
 				}
 				t.Logf("proposed_merge_rows=%d", len(rows))
-			case jmodules.TaskTypologyRefine:
+			case jmodules.TaskTypologySliceCatalog:
 				if stringField(out, "refined_catalog_yaml") == "" {
 					t.Fatal("live refined_catalog_yaml empty")
 				}

@@ -65,7 +65,7 @@ slices:
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
 		PackageRolesPath:     "package_roles.yaml",
-		ClusterProposalPath:  "cluster_merge_proposal.yaml",
+		ClusterProposalPath:  "slice_grouping_proposal.yaml",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",
 	}
@@ -74,7 +74,7 @@ slices:
 	}
 
 	refined := draft
-	fake := typologyRefineGeneratorFunc(func(_ context.Context, in TypologyRefineInput) (TypologyRefineOutput, error) {
+	fake := typologySlicePipelineFunc(func(_ context.Context, in TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 		if !strings.Contains(in.DraftCatalogYAML, "id: demo") {
 			t.Fatalf("draft=%q", in.DraftCatalogYAML)
 		}
@@ -90,7 +90,7 @@ slices:
 		if !strings.Contains(in.ReadmeSnapshot, "demo serve") {
 			t.Fatalf("readme_snapshot=%q", in.ReadmeSnapshot)
 		}
-		return TypologyRefineOutput{
+		return TypologySlicePipelineOutput{
 			MechanicalGroupingYAML:   "entrypoint_paths:\n  - internal/demo\n",
 			ClusterMergeProposalYAML: "[]\n",
 			RefinedCatalogYAML:       refined,
@@ -125,13 +125,13 @@ slices:
 	if updated.PackageCapabilityConstraintsPath != "package_capability_constraints.yaml" {
 		t.Fatalf("constraints_path=%q", updated.PackageCapabilityConstraintsPath)
 	}
-	if updated.SliceObjectiveClaimsPath != "slice_objective_claims.yaml" {
+	if updated.SliceObjectiveClaimsPath != "slice_meaning_claims.yaml" {
 		t.Fatalf("claims_path=%q", updated.SliceObjectiveClaimsPath)
 	}
-	if updated.SliceObjectiveLedgerPath != "slice_objective_ledger.yaml" {
+	if updated.SliceObjectiveLedgerPath != "slice_meaning_ledger.yaml" {
 		t.Fatalf("ledger_path=%q", updated.SliceObjectiveLedgerPath)
 	}
-	for _, name := range []string{"cluster_merge_proposal.yaml", "mechanical_grouping.yaml", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md", "package_capability_constraints.yaml", "slice_objective_claims.yaml", "slice_objective_ledger.yaml"} {
+	for _, name := range []string{"slice_grouping_proposal.yaml", "mechanical_grouping.yaml", "refined_snapshot.yaml", "journey.md", "snapshot.yaml", contextstore.TypologyArchitectureBriefPath, "human_intervention.md", "package_capability_constraints.yaml", "slice_meaning_claims.yaml", "slice_meaning_ledger.yaml"} {
 		if _, err := os.Stat(filepath.Join(evidence, name)); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}

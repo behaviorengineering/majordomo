@@ -89,13 +89,13 @@ func TestLiveTypologyClusterReplay(t *testing.T) {
 	defer func() { _ = closeTrace() }()
 
 	rt, err := judge.NewRuntime(ctx, cfg, judge.RuntimeOptions{
-		Tasks: []string{jmodules.TaskTypologyCluster},
+		Tasks: []string{jmodules.TaskTypologySliceGrouping},
 	})
 	if err != nil {
 		t.Fatalf("judge runtime: %v", err)
 	}
 
-	out, err := rt.Generate(ctx, jmodules.TaskTypologyCluster, doc.Fields, 1)
+	out, err := rt.Generate(ctx, jmodules.TaskTypologySliceGrouping, doc.Fields, 1)
 	if err != nil {
 		t.Fatalf("typology_cluster generate: %v", err)
 	}

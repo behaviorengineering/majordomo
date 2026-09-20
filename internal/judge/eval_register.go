@@ -36,14 +36,14 @@ type digestEvalSpec struct {
 }
 
 var digestEvalSpecs = map[string]digestEvalSpec{
-	jmodules.TaskTypologyCluster: {
+	jmodules.TaskTypologySliceGrouping: {
 		evaluatorKey:      "typology_cluster_quality",
 		consolidatorKey:   "typology_cluster_quality_consolidator",
 		evaluatorLabel:    "Typology Cluster Evaluator",
 		consolidatorLabel: "Typology Cluster Consolidator",
 		criterionIDs:      typologypack.ClusterCriterionIDs,
 		focusAreas:        "parallel merge list fields; observed package_roles before any merge overlay",
-		feedbackSuffix: `Score generator_output merge_ids, merge_packages, and merge_intents (composed into cluster_merge_proposal.yaml) against the cluster delivery rubrics.
+		feedbackSuffix: `Score generator_output merge_ids, merge_packages, and merge_intents (composed into slice_grouping_proposal.yaml) against the cluster delivery rubrics.
 Reject proposals that contradict package_roles.
 Reject ignoring the mechanical_grouping_yaml seed.
 Reject using folder names (dashboard, board, cli, server) as classification evidence.
@@ -55,7 +55,7 @@ Reject markdown counsel or catalog YAML in the cluster pass.`,
 		scoreSuffix:        `Prefer low scores when merge rows invent ownership from names or contradict package_roles and the door-walk seed.`,
 		consolidatorSuffix: "Merge cluster feedback. Prefer evidence-aligned merge rows over polish.",
 	},
-	jmodules.TaskTypologyRefine: {
+	jmodules.TaskTypologySliceCatalog: {
 		evaluatorKey:      "typology_quality",
 		consolidatorKey:   "typology_quality_consolidator",
 		evaluatorLabel:    "Typology Quality Evaluator",
@@ -66,8 +66,8 @@ Reject markdown counsel or catalog YAML in the cluster pass.`,
 Reject hollow objectives like "Provide X functionality".
 Reject process-exec adapters (cliexec) marked kind: cli.
 Reject folding server / goEmbed / NewMux packages into the CLI surface solely because cmd is the sole importer.
-Reject catalog folds that ignore cluster_merge_verdicts_yaml accept rows.
-Reject objectives that drift from slice_objective_ledger_yaml.
+Reject catalog folds that ignore slice_grouping_verdicts_yaml accept rows.
+Reject objectives that drift from slice_meaning_ledger_yaml.
 Reject journey markdown in this pass; journey is written later by human-intervention.`,
 		scoreSuffix: `Prefer low scores when objectives are template language, surfaces misuse kind: cli for exec adapters,
 HTTP/embed packages are CLI furniture, or catalog membership contradicts accepted merge verdicts.`,

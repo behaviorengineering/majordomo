@@ -60,7 +60,7 @@ func TestEnsureWorkStoryDirWritable(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "README.md")); err != nil {
 		t.Fatal(err)
 	}
-	trace := rlmTraceDir(dir, jmodules.TaskTypologyClusterAudit)
+	trace := rlmTraceDir(dir, jmodules.TaskTypologySliceGroupingAudit)
 	marker := filepath.Join(trace, "step.jsonl")
 	if err := os.WriteFile(marker, []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestEnsureWorkStoryDirWritable(t *testing.T) {
 
 func TestRLMTraceDirCreatesScratch(t *testing.T) {
 	base := t.TempDir()
-	dir := rlmTraceDir(base, jmodules.TaskTypologyClusterAudit)
+	dir := rlmTraceDir(base, jmodules.TaskTypologySliceGroupingAudit)
 	marker := filepath.Join(dir, "step.jsonl")
 	if err := os.WriteFile(marker, []byte(`{"step":1}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)

@@ -92,7 +92,7 @@ func (g JudgeBootstrapStoryGenerator) Generate(ctx context.Context, input Bootst
 			"typology_manifest":        input.TypologyManifest,
 			"typology_architecture":    input.TypologyArchitecture,
 			"typology_refined_catalog": input.TypologyRefinedCatalog,
-			"slice_objective_ledger":   input.TypologySliceObjectiveLedger,
+			"slice_meaning_ledger":   input.TypologySliceObjectiveLedger,
 			"typology_journey":         input.TypologyJourney,
 			"repo_layout":              input.RepoLayout,
 			"current_readme":           input.CurrentReadme,
@@ -225,7 +225,9 @@ func loadBootstrapStoryInput(ctxDir, analysisDir string, at time.Time, sourceSHA
 		input.TypologyJourney = readText(filepath.Join(ctxDir, "evidence", "typology", manifest.JourneyPath))
 	}
 	if strings.TrimSpace(manifest.SliceObjectiveLedgerPath) != "" {
-		input.TypologySliceObjectiveLedger = readText(filepath.Join(ctxDir, "evidence", "typology", manifest.SliceObjectiveLedgerPath))
+		typoDir := filepath.Join(ctxDir, "evidence", "typology")
+		primary := strings.TrimSpace(manifest.SliceObjectiveLedgerPath)
+		input.TypologySliceObjectiveLedger = readEvidenceRel(typoDir, primary, legacySliceObjectiveLedgerRel, sliceObjectiveLedgerRel)
 	}
 	constraintsRel := strings.TrimSpace(manifest.PackageCapabilityConstraintsPath)
 	if constraintsRel == "" {
@@ -253,8 +255,8 @@ func requireBootstrapStoryEvidence(input BootstrapStoryInput, manifest contextst
 		manifest.Mode != contextstore.TypologyModeFallback
 	if refinedRan {
 		fields["typology_refined_catalog"] = input.TypologyRefinedCatalog
-		fields["slice_objective_ledger"] = input.TypologySliceObjectiveLedger
-		required = append(required, "typology_refined_catalog", "slice_objective_ledger")
+		fields["slice_meaning_ledger"] = input.TypologySliceObjectiveLedger
+		required = append(required, "typology_refined_catalog", "slice_meaning_ledger")
 	}
 	return stropvalidation.ValidateRequiredInputs(required)(context.Background(), fields, nil)
 }

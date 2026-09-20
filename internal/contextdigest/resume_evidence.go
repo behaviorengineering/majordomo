@@ -22,7 +22,7 @@ func validateResumeEvidence(ctxDir, stage string) error {
 	}
 	stage = normalizeResumeStage(stage)
 	switch stage {
-	case ResumeStageRefine:
+	case ResumeStageCatalog:
 		return requireEvidenceFiles(evidenceDir, refineEvidenceReqs(manifest))
 	case ResumeStageIntervention:
 		return requireEvidenceFiles(evidenceDir, interventionEvidenceReqs(manifest))
@@ -132,6 +132,13 @@ func requireEvidenceFiles(evidenceDir string, reqs []evidenceReq) error {
 		}
 		path := filepath.Join(evidenceDir, rel)
 		st, err := os.Stat(path)
+		if (err != nil || st.IsDir()) && legacyEvidenceRel(rel) != "" {
+			alt := filepath.Join(evidenceDir, legacyEvidenceRel(rel))
+			st, err = os.Stat(alt)
+			if err == nil && !st.IsDir() {
+				path = alt
+			}
+		}
 		if err != nil || st.IsDir() {
 			missing = append(missing, fmt.Sprintf("%s=%s", r.field, rel))
 			continue
@@ -144,6 +151,21 @@ func requireEvidenceFiles(evidenceDir string, reqs []evidenceReq) error {
 		return fmt.Errorf("resume evidence missing required files for stage: %s", strings.Join(missing, ", "))
 	}
 	return nil
+}
+
+func legacyEvidenceRel(rel string) string {
+	switch strings.TrimSpace(rel) {
+	case sliceObjectiveLedgerRel:
+		return legacySliceObjectiveLedgerRel
+	case sliceObjectiveClaimsRel:
+		return legacySliceObjectiveClaimsRel
+	case clusterMergeProposalRel:
+		return legacyClusterMergeProposalRel
+	case clusterMergeVerdictsRel:
+		return legacyClusterMergeVerdictsRel
+	default:
+		return ""
+	}
 }
 
 // stageAnalysisDraftsFromEvidence copies PR evidence draft catalog + architecture brief into

@@ -46,7 +46,8 @@ type Result struct {
 
 // Resume stages for --from-stage (PR-seeded replay).
 const (
-	ResumeStageRefine       = "refine"
+	ResumeStageCatalog      = "catalog"
+	ResumeStageRefine       = "refine" // legacy alias for catalog (one release)
 	ResumeStageIntervention = "intervention"
 	ResumeStageStory        = "story"
 )
@@ -62,7 +63,7 @@ type Options struct {
 	ModuleScope                string
 	BootstrapSurveyRunner      BootstrapSurveyRunner
 	BootstrapStoryGenerator    BootstrapStoryGenerator
-	TypologyRefineGenerator    TypologyRefineGenerator
+	TypologySlicePipeline    TypologySlicePipeline
 	HumanInterventionGenerator HumanInterventionGenerator
 	BootstrapSurveyPolicy      string
 	Judge                      judge.Generator // optional; built from config when nil
@@ -82,7 +83,7 @@ type Options struct {
 	// ResumePR + FromStage enable PR-seeded stage replay: load that context PR head into a
 	// temp ctx dir, re-run only the requested stages, keep outputs local (no context push/PR).
 	ResumePR  int    // served-repo context PR/MR number; 0 = disabled
-	FromStage string // refine | intervention | story (also survey for local seed)
+	FromStage string // catalog|intervention|story (legacy refine alias; also survey for local seed)
 	// LocalSeedDir enables filesystem-only seeding under this directory (no forge token / push).
 	LocalSeedDir string
 	// AllowSourceMove retargets an existing local workspace when workdir HEAD moved.

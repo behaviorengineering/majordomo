@@ -193,7 +193,7 @@ slices:
 		refined: refined,
 	}
 	auditor := &stubClusterAuditor{}
-	out, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
+	out, err := (JudgeTypologySlicePipeline{Gen: stub}).Assemble(context.Background(), TypologySlicePipelineInput{
 		RepoID:            "demo",
 		ModuleScope:       ".",
 		DraftCatalogYAML:  draft,
@@ -266,7 +266,7 @@ slices:
 		refined: draft,
 	}
 	auditor := &countingRejectAuditor{}
-	_, err := (JudgeTypologyRefineGenerator{Gen: flip}).Refine(context.Background(), TypologyRefineInput{
+	_, err := (JudgeTypologySlicePipeline{Gen: flip}).Assemble(context.Background(), TypologySlicePipelineInput{
 		RepoID:            "demo",
 		ModuleScope:       ".",
 		DraftCatalogYAML:  draft,
@@ -321,14 +321,14 @@ func (s *flippingClusterJudge) clusterLists(yaml string) map[string]interface{} 
 
 func (s *flippingClusterJudge) Generate(_ context.Context, task string, _ map[string]interface{}, _ int) (map[string]interface{}, error) {
 	switch task {
-	case jmodules.TaskTypologyCluster:
+	case jmodules.TaskTypologySliceGrouping:
 		s.clusterCalls++
 		yaml := s.firstYAML
 		if s.clusterCalls > 1 {
 			yaml = s.secondYAML
 		}
 		return s.clusterLists(yaml), nil
-	case jmodules.TaskTypologyRefine:
+	case jmodules.TaskTypologySliceCatalog:
 		return map[string]interface{}{"refined_catalog_yaml": s.refined}, nil
 	default:
 		return map[string]interface{}{}, nil

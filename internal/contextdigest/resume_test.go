@@ -70,9 +70,9 @@ func TestValidateResumeEvidencePerStage(t *testing.T) {
 	t.Run("story missing ledger fails closed", func(t *testing.T) {
 		t.Parallel()
 		ctxDir := writeResumeEvidenceFixture(t, resumeFixtureKindStory)
-		_ = os.Remove(filepath.Join(ctxDir, "evidence", "typology", "slice_objective_ledger.yaml"))
+		_ = os.Remove(filepath.Join(ctxDir, "evidence", "typology", "slice_meaning_ledger.yaml"))
 		err := validateResumeEvidence(ctxDir, ResumeStageStory)
-		if err == nil || !strings.Contains(err.Error(), "slice_objective_ledger") {
+		if err == nil || !strings.Contains(err.Error(), "slice_meaning_ledger") {
 			t.Fatalf("err=%v", err)
 		}
 	})
@@ -108,9 +108,9 @@ func TestRunBootstrapFromStageStorySkipsSurveyAndRefine(t *testing.T) {
 			surveyCalls.Add(1)
 			return nil
 		}),
-		TypologyRefineGenerator: typologyRefineGeneratorFunc(func(context.Context, TypologyRefineInput) (TypologyRefineOutput, error) {
+		TypologySlicePipeline: typologySlicePipelineFunc(func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 			refineCalls.Add(1)
-			return TypologyRefineOutput{}, nil
+			return TypologySlicePipelineOutput{}, nil
 		}),
 		HumanInterventionGenerator: humanInterventionGeneratorFunc(func(context.Context, HumanInterventionInput) (HumanInterventionOutput, error) {
 			interventionCalls.Add(1)
@@ -166,9 +166,9 @@ func TestRunBootstrapFromStageInterventionThenStory(t *testing.T) {
 	opts := Options{
 		ResumePR:  12,
 		FromStage: ResumeStageIntervention,
-		TypologyRefineGenerator: typologyRefineGeneratorFunc(func(context.Context, TypologyRefineInput) (TypologyRefineOutput, error) {
+		TypologySlicePipeline: typologySlicePipelineFunc(func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 			refineCalls.Add(1)
-			return TypologyRefineOutput{}, nil
+			return TypologySlicePipelineOutput{}, nil
 		}),
 		HumanInterventionGenerator: humanInterventionGeneratorFunc(func(context.Context, HumanInterventionInput) (HumanInterventionOutput, error) {
 			interventionCalls.Add(1)
@@ -437,7 +437,7 @@ slices:
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
 		PackageRolesPath:     "package_roles.yaml",
-		ClusterProposalPath:  "cluster_merge_proposal.yaml",
+		ClusterProposalPath:  "slice_grouping_proposal.yaml",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",
 	}
@@ -446,10 +446,10 @@ slices:
 		write("refined_snapshot.yaml", catalog)
 		write("journey.md", "# Journey\n\nOpen.\n")
 		write("human_intervention.md", "# HI\n")
-		write("cluster_merge_proposal.yaml", "[]\n")
+		write("slice_grouping_proposal.yaml", "[]\n")
 		write("package_capability_constraints.yaml", "packages: []\n")
-		write("slice_objective_claims.yaml", "slices:\n  - id: demo\n    claims: [data_shape]\n")
-		write("slice_objective_ledger.yaml", `slices:
+		write("slice_meaning_claims.yaml", "slices:\n  - id: demo\n    claims: [data_shape]\n")
+		write("slice_meaning_ledger.yaml", `slices:
   - id: demo
     owned_paths: [internal/demo]
     evidence: [DemoType]
@@ -459,8 +459,8 @@ slices:
 `)
 		manifest.RefineStatus = contextstore.TypologyRefineComplete
 		manifest.PackageCapabilityConstraintsPath = "package_capability_constraints.yaml"
-		manifest.SliceObjectiveClaimsPath = "slice_objective_claims.yaml"
-		manifest.SliceObjectiveLedgerPath = "slice_objective_ledger.yaml"
+		manifest.SliceObjectiveClaimsPath = "slice_meaning_claims.yaml"
+		manifest.SliceObjectiveLedgerPath = "slice_meaning_ledger.yaml"
 		manifest.HumanInterventionPath = "human_intervention.md"
 	}
 

@@ -282,8 +282,8 @@ func validateBootstrapStoryEvidenceMap(input BootstrapStoryInput) error {
 	required := []string{"repo_id", "readme_snapshot"}
 	if strings.TrimSpace(input.TypologyRefinedCatalog) != "" || strings.TrimSpace(input.TypologySliceObjectiveLedger) != "" {
 		fields["typology_refined_catalog"] = input.TypologyRefinedCatalog
-		fields["slice_objective_ledger"] = input.TypologySliceObjectiveLedger
-		required = append(required, "typology_refined_catalog", "slice_objective_ledger")
+		fields["slice_meaning_ledger"] = input.TypologySliceObjectiveLedger
+		required = append(required, "typology_refined_catalog", "slice_meaning_ledger")
 	}
 	return stropvalidation.ValidateRequiredInputs(required)(context.Background(), fields, nil)
 }

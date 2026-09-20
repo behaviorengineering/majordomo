@@ -48,11 +48,11 @@ func (s *stubJudgeGen) clusterOut() map[string]interface{} {
 func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[string]interface{}, _ int) (map[string]interface{}, error) {
 	s.calls++
 	switch task {
-	case jmodules.TaskTypologyCluster:
+	case jmodules.TaskTypologySliceGrouping:
 		return s.clusterOut(), nil
-	case jmodules.TaskTypologyRefine:
+	case jmodules.TaskTypologySliceCatalog:
 		if needle := strings.TrimSpace(s.ledgerNeedle); needle != "" {
-			ledger, ok := fields["slice_objective_ledger_yaml"].(string)
+			ledger, ok := fields["slice_meaning_ledger_yaml"].(string)
 			if !ok || !strings.Contains(ledger, needle) {
 				return nil, context.Canceled // force visible failure if ledger missing
 			}
@@ -124,7 +124,7 @@ edges:
 			Objective: "Shared board payload shapes.", Verdict: "grounded",
 		}}},
 	}
-	out, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
+	out, err := (JudgeTypologySlicePipeline{Gen: stub}).Assemble(context.Background(), TypologySlicePipelineInput{
 		RepoID: "demo", ModuleScope: ".",
 		DraftCatalogYAML:      draft,
 		PackageRoles:          roles,
@@ -183,7 +183,7 @@ slices:
         path: internal/board
 `,
 	}
-	_, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
+	_, err := (JudgeTypologySlicePipeline{Gen: stub}).Assemble(context.Background(), TypologySlicePipelineInput{
 		RepoID: "demo", ModuleScope: ".",
 		DraftCatalogYAML: draft,
 		PackageRoles:     roles,
