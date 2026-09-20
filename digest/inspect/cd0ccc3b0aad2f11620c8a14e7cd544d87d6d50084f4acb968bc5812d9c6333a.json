@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "cd0ccc3b0aad2f11620c8a14e7cd544d87d6d50084f4acb968bc5812d9c6333a",
+  "created_at": "2026-09-20T15:22:40Z",
+  "payload": {
+    "path": "internal/githttps",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:ExtraHeaderArgs"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 4,
+    "prompt_tokens": 4620,
+    "completion_tokens": 715,
+    "total_tokens": 5335
+  }
+}

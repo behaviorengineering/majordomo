@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "e1fbd7280b0e55d89055c1658d96cf7c64924f3c5ebd0468bb9eb24240511e60",
+  "created_at": "2026-09-20T15:22:40Z",
+  "payload": {
+    "path": "internal/cluster",
+    "role": "aggregator",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"UnionFind\", \"ReverseDeps\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "aggregator",
+    "agreement": "match",
+    "rlm_iterations": 12,
+    "prompt_tokens": 41366,
+    "completion_tokens": 4793,
+    "total_tokens": 46159
+  }
+}
