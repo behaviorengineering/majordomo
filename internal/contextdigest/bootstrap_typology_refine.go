@@ -1558,9 +1558,16 @@ func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]pac
 			continue
 		}
 		sid := uniqueSliceID(strings.TrimSpace(s.ID) + "-http")
+		// Meaning travels with the packages. alignLedgerToRefinedCatalog requires
+		// a contributing ledger objective verbatim, so copy the parent objective
+		// instead of inventing a prestige delivery sentence the ledger never wrote.
+		obj := strings.TrimSpace(s.Objective)
+		if obj == "" {
+			obj = "Delivery surface separated from the CLI entrypoint."
+		}
 		extra = append(extra, catalog.Slice{
 			ID:        sid,
-			Objective: "Delivery surface separated from the CLI entrypoint.",
+			Objective: obj,
 			Surfaces: []catalog.Surface{{
 				ID:         sid + "-" + string(httpKind),
 				Kind:       httpKind,

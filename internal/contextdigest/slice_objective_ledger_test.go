@@ -86,6 +86,69 @@ func TestAppendLedgerObjectiveIssuesMismatch(t *testing.T) {
 	}
 }
 
+func TestSeparateHTTPSurfacesCopiesParentObjectiveForLedgerAlign(t *testing.T) {
+	t.Parallel()
+	parentObj := "The operations slice manages CLI execution, HTTP serving, and configuration."
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{{
+			ID:        "operations",
+			Objective: parentObj,
+			Owns: []catalog.Component{
+				{ID: "cmd", Path: "cmd/majordomo"},
+				{ID: "gw", Path: "internal/aigateway"},
+			},
+			Surfaces: []catalog.Surface{{
+				ID:   "operations-cli",
+				Kind: catalog.InteractionCLI,
+				Components: []catalog.Component{
+					{ID: "cli", Path: "internal/cli"},
+				},
+			}},
+		}},
+	}
+	roles := map[string]packageRoleNode{
+		"cmd/majordomo":      {Path: "cmd/majordomo", Role: roleEntrypoint},
+		"internal/cli":       {Path: "internal/cli", Role: roleEntrypoint},
+		"internal/aigateway": {Path: "internal/aigateway", Role: roleHTTPSurface},
+	}
+	split := separateHTTPSurfacesFromEntrypoint(typo, roles)
+	var httpSlice catalog.Slice
+	foundHTTP := false
+	for _, s := range split.Slices {
+		if s.ID == "operations-http" {
+			httpSlice = s
+			foundHTTP = true
+		}
+	}
+	if !foundHTTP {
+		t.Fatalf("expected operations-http slice, got %+v", split.Slices)
+	}
+	if httpSlice.Objective != parentObj {
+		t.Fatalf("http objective=%q want parent %q", httpSlice.Objective, parentObj)
+	}
+	ledger := sliceObjectiveLedgerDoc{
+		Slices: []sliceObjectiveLedgerEntry{{
+			ID:         "operations",
+			OwnedPaths: []string{"cmd/majordomo", "internal/cli", "internal/aigateway"},
+			Evidence:   []string{"ServeHTTP"},
+			Claims:     []string{capServeHTTP, capRunCLI},
+			Objective:  parentObj,
+			Verdict:    "grounded",
+		}},
+	}
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "cmd/majordomo", Role: roleEntrypoint},
+			{Path: "internal/cli", Role: roleEntrypoint},
+			{Path: "internal/aigateway", Role: roleHTTPSurface, Evidence: []string{"delivery:http"}},
+		},
+	})
+	_, _, issues := alignLedgerToRefinedCatalog(split, ledger, constraints)
+	if len(issues) != 0 {
+		t.Fatalf("align issues after parent-objective copy: %v", issues)
+	}
+}
+
 func TestAlignLedgerToRefinedCatalogMergesByPackagePath(t *testing.T) {
 	t.Parallel()
 	typo := catalog.Typology{

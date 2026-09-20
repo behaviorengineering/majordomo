@@ -244,6 +244,7 @@ MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from f
 Catalog rules:
 - Every slice MUST have a non-empty business objective that states why the bounded context exists in one concrete sentence.
 - MUST NOT use hollow template objectives such as "Provide X functionality", "Provide X capabilities", or "Provide X services".
+- Each slice MUST use at most one owns block, one surfaces block, and one libraries block. List every package for that slice inside the same block instead of repeating the key.
 - Components are packages under owns, under surfaces, or under libraries[].owns.
 - Libraries are technical package groups with a purpose and owns[] only.
 - MUST NOT invent libraries[] membership solely to clear findings.
