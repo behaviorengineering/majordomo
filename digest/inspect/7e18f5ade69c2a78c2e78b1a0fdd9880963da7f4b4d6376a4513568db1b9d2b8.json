@@ -1,0 +1,26 @@
+{
+  "kind": "inspect",
+  "fingerprint": "7e18f5ade69c2a78c2e78b1a0fdd9880963da7f4b4d6376a4513568db1b9d2b8",
+  "created_at": "2026-09-20T15:26:21Z",
+  "payload": {
+    "path": "internal/publish",
+    "role": "unknown",
+    "confidence": 0.4,
+    "evidence": [
+      "imports_os_exec",
+      "exports_run_surface",
+      "rlm:'publishGitHub', 'publishGitLab', 'publishBitbucket'",
+      "rlm_disagree_conflict"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "candidate_role": "adapter",
+    "mechanical_role": "exec_runner",
+    "llm_role": "adapter",
+    "agreement": "disagree",
+    "rlm_iterations": 6,
+    "prompt_tokens": 11061,
+    "completion_tokens": 1552,
+    "total_tokens": 12613
+  }
+}
