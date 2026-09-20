@@ -1,0 +1,25 @@
+{
+  "kind": "inspect",
+  "fingerprint": "58a59e9120eb6bc5adac36d543e6bf812b3c9dc1c78fa9457e673d28fe4f80ea",
+  "created_at": "2026-09-20T15:22:16Z",
+  "payload": {
+    "path": "internal/aigateway",
+    "role": "server",
+    "confidence": 0.95,
+    "evidence": [
+      "delivery:http",
+      "imports_net_http",
+      "http_route_register",
+      "rlm:\"http.Server\", \"http.NewServeMux\", \"mux.HandleFunc\", \"gw.server.Serve\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "server",
+    "llm_role": "server",
+    "agreement": "match",
+    "rlm_iterations": 6,
+    "prompt_tokens": 14640,
+    "completion_tokens": 1413,
+    "total_tokens": 16053
+  }
+}
