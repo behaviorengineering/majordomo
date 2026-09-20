@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "d9c86060175713d34f3f177a9bff7a0f94ea48d46db3557507b7389c1e4480ae",
+  "created_at": "2026-09-20T15:25:26Z",
+  "payload": {
+    "path": "internal/agent",
+    "role": "exec_runner",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"Dispatch\", \"RunOpenCode\", \"RunSummaryLoop\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "exec_runner",
+    "agreement": "match",
+    "rlm_iterations": 12,
+    "prompt_tokens": 27884,
+    "completion_tokens": 5968,
+    "total_tokens": 33852
+  }
+}
