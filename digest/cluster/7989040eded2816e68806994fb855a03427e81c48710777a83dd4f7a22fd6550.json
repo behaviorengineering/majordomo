@@ -1,0 +1,10 @@
+{
+  "kind": "cluster_cot",
+  "fingerprint": "7989040eded2816e68806994fb855a03427e81c48710777a83dd4f7a22fd6550",
+  "created_at": "2026-09-20T15:27:43Z",
+  "payload": {
+    "merge_ids": "none",
+    "merge_packages": "none",
+    "merge_intents": "none"
+  }
+}
