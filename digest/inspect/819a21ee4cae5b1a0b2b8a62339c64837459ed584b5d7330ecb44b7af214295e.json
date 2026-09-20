@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "819a21ee4cae5b1a0b2b8a62339c64837459ed584b5d7330ecb44b7af214295e",
+  "created_at": "2026-09-20T15:22:25Z",
+  "payload": {
+    "path": "internal/contextgate",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:ParseComment, ApplyComments, Sidecar"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 8,
+    "prompt_tokens": 11261,
+    "completion_tokens": 1563,
+    "total_tokens": 12824
+  }
+}
