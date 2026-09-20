@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/XiaoConstantine/dspy-go/pkg/core"
+	dspymod "github.com/XiaoConstantine/dspy-go/pkg/modules"
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/judge"
@@ -21,19 +23,17 @@ import (
 	"github.com/behaviorengineering/strop/dspy/factory"
 	"github.com/behaviorengineering/typology/catalog"
 	typroles "github.com/behaviorengineering/typology/roles"
-	"github.com/XiaoConstantine/dspy-go/pkg/core"
-	dspymod "github.com/XiaoConstantine/dspy-go/pkg/modules"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	maxLedgerSlices         = 24
-	ledgerRLMWorkers        = 2
-	ledgerRLMTimeout        = 15 * time.Minute
-	ledgerEvidenceTimeout   = 90 * time.Second
-	ledgerSynthesisTimeout  = 5 * time.Minute
-	ledgerMaxContextChars   = 24_000
-	ledgerPlanRelDir        = "tmp/typology/ledger_plans"
+	maxLedgerSlices        = 24
+	ledgerRLMWorkers       = 2
+	ledgerRLMTimeout       = 15 * time.Minute
+	ledgerEvidenceTimeout  = 90 * time.Second
+	ledgerSynthesisTimeout = 5 * time.Minute
+	ledgerMaxContextChars  = 24_000
+	ledgerPlanRelDir       = "tmp/typology/ledger_plans"
 )
 
 var objectiveVerdictRE = regexp.MustCompile(`(?i)\bverdict\s*[:=]\s*(grounded|overclaim)\b`)
@@ -186,9 +186,9 @@ type sliceLedgerStepPlan struct {
 
 // packageEvidenceNote is distilled evidence from one package visit.
 type packageEvidenceNote struct {
-	Path     string   `yaml:"path"`
-	Evidence []string `yaml:"evidence"`
-	Notes    string   `yaml:"notes"`
+	Path     string   `yaml:"path" json:"path"`
+	Evidence []string `yaml:"evidence" json:"evidence"`
+	Notes    string   `yaml:"notes" json:"notes"`
 }
 
 func buildSliceObjectiveLedger(
@@ -312,8 +312,9 @@ func buildSliceObjectiveLedger(
 	return doc, nil, nil
 }
 
-// groundOneSliceLedger runs the mechanical package-visit plan, then one synthesis call.
-// Evidence steps are sequential within the slice; callers may still parallelize across slices.
+// groundOneSliceLedger runs the mechanical package-visit plan via strop RunStepPlan,
+// then one synthesis step. Evidence steps are sequential within the slice; callers
+// may still parallelize across slices. Filesystem checkpoints allow mid-slice resume.
 func groundOneSliceLedger(
 	ctx context.Context,
 	caller sliceLedgerRLMCaller,
@@ -362,125 +363,10 @@ func groundOneSliceLedger(
 		}
 	}
 
-	notes, issue := gatherSlicePackageEvidence(ctx, caller, req, t, wholeContext, byPath)
-	if issue != "" {
-		return sliceObjectiveLedgerEntry{}, issue, nil
-	}
-	if len(notes) == 0 {
-		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
-			"%s: slice %q owned packages have empty RLM context; cannot ground objective",
-			typologypack.CriterionIDRoleGrounding, t.id,
-		), nil
-	}
-
-	distilled := formatDistilledPackageEvidence(notes)
-	if len(distilled) > ledgerMaxContextChars {
-		distilled = truncateToLedgerBudget(distilled, "\n[... distilled evidence truncated ...]\n")
-	}
-	query := formatSliceObjectiveLedgerQuery(t.id, t.paths, constraintBlock, req.ClusterHintYAML, sliceFeedback)
-	synthCtx, cancel := context.WithTimeout(ctx, ledgerSynthesisTimeout)
-	defer cancel()
-	answer, _, promptTok, completionTok, totalTok, err := caller.Complete(synthCtx, distilled, query)
 	if req.DigestCache != nil {
 		req.DigestCache.RecordLedgerMiss()
 	}
-	if err != nil {
-		if ctx.Err() != nil {
-			return sliceObjectiveLedgerEntry{}, "", fmt.Errorf("%s: slice %q objective ledger RLM failed: %w",
-				typologypack.CriterionIDRoleGrounding, t.id, err)
-		}
-		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
-			"%s: slice %q objective ledger synthesis failed: %v",
-			typologypack.CriterionIDRoleGrounding, t.id, err,
-		), nil
-	}
-	evidence, claims, objective, verdict, err := parseSliceObjectiveLedgerAnswer(answer)
-	if err != nil {
-		return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
-			"%s: slice %q objective ledger parse failed: %v",
-			typologypack.CriterionIDRoleGrounding, t.id, err,
-		), nil
-	}
-	unclaimedOK := sliceAllCapabilityCodesMustNot(t.paths, byPath)
-	if verdict == ledgerVerdictOverclaim {
-		if !unclaimedOK {
-			return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
-				"%s: slice %q objective overclaims; cite package evidence or simplify the meaning",
-				typologypack.CriterionIDRoleGrounding, t.id,
-			), nil
-		}
-		if strings.TrimSpace(objective) == "" {
-			objective = ledgerUnclaimedObjective
-		}
-		if len(evidence) == 0 {
-			evidence = []string{"role:unknown"}
-		}
-		claims = nil
-		verdict = ledgerVerdictGrounded
-	}
-	if verdict == ledgerVerdictGrounded && len(claims) == 0 {
-		if !unclaimedOK {
-			return sliceObjectiveLedgerEntry{}, fmt.Sprintf(
-				"%s: slice %q grounded answer missing claims",
-				typologypack.CriterionIDRoleGrounding, t.id,
-			), nil
-		}
-		if strings.TrimSpace(objective) == "" {
-			objective = ledgerUnclaimedObjective
-		}
-	}
-	source := ledgerSourceRLM
-	// Keep claims allowed by at least one owned package is=[] prior. must_not union is too
-	// strict for multi-role slices (one unknown package would forbid every portable code).
-	dropped := claimsNotAllowedByOwnedIs(claims, t.paths, byPath)
-	claims = filterClaimsToOwnedIs(claims, t.paths, byPath)
-	if verdict == ledgerVerdictGrounded && len(claims) == 0 {
-		if !unclaimedOK {
-			msg := fmt.Sprintf(
-				"%s: slice %q has no claims allowed by owned package is=[]",
-				typologypack.CriterionIDRoleGrounding, t.id,
-			)
-			if len(dropped) > 0 {
-				msg = fmt.Sprintf("%s (dropped %v not allowed by owned package is=)", msg, dropped)
-			}
-			return sliceObjectiveLedgerEntry{}, msg, nil
-		}
-		if strings.TrimSpace(objective) == "" {
-			objective = ledgerUnclaimedObjective
-		}
-		source = ledgerSourceUnclaimed
-	} else if len(claims) == 0 {
-		source = ledgerSourceUnclaimed
-	}
-	entry := sliceObjectiveLedgerEntry{
-		ID:         t.id,
-		OwnedPaths: append([]string(nil), t.paths...),
-		Evidence:   evidence,
-		Claims:     claims,
-		Objective:  objective,
-		Verdict:    verdict,
-		Source:     source,
-	}
-	if entailIssues := rejectUnentailedClaims(t.id, claims, t.paths, req.Constraints, rolesDoc); len(entailIssues) > 0 {
-		return sliceObjectiveLedgerEntry{}, strings.Join(entailIssues, "\n"), nil
-	}
-	if req.DigestCache != nil && entry.Verdict == ledgerVerdictGrounded {
-		if err := req.DigestCache.StoreLedger(fp, cache.LedgerCachedEntry{
-			ID:               entry.ID,
-			OwnedPaths:       append([]string(nil), entry.OwnedPaths...),
-			Evidence:         append([]string(nil), entry.Evidence...),
-			Claims:           append([]string(nil), entry.Claims...),
-			Objective:        entry.Objective,
-			Verdict:          entry.Verdict,
-			Source:           entry.Source,
-			PromptTokens:     promptTok,
-			CompletionTokens: completionTok,
-			TotalTokens:      totalTok,
-		}); err != nil {
-			return sliceObjectiveLedgerEntry{}, "", fmt.Errorf("store slice %q objective ledger cache: %w", t.id, err)
-		}
-	}
-	return entry, "", nil
+	return runSliceLedgerViaStepPlan(ctx, caller, req, t, wholeContext, byPath, rolesDoc, sliceFeedback)
 }
 
 func buildSliceLedgerStepPlan(sliceID string, paths []string) sliceLedgerStepPlan {
