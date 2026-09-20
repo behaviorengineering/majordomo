@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "c1c2dd68efbbd2f29af2e663c4f785284c606a09abd6095c3e8053b506371aa0",
+  "created_at": "2026-09-20T15:21:22Z",
+  "payload": {
+    "path": "internal/agenting",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"Stage\", \"Select\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 9,
+    "prompt_tokens": 18091,
+    "completion_tokens": 2125,
+    "total_tokens": 20216
+  }
+}
