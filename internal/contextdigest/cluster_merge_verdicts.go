@@ -10,10 +10,8 @@ import (
 )
 
 const (
-	clusterMergeVerdictsRel       = "slice_grouping_verdicts.yaml"
-	clusterMergeProposalRel       = "slice_grouping_proposal.yaml"
-	legacyClusterMergeVerdictsRel = "cluster_merge_verdicts.yaml"
-	legacyClusterMergeProposalRel = "cluster_merge_proposal.yaml"
+	clusterMergeVerdictsRel = "slice_grouping_verdicts.yaml"
+	clusterMergeProposalRel = "slice_grouping_proposal.yaml"
 	maxClusterAuditMerges   = 32
 
 	mergeIntentSlice    = "slice"

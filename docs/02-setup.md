@@ -109,7 +109,7 @@ observability:
 
 Env still overrides when set (`MAJORDOMO_OTEL_ENDPOINT`, `MAJORDOMO_OTEL_API_KEY` / `PHOENIX_API_KEY`, `MAJORDOMO_OTEL_ENABLED=0`). Digest, orchestrate, and run review nest work under one process TraceID (returned as `trace_id` on digest JSON). On a failed `run review` / `orchestrate`, the full OpenInference trace is also written to the failure-dump path above. Disable with `MAJORDOMO_OTEL_ENABLED=0` or `observability.enabled: false`.
 
-Provider allow-list: `typology_cluster_audit` is an RLM Complete path (like objective grounding). Configure it under job providers or fall back to `typology_inspect`. Do not register a dummy CoT ctor for it. Token totals appear in the digest `llm_usage` summary under `typology_cluster_audit`.
+Provider allow-list: `typology_slice_grouping_audit` is an RLM Complete path (like slice meaning). Configure it under job providers or fall back to `typology_inspect`. Do not register a dummy CoT ctor for it. Token totals appear in the digest `llm_usage` summary under `typology_slice_grouping_audit`.
 
 ## Local image builds
 

@@ -280,7 +280,7 @@ func (s *DigestStore) recordTokenHit(prompt, completion, total int, bumpHits fun
 	s.stats.TokensSavedTotal += total
 }
 
-// RecordClusterCoTHit notes a typology_cluster CoT skip.
+// RecordClusterCoTHit notes a typology_slice_grouping CoT skip.
 func (s *DigestStore) RecordClusterCoTHit(prompt, completion, total int) {
 	if s == nil {
 		return
@@ -288,7 +288,7 @@ func (s *DigestStore) RecordClusterCoTHit(prompt, completion, total int) {
 	s.recordTokenHit(prompt, completion, total, func(st *DigestRunStats) { st.ClusterCoTHits++ }, &s.stats.clusterCoTStoredTotalSum, &s.stats.clusterCoTStoredTotalN)
 }
 
-// RecordClusterCoTMiss notes a typology_cluster provider call.
+// RecordClusterCoTMiss notes a typology_slice_grouping provider call.
 func (s *DigestStore) RecordClusterCoTMiss() {
 	if s == nil {
 		return
@@ -525,7 +525,7 @@ type ClusterAuditCached struct {
 	TotalTokens      int                       `json:"total_tokens,omitempty"`
 }
 
-// ClusterCoTFingerprint keys one typology_cluster CoT proposal.
+// ClusterCoTFingerprint keys one typology_slice_grouping CoT proposal.
 type ClusterCoTFingerprint struct {
 	DraftHash       string
 	RolesHash       string
@@ -896,7 +896,7 @@ func (s *DigestStore) StoreClusterAudit(fp ClusterAuditFingerprint, entry Cluste
 	return nil
 }
 
-// LookupClusterCoT returns a cached typology_cluster CoT proposal when the fingerprint matches.
+// LookupClusterCoT returns a cached typology_slice_grouping CoT proposal when the fingerprint matches.
 func (s *DigestStore) LookupClusterCoT(fp ClusterCoTFingerprint) (ClusterCoTCached, bool, error) {
 	if s == nil || strings.TrimSpace(s.Dir) == "" {
 		return ClusterCoTCached{}, false, nil
@@ -913,7 +913,7 @@ func (s *DigestStore) LookupClusterCoT(fp ClusterCoTFingerprint) (ClusterCoTCach
 	return out, true, nil
 }
 
-// StoreClusterCoT writes a successful typology_cluster CoT proposal.
+// StoreClusterCoT writes a successful typology_slice_grouping CoT proposal.
 func (s *DigestStore) StoreClusterCoT(fp ClusterCoTFingerprint, entry ClusterCoTCached) error {
 	if s == nil || strings.TrimSpace(s.Dir) == "" {
 		return nil

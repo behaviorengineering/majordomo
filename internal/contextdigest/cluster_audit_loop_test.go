@@ -352,7 +352,7 @@ func (s *countingRejectAuditor) Audit(_ context.Context, req clusterAuditRequest
 		})
 	}
 	out = append(out, req.Frozen...)
-	return clusterAuditResult{Verdicts: out, TraceDir: "tmp/rlm-traces/typology_cluster_audit"}, nil
+	return clusterAuditResult{Verdicts: out, TraceDir: "tmp/rlm-traces/typology_slice_grouping_audit"}, nil
 }
 
 func TestAssertAcceptedMembershipBlocksLibraryThemeFold(t *testing.T) {

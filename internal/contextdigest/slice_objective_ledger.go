@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	sliceObjectiveLedgerRel       = "slice_meaning_ledger.yaml"
-	legacySliceObjectiveLedgerRel = "slice_objective_ledger.yaml"
-	ledgerVerdictGrounded         = "grounded"
+	sliceObjectiveLedgerRel = "slice_meaning_ledger.yaml"
+	ledgerVerdictGrounded   = "grounded"
 	ledgerVerdictOverclaim   = "overclaim"
 	ledgerSourceRLM          = "slice_objective_rlm"
 	ledgerSourceUnclaimed    = "slice_objective_rlm_unclaimed"

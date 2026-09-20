@@ -227,7 +227,7 @@ func loadBootstrapStoryInput(ctxDir, analysisDir string, at time.Time, sourceSHA
 	if strings.TrimSpace(manifest.SliceObjectiveLedgerPath) != "" {
 		typoDir := filepath.Join(ctxDir, "evidence", "typology")
 		primary := strings.TrimSpace(manifest.SliceObjectiveLedgerPath)
-		input.TypologySliceObjectiveLedger = readEvidenceRel(typoDir, primary, legacySliceObjectiveLedgerRel, sliceObjectiveLedgerRel)
+		input.TypologySliceObjectiveLedger = readEvidenceRel(typoDir, primary)
 	}
 	constraintsRel := strings.TrimSpace(manifest.PackageCapabilityConstraintsPath)
 	if constraintsRel == "" {

@@ -365,7 +365,7 @@ majordomo context digest --repo-id <id> --workdir <clone> \
 
 - Loads that PR's head tree into a temp context dir (evidence + teaching files).
 - Skips survey; starts at `--from-stage` (`catalog` includes human-intervention then story;
-  `intervention` then story; `story` alone). Legacy alias: `refine` still means `catalog` for one release.
+  `intervention` then story; `story` alone).
 - Inference-cache Lookup/Store and skip stats still apply (same fingerprints as a full seed).
 - **Local-only:** does not push `majordomo-context/*`, does not open/update the context PR.
   Result JSON includes `action=resume`, `resume_pr`, `resume_head`, `from_stage`, and

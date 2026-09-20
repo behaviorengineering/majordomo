@@ -174,7 +174,7 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 		merges = scrubForbiddenHTTPEntrypointMergeRows(merges, input.PackageRoles)
 		pending, frozen := sticky.applySticky(merges)
 		if len(pending) > 0 && auditor == nil {
-			return TypologySlicePipelineOutput{}, fmt.Errorf("typology_cluster_audit RLM is required for proposed merges but no cluster auditor is configured")
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology_slice_grouping_audit RLM is required for proposed merges but no cluster auditor is configured")
 		}
 		constraintsForAudit := stringField(clusterFields, "package_capability_constraints")
 		auditStart := time.Now()

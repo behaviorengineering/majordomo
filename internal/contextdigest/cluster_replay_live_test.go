@@ -14,7 +14,7 @@ import (
 	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
 )
 
-// clusterReplayFixture is one captured typology_cluster Process span used by the
+// clusterReplayFixture is one captured typology_slice_grouping Process span used by the
 // offline "recorded none" gate (older seed that emitted literal none).
 type clusterReplayFixture struct {
 	Source          string                 `json:"source"`
@@ -26,7 +26,7 @@ type clusterReplayFixture struct {
 
 func loadClusterReplayFixture(t *testing.T) clusterReplayFixture {
 	t.Helper()
-	path := filepath.Join("testdata", "cluster_replay", "gitboard_typology_cluster_span.json")
+	path := filepath.Join("testdata", "cluster_replay", "gitboard_typology_slice_grouping_span.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -97,7 +97,7 @@ func TestLiveTypologyClusterReplay(t *testing.T) {
 
 	out, err := rt.Generate(ctx, jmodules.TaskTypologySliceGrouping, doc.Fields, 1)
 	if err != nil {
-		t.Fatalf("typology_cluster generate: %v", err)
+		t.Fatalf("typology_slice_grouping generate: %v", err)
 	}
 
 	mergeIDs := stringField(out, "merge_ids")

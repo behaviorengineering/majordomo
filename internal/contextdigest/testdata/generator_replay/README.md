@@ -10,8 +10,8 @@ Covered today (gitboard seed):
 
 | Task | Fixture |
 |------|---------|
-| `typology_cluster` | `gitboard_typology_cluster_span.json` |
-| `typology_refine` | `gitboard_typology_refine_span.json` |
+| `typology_slice_grouping` | `gitboard_typology_slice_grouping_span.json` |
+| `typology_slice_catalog` | `gitboard_typology_slice_catalog_span.json` |
 
 Other `judge.DigestTasks()` still appear as skipped subtests until you drop a
 matching `gitboard_<task>_span.json` here. RLM tasks dump under `rlm-traces/` and

@@ -32,7 +32,7 @@ func validateLocalSeedOptions(opts Options) error {
 	switch stage {
 	case "", LocalStageSurvey, LocalStageCatalog, LocalStageIntervention, LocalStageStory:
 	default:
-		return fmt.Errorf("unsupported --from-stage %q for local seed (want survey|catalog|intervention|story; refine still accepted)", opts.FromStage)
+		return fmt.Errorf("unsupported --from-stage %q for local seed (want survey|catalog|intervention|story)", opts.FromStage)
 	}
 	if opts.SkipStory && stage == LocalStageStory {
 		return fmt.Errorf("--skip-story conflicts with --from-stage story")

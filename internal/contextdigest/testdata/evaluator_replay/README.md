@@ -2,7 +2,7 @@
 
 Captured `Predict:typology_quality*` Process spans from a digest work story
 (`module-traces/*.jsonl`). Offline checks recorded outs; live replay runs the
-full `typology_refine` EvaluateWorkflow (feedback + score + consolidator) using
+full `typology_slice_catalog` EvaluateWorkflow (feedback + score + consolidator) using
 the refine generator fixture I/O.
 
 | Slug | Span |

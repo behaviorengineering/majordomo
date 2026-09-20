@@ -241,7 +241,7 @@ func TestRunLocalSeedFreshAndResumeNoPush(t *testing.T) {
 	}
 
 	// Resume from refine with working refine/story stubs.
-	opts.FromStage = LocalStageRefine
+	opts.FromStage = LocalStageCatalog
 	opts.SkipStory = false
 	opts.TypologySlicePipeline = typologySlicePipelineFunc(func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 		refineCalls.Add(1)

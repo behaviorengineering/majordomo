@@ -46,57 +46,9 @@ type ModuleTaskConfig struct {
 
 var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
-// canonicalGeneratorTask maps legacy slice-pipeline task ids to domain ids.
-func canonicalGeneratorTask(task string) string {
-	switch strings.TrimSpace(task) {
-	case "typology_cluster":
-		return "typology_slice_grouping"
-	case "typology_cluster_audit":
-		return "typology_slice_grouping_audit"
-	case "typology_objective_grounding":
-		return "typology_slice_meaning"
-	case "typology_refine":
-		return "typology_slice_catalog"
-	default:
-		return strings.TrimSpace(task)
-	}
-}
-
-// moduleConfigKeys returns lookup order for job_configs modules (canonical first, then legacy).
-func moduleConfigKeys(task string) []string {
-	canonical := canonicalGeneratorTask(task)
-	keys := []string{canonical}
-	switch canonical {
-	case "typology_slice_grouping":
-		keys = append(keys, "typology_cluster")
-	case "typology_slice_grouping_audit":
-		keys = append(keys, "typology_cluster_audit")
-	case "typology_slice_meaning":
-		keys = append(keys, "typology_objective_grounding")
-	case "typology_slice_catalog":
-		keys = append(keys, "typology_refine")
-	}
-	if task != "" && task != canonical {
-		keys = append(keys, task)
-	}
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(keys))
-	for _, k := range keys {
-		if k == "" {
-			continue
-		}
-		if _, ok := seen[k]; ok {
-			continue
-		}
-		seen[k] = struct{}{}
-		out = append(out, k)
-	}
-	return out
-}
-
 // JobForTask maps a generator task name to its job_configs key.
 func JobForTask(task string) string {
-	switch canonicalGeneratorTask(task) {
+	switch strings.TrimSpace(task) {
 	case "bootstrap_story", "digest_story", "typology_inspect",
 		"typology_slice_meaning", "typology_slice_grouping_audit", "typology_slice_grouping", "typology_slice_catalog",
 		"typology_human_intervention",
@@ -157,7 +109,6 @@ func (c RepoConfig) GetModuleProvider(job, module string) (AIProviderConfig, err
 
 // ResolveTaskProvider returns the configured provider for a generator task.
 // ok is false when the task has no job_configs entry (caller may use gateway fallback).
-// Accepts domain task ids and one-release legacy aliases (typology_cluster, typology_refine, …).
 func (c RepoConfig) ResolveTaskProvider(task string) (AIProviderConfig, bool, error) {
 	task = strings.TrimSpace(task)
 	job := JobForTask(task)
@@ -171,16 +122,8 @@ func (c RepoConfig) ResolveTaskProvider(task string) (AIProviderConfig, bool, er
 	if !ok || jobCfg.Modules == nil {
 		return AIProviderConfig{}, false, nil
 	}
-	var modCfg ModuleTaskConfig
-	found := false
-	for _, key := range moduleConfigKeys(task) {
-		if cfg, ok := jobCfg.Modules[key]; ok && strings.TrimSpace(cfg.Provider) != "" {
-			modCfg = cfg
-			found = true
-			break
-		}
-	}
-	if !found {
+	modCfg, ok := jobCfg.Modules[task]
+	if !ok || strings.TrimSpace(modCfg.Provider) == "" {
 		return AIProviderConfig{}, false, nil
 	}
 	provider, err := c.GetAIProvider(modCfg.Provider)

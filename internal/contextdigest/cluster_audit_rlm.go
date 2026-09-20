@@ -179,7 +179,7 @@ func runClusterMergeAudit(ctx context.Context, caller clusterAuditCaller, req cl
 		req.DigestCache.RecordClusterAuditMiss()
 	}
 	if err != nil {
-		return out, fmt.Errorf("typology_cluster_audit RLM: %w", err)
+		return out, fmt.Errorf("typology_slice_grouping_audit RLM: %w", err)
 	}
 	audited, parseErr := parseClusterAuditAnswer(answer, req.Proposed)
 	if parseErr != nil {
@@ -197,7 +197,7 @@ func runClusterMergeAudit(ctx context.Context, caller clusterAuditCaller, req cl
 		}
 	}
 	out.Verdicts = append(append([]clusterMergeVerdict(nil), req.Frozen...), audited...)
-	logf("INFO", "typology_cluster_audit attempt=%d rows=%d iterations=%d duration_ms=%d tokens=%d",
+	logf("INFO", "typology_slice_grouping_audit attempt=%d rows=%d iterations=%d duration_ms=%d tokens=%d",
 		req.Attempt, len(req.Proposed), iters, out.Duration.Milliseconds(), totalTok)
 	return out, nil
 }
@@ -419,7 +419,7 @@ func alignClusterAuditRows(rows []clusterMergeVerdict, proposed []proposedMerge)
 			extras = append(extras, id)
 		}
 		sort.Strings(extras)
-		return out, fmt.Errorf("typology_cluster_audit returned extra ids: %s", strings.Join(extras, ", "))
+		return out, fmt.Errorf("typology_slice_grouping_audit returned extra ids: %s", strings.Join(extras, ", "))
 	}
 	return out, nil
 }
@@ -478,7 +478,7 @@ func parseClusterAuditAnswerLines(answer string, proposed []proposedMerge) ([]cl
 			extras = append(extras, id)
 		}
 		sort.Strings(extras)
-		return out, fmt.Errorf("typology_cluster_audit returned extra ids: %s", strings.Join(extras, ", "))
+		return out, fmt.Errorf("typology_slice_grouping_audit returned extra ids: %s", strings.Join(extras, ", "))
 	}
 	return out, nil
 }

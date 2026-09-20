@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 )
 
 // generatorReplayFixture is one captured Predict:<task> Process span.
@@ -26,56 +24,27 @@ func generatorReplayFixturePath(task string) string {
 	return filepath.Join("testdata", "generator_replay", "gitboard_"+task+"_span.json")
 }
 
-func generatorReplayFixtureCandidates(task string) []string {
-	out := []string{generatorReplayFixturePath(task)}
-	for _, legacy := range jmodules.LegacyTaskAliases(task) {
-		out = append(out, generatorReplayFixturePath(legacy))
-	}
-	// Reverse: when task is already a legacy id used in older fixture filenames.
-	switch task {
-	case jmodules.TaskTypologySliceGrouping:
-		out = append(out, generatorReplayFixturePath(jmodules.LegacyTaskTypologyCluster))
-	case jmodules.TaskTypologySliceCatalog:
-		out = append(out, generatorReplayFixturePath(jmodules.LegacyTaskTypologyRefine))
-	}
-	seen := map[string]struct{}{}
-	uniq := make([]string, 0, len(out))
-	for _, p := range out {
-		if _, ok := seen[p]; ok {
-			continue
-		}
-		seen[p] = struct{}{}
-		uniq = append(uniq, p)
-	}
-	return uniq
-}
-
 func loadGeneratorReplayFixture(t *testing.T, task string) (generatorReplayFixture, bool) {
 	t.Helper()
-	var lastErr error
-	for _, path := range generatorReplayFixtureCandidates(task) {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			if os.IsNotExist(err) {
-				lastErr = err
-				continue
-			}
-			t.Fatalf("read fixture %s: %v", path, err)
+	path := generatorReplayFixturePath(task)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return generatorReplayFixture{}, false
 		}
-		var doc generatorReplayFixture
-		if err := json.Unmarshal(raw, &doc); err != nil {
-			t.Fatalf("decode fixture %s: %v", path, err)
-		}
-		if strings.TrimSpace(doc.Task) == "" {
-			doc.Task = task
-		}
-		if len(doc.Fields) == 0 {
-			t.Fatalf("fixture %s fields empty", path)
-		}
-		return doc, true
+		t.Fatalf("read fixture %s: %v", path, err)
 	}
-	_ = lastErr
-	return generatorReplayFixture{}, false
+	var doc generatorReplayFixture
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("decode fixture %s: %v", path, err)
+	}
+	if strings.TrimSpace(doc.Task) == "" {
+		doc.Task = task
+	}
+	if len(doc.Fields) == 0 {
+		t.Fatalf("fixture %s fields empty", path)
+	}
+	return doc, true
 }
 
 func polypusReachable(t *testing.T) bool {

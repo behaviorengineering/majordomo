@@ -142,7 +142,7 @@ func TestLiveTypologyRefineEvaluateReplay(t *testing.T) {
 
 	agg, err := rt.Evaluate(ctx, jmodules.TaskTypologySliceCatalog, refine.Fields, refine.RecordedOutputs, 1)
 	if err != nil {
-		t.Fatalf("evaluate typology_refine: %v", err)
+		t.Fatalf("evaluate typology_slice_catalog: %v", err)
 	}
 	if agg == nil {
 		t.Fatal("nil aggregated evaluation")

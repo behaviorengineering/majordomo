@@ -6,43 +6,16 @@ import (
 	"strings"
 )
 
-// readEvidenceRel reads primaryRel under dir, then each legacy name. Empty if none exist.
-func readEvidenceRel(dir, primaryRel string, legacyRels ...string) string {
+// readEvidenceRel reads primaryRel under dir. Empty if missing.
+func readEvidenceRel(dir, primaryRel string, _ ...string) string {
 	dir = strings.TrimSpace(dir)
-	if dir == "" {
+	rel := strings.TrimSpace(primaryRel)
+	if dir == "" || rel == "" {
 		return ""
 	}
-	candidates := append([]string{primaryRel}, legacyRels...)
-	for _, rel := range candidates {
-		rel = strings.TrimSpace(rel)
-		if rel == "" {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(dir, rel))
-		if err != nil {
-			continue
-		}
-		return string(b)
+	b, err := os.ReadFile(filepath.Join(dir, rel))
+	if err != nil {
+		return ""
 	}
-	return ""
-}
-
-// resolveEvidenceRel picks an existing relative path under dir (primary first, then legacy).
-// Returns primaryRel when nothing exists yet (for new writes / manifest defaults).
-func resolveEvidenceRel(dir, primaryRel string, legacyRels ...string) string {
-	dir = strings.TrimSpace(dir)
-	candidates := append([]string{primaryRel}, legacyRels...)
-	for _, rel := range candidates {
-		rel = strings.TrimSpace(rel)
-		if rel == "" {
-			continue
-		}
-		if dir == "" {
-			return primaryRel
-		}
-		if _, err := os.Stat(filepath.Join(dir, rel)); err == nil {
-			return rel
-		}
-	}
-	return primaryRel
+	return string(b)
 }

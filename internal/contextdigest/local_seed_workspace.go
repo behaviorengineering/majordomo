@@ -18,7 +18,6 @@ const (
 
 	LocalStageSurvey       = "survey"
 	LocalStageCatalog      = "catalog"
-	LocalStageRefine       = "refine" // legacy alias for catalog (one release)
 	LocalStageIntervention = "intervention"
 	LocalStageStory        = "story"
 

@@ -24,7 +24,7 @@ func TestValidateResumeOptions(t *testing.T) {
 		wantErr string
 	}{
 		{name: "disabled", opts: Options{}},
-		{name: "ok refine", opts: Options{ResumePR: 42, FromStage: "refine"}},
+		{name: "ok catalog", opts: Options{ResumePR: 42, FromStage: "catalog"}},
 		{name: "ok story", opts: Options{ResumePR: 7, FromStage: "STORY"}},
 		{name: "missing pr", opts: Options{FromStage: "story"}, wantErr: "--resume-pr"},
 		{name: "missing stage", opts: Options{ResumePR: 1}, wantErr: "--from-stage"},
@@ -54,7 +54,7 @@ func TestValidateResumeEvidencePerStage(t *testing.T) {
 	t.Run("refine ok", func(t *testing.T) {
 		t.Parallel()
 		ctxDir := writeResumeEvidenceFixture(t, resumeFixtureKindRefine)
-		if err := validateResumeEvidence(ctxDir, ResumeStageRefine); err != nil {
+		if err := validateResumeEvidence(ctxDir, ResumeStageCatalog); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -62,7 +62,7 @@ func TestValidateResumeEvidencePerStage(t *testing.T) {
 		t.Parallel()
 		ctxDir := writeResumeEvidenceFixture(t, resumeFixtureKindRefine)
 		_ = os.Remove(filepath.Join(ctxDir, "evidence", "typology", "graph.txt"))
-		err := validateResumeEvidence(ctxDir, ResumeStageRefine)
+		err := validateResumeEvidence(ctxDir, ResumeStageCatalog)
 		if err == nil || !strings.Contains(err.Error(), "graph_path") {
 			t.Fatalf("err=%v", err)
 		}

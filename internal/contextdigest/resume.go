@@ -18,11 +18,7 @@ func isResumeMode(opts Options) bool {
 }
 
 func normalizeResumeStage(stage string) string {
-	s := strings.ToLower(strings.TrimSpace(stage))
-	if s == ResumeStageRefine || s == LocalStageRefine {
-		return ResumeStageCatalog
-	}
-	return s
+	return strings.ToLower(strings.TrimSpace(stage))
 }
 
 func validateResumeOptions(opts Options) error {
@@ -35,7 +31,7 @@ func validateResumeOptions(opts Options) error {
 		return fmt.Errorf("--resume-pr required with --from-stage (or use --local-seed-dir for filesystem seed)")
 	}
 	if stage == "" {
-		return fmt.Errorf("--from-stage required with --resume-pr (catalog|intervention|story; refine still accepted)")
+		return fmt.Errorf("--from-stage required with --resume-pr (catalog|intervention|story)")
 	}
 	switch stage {
 	case ResumeStageCatalog, ResumeStageIntervention, ResumeStageStory:
