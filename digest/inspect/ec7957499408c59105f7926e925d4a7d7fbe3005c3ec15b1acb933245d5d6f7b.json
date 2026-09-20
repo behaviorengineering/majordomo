@@ -1,0 +1,23 @@
+{
+  "kind": "inspect",
+  "fingerprint": "ec7957499408c59105f7926e925d4a7d7fbe3005c3ec15b1acb933245d5d6f7b",
+  "created_at": "2026-09-20T15:21:12Z",
+  "payload": {
+    "path": "cmd/majordomo",
+    "role": "entrypoint",
+    "confidence": 0.95,
+    "evidence": [
+      "has_main",
+      "rlm:\"package: `main`\", \"unexportedFuncs: main\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "entrypoint",
+    "llm_role": "entrypoint",
+    "agreement": "match",
+    "rlm_iterations": 9,
+    "prompt_tokens": 8462,
+    "completion_tokens": 1611,
+    "total_tokens": 10073
+  }
+}
