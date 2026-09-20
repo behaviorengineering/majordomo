@@ -1,6 +1,6 @@
 package bootstrap
 
-import "github.com/behaviorengineering/strop/evaluation/criteria"
+import "github.com/behaviorengineering/strop/pkg/evaluation/criteria"
 
 const (
 	CriterionIDEvidencedOnly criteria.CriterionID = "majordomo_bootstrap_evidenced_only"

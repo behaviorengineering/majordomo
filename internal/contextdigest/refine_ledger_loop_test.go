@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
-	"github.com/behaviorengineering/strop/evaluation"
+	"github.com/behaviorengineering/strop/pkg/evaluation"
 )
 
 type stubJudgeGen struct {

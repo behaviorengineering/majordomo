@@ -4,9 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/behaviorengineering/strop/dspy/registry"
-	"github.com/behaviorengineering/strop/dspy/runner"
-	"github.com/behaviorengineering/strop/evaluation"
+	"github.com/behaviorengineering/strop/pkg/dspy/registry"
+	"github.com/behaviorengineering/strop/pkg/dspy/runner"
+	"github.com/behaviorengineering/strop/pkg/evaluation"
 
 	"github.com/behaviorengineering/majordomo/internal/aigateway"
 )

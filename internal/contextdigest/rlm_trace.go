@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	stropdspy "github.com/behaviorengineering/strop/dspy"
+	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
 )
 
 // rlmTraceDir returns TraceDir for strop RLM JSONL dumps (not teaching branch).

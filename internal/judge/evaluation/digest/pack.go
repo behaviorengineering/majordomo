@@ -1,7 +1,7 @@
 package digest
 
 import (
-	"github.com/behaviorengineering/strop/evaluation/criteria"
+	"github.com/behaviorengineering/strop/pkg/evaluation/criteria"
 )
 
 const (

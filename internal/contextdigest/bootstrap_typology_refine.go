@@ -16,7 +16,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
-	"github.com/behaviorengineering/strop/runreport"
+	"github.com/behaviorengineering/strop/pkg/runreport"
 	"github.com/behaviorengineering/typology/catalog"
 	"gopkg.in/yaml.v3"
 )

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	stropdspy "github.com/behaviorengineering/strop/dspy"
+	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
 
 	"github.com/behaviorengineering/majordomo/internal/aigateway"
 )

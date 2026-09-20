@@ -13,8 +13,8 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
-	"github.com/behaviorengineering/strop/orchestration"
-	"github.com/behaviorengineering/strop/stepplan"
+	"github.com/behaviorengineering/strop/pkg/orchestration"
+	"github.com/behaviorengineering/strop/pkg/stepplan"
 	typroles "github.com/behaviorengineering/typology/roles"
 )
 

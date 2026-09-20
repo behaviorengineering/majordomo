@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/behaviorengineering/strop/orchestration"
-	"github.com/behaviorengineering/strop/streaming"
+	"github.com/behaviorengineering/strop/pkg/orchestration"
+	"github.com/behaviorengineering/strop/pkg/streaming"
 
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"

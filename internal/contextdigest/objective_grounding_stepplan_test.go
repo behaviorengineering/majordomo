@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/behaviorengineering/strop/stepplan"
+	"github.com/behaviorengineering/strop/pkg/stepplan"
 )
 
 func TestRunSliceLedgerViaStepPlanResumeSkipsEvidence(t *testing.T) {

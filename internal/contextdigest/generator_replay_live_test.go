@@ -9,7 +9,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
-	stropdspy "github.com/behaviorengineering/strop/dspy"
+	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
 )
 
 // digestGeneratorReplayTasks are CoT/Predict digest generators that should gain

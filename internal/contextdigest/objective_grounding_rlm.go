@@ -20,7 +20,7 @@ import (
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
-	"github.com/behaviorengineering/strop/dspy/factory"
+	"github.com/behaviorengineering/strop/pkg/dspy/factory"
 	"github.com/behaviorengineering/typology/catalog"
 	typroles "github.com/behaviorengineering/typology/roles"
 	"gopkg.in/yaml.v3"

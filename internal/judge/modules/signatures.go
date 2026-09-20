@@ -2,7 +2,7 @@ package modules
 
 import (
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
-	dspymodules "github.com/behaviorengineering/strop/dspy/modules"
+	dspymodules "github.com/behaviorengineering/strop/pkg/dspy/modules"
 )
 
 func in(name, desc string) core.InputField {
