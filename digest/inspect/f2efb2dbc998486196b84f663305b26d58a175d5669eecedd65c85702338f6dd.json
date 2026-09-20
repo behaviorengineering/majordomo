@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "f2efb2dbc998486196b84f663305b26d58a175d5669eecedd65c85702338f6dd",
+  "created_at": "2026-09-20T15:24:36Z",
+  "payload": {
+    "path": "internal/orchestrate",
+    "role": "unknown",
+    "confidence": 0,
+    "evidence": [
+      "rlm:Run, runFileWaves, runSynthesis contradiction_rejected"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "unknown",
+    "agreement": "abstain",
+    "rlm_iterations": 6,
+    "prompt_tokens": 7213,
+    "completion_tokens": 956,
+    "total_tokens": 8169
+  }
+}
