@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "8228e2d9c7b71ac60274a7bd5313d948dd9f3cd56b68a96db915cf7b8e38ae82",
+  "created_at": "2026-09-20T15:21:41Z",
+  "payload": {
+    "path": "internal/contextstore",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:ChronologyEvent, Meta, CurrentSchemaVersion"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 8,
+    "prompt_tokens": 10456,
+    "completion_tokens": 2445,
+    "total_tokens": 12901
+  }
+}
