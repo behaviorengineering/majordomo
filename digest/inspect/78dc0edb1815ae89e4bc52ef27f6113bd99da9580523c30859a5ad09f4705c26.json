@@ -1,0 +1,25 @@
+{
+  "kind": "inspect",
+  "fingerprint": "78dc0edb1815ae89e4bc52ef27f6113bd99da9580523c30859a5ad09f4705c26",
+  "created_at": "2026-09-20T15:23:20Z",
+  "payload": {
+    "path": "internal/diff",
+    "role": "dto",
+    "confidence": 0.9,
+    "evidence": [
+      "json_tags",
+      "decl_heavy_export_surface",
+      "rlm:\"BuildAll\", \"combined diffs\"",
+      "rlm_disagree_kept_stage1"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "dto",
+    "llm_role": "aggregator",
+    "agreement": "disagree",
+    "rlm_iterations": 4,
+    "prompt_tokens": 5555,
+    "completion_tokens": 1081,
+    "total_tokens": 6636
+  }
+}
