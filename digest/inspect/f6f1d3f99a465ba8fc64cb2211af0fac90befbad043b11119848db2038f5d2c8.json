@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "f6f1d3f99a465ba8fc64cb2211af0fac90befbad043b11119848db2038f5d2c8",
+  "created_at": "2026-09-20T15:24:03Z",
+  "payload": {
+    "path": "internal/judge/evaluation/typology",
+    "role": "unknown",
+    "confidence": 0,
+    "evidence": [
+      "rlm:ClusterCriterionIDs, CriterionIDAdapterSurfaces, Register contradiction_rejected"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "unknown",
+    "agreement": "abstain",
+    "rlm_iterations": 12,
+    "prompt_tokens": 23620,
+    "completion_tokens": 2591,
+    "total_tokens": 26211
+  }
+}
