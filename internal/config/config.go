@@ -283,3 +283,16 @@ func DigestCacheBranch(repoID string) string {
 func ContextUpdateBranch(repoID string) string {
 	return ContextBranch(repoID) + "-update"
 }
+
+// TypologyPromoteBranch returns the base tip name for confirmed-catalog promote history.
+// Digest does not keep a long-lived base branch here; product PRs use default as base.
+// The helper exists so operators and poll skip share one prefix.
+func TypologyPromoteBranch(repoID string) string {
+	return "majordomo-typology/" + repoID
+}
+
+// TypologyPromoteUpdateBranch returns the product PR head that promotes the refined
+// typology proposal into `.typology/typology.yaml` on the default branch.
+func TypologyPromoteUpdateBranch(repoID string) string {
+	return TypologyPromoteBranch(repoID) + "-update"
+}
