@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "361cbb38111edc9b59effcae5de935dcca7464b33c257bdef5d78737d478e1ee",
+  "created_at": "2026-09-20T15:25:20Z",
+  "payload": {
+    "path": "internal/workspace",
+    "role": "exec_runner",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:Local.Shell, Stub.Shell, exec.CommandContext"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "exec_runner",
+    "agreement": "match",
+    "rlm_iterations": 5,
+    "prompt_tokens": 6629,
+    "completion_tokens": 910,
+    "total_tokens": 7539
+  }
+}
