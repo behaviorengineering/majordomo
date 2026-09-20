@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "28cef286e1ee138de8ab8c603e6237529cf15dd4bcb1519246f65e11b0359f47",
+  "created_at": "2026-09-20T15:26:07Z",
+  "payload": {
+    "path": "internal/judge/evaluation/bootstrap",
+    "role": "aggregator",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:Register(r *criteria.CriterionRegistry)"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "aggregator",
+    "agreement": "match",
+    "rlm_iterations": 9,
+    "prompt_tokens": 15529,
+    "completion_tokens": 2477,
+    "total_tokens": 18006
+  }
+}
