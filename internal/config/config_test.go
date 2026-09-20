@@ -24,6 +24,18 @@ func TestContextBranch(t *testing.T) {
 	}
 }
 
+func TestTypologyPromoteBranch(t *testing.T) {
+	got := TypologyPromoteBranch("payments-api")
+	want := "majordomo-typology/payments-api"
+	if got != want {
+		t.Fatalf("TypologyPromoteBranch = %q, want %q", got, want)
+	}
+	upd := TypologyPromoteUpdateBranch("payments-api")
+	if upd != want+"-update" {
+		t.Fatalf("TypologyPromoteUpdateBranch = %q, want %q", upd, want+"-update")
+	}
+}
+
 func TestCacheSkipsDefaultOn(t *testing.T) {
 	c := Cache{}
 	if !c.SkipsEnabled() {

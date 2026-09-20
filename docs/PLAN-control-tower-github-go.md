@@ -252,7 +252,7 @@ Prep selects packs; the model MUST NOT probe `agenting/`. `pipelines.*.agentCont
 
 **Findings schema.** Judge output is **structured** (strop XML / map). Mandatory: `file`, `slug`, `findings` (each `severity` in `critical|warn|info`, `text` non-empty). Go fails the state if a reviewable has no artifact or a finding lacks severity. Markdown reports are a **formatter** after validation, not the contract. `[CRITICAL]` in MD is display, not the machine.
 
-**Context PRs on every SCM.** Open/restack uses the same forge adapters as publish (`gh` / `glab` / Bitbucket HTTP). Base = `majordomo-context/<id>`, head = `majordomo-context/<id>-update`. Poll must ignore PRs under `majordomo-context/` (Phase 6 checkbox).
+**Context PRs on every SCM.** Open/restack uses the same forge adapters as publish (`gh` / `glab` / Bitbucket HTTP). Base = `majordomo-context/<id>`, head = `majordomo-context/<id>-update`. Poll must ignore PRs under `majordomo-context/` and `majordomo-typology/` (Phase 6 checkbox). Typology promote PRs (reuse+drift) use base = default and head = `majordomo-typology/<id>-update`.
 
 **Digest trigger.** Tower cron (same interval family as poll, e.g. every 5m). Run only when `last_merged_sha` is a proper ancestor of default `HEAD` and not equal to it (cursor behind). If caught up, exit no-op. One worker per repo (`context-digest-<repo-id>`).
 
@@ -260,7 +260,7 @@ Prep selects packs; the model MUST NOT probe `agenting/`. `pipelines.*.agentCont
 
 **Gate comments.** Only comments starting with `@majordomo` count. `@majordomo reject <reason>` = reject + regen. `@majordomo done` = conversation complete (human may click merge). Other comments are ignored for Gate.
 
-**Digest credentials.** Same forge token as review MUST allow: read default, push to `majordomo-context/**`, open/restack PRs base=`majordomo-context/<id>` head=`…/update`.
+**Digest credentials.** Same forge token as review MUST allow: read default, push to `majordomo-context/**`, open/restack PRs base=`majordomo-context/<id>` head=`…/update`, and when promoting a drifted confirmed catalog push `majordomo-typology/**` and open/restack a product PR base=default head=`majordomo-typology/<id>-update`.
 
 **Generic SCM.** Digest open/restack requires GitHub, GitLab, or Bitbucket. For `scm: generic`: skip opening a context PR; log and exit. No invented forge.
 
@@ -849,7 +849,7 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | Topic | Decision |
 |-------|----------|
 | **Poll cursor (v1)** | Actions cache + `.poll-cache/<repo-id>/poll-cursor.json` on the tower. Served-repo git branch is optional Phase 5 hardening, not required for pilot. |
-| **Credential model** | One forge token **per org/group** in tower secrets: `GH_TOKEN_<OWNER>` (GitHub; never `GITHUB_TOKEN_*` — Actions forbids that prefix) or `GITLAB_TOKEN_<OWNER>` (GitLab). Optional per-repo override `MAJORDOMO_CREDENTIAL_<REPO_ID>`. Lookup order: per-repo → org. **No** unqualified `GH_TOKEN` / `GITLAB_TOKEN` / `GITHUB_TOKEN` for served-repo access (tower Actions `GITHUB_TOKEN` remains for operating on the tower itself). Map secrets into job env explicitly. Phase 6 digest needs the same token to **push** `majordomo-context/**` and open/restack context PRs (not only comment on product PRs). |
+| **Credential model** | One forge token **per org/group** in tower secrets: `GH_TOKEN_<OWNER>` (GitHub; never `GITHUB_TOKEN_*` — Actions forbids that prefix) or `GITLAB_TOKEN_<OWNER>` (GitLab). Optional per-repo override `MAJORDOMO_CREDENTIAL_<REPO_ID>`. Lookup order: per-repo → org. **No** unqualified `GH_TOKEN` / `GITLAB_TOKEN` / `GITHUB_TOKEN` for served-repo access (tower Actions `GITHUB_TOKEN` remains for operating on the tower itself). Map secrets into job env explicitly. Phase 6 digest needs the same token to **push** `majordomo-context/**` and open/restack context PRs, and when reuse+drift to **push** `majordomo-typology/**` and open/restack a product PR against default (not only comment on product PRs). |
 | **Continuous runs** | `review.enableContinuousRuns` default **false** (one review per PR number). Set **true** to re-queue when `head_sha` changes. |
 | **Cache skips** | Analysis-cache skips **on by default**; opt out with `cache.disableSkips: true`. |
 | **OpenCode auth** | Provider API keys are **per-run job secrets/env** (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` for custom OpenAI-compatible gateways). Never bake keys into the agent image. Optional non-secret provider config (`baseURL`, provider id) via `opencode.json` / `OPENCODE_CONFIG_CONTENT` with `{env:...}`. SCM tokens remain separate from LLM auth. `agent-dispatch.sh` preflights provider keys; it no longer requires `GITHUB_TOKEN` for Copilot CLI. |

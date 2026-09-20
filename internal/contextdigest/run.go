@@ -26,6 +26,7 @@ type Result struct {
 	CursorAfter   string            `json:"cursor_after,omitempty"`
 	CommitsWalked int               `json:"commits_walked,omitempty"`
 	ContextPR     string            `json:"context_pr,omitempty"`
+	TypologyPR    string            `json:"typology_pr,omitempty"` // product PR promoting refined catalog into .typology/
 	GateStatus    string            `json:"gate_status,omitempty"`
 	Message       string            `json:"message,omitempty"`
 	WorkStoryDir  string            `json:"work_story_dir,omitempty"` // durable RLM + runreport dump (local AI testing)
@@ -559,6 +560,14 @@ func finishDigestRun(p finishParams) (Result, error) {
 		}
 	}
 
+	var typologyPR string
+	promote, promoteErr := promoteConfirmedTypology(p, pr)
+	if promoteErr != nil {
+		logf("WARN", "typology promote: %v", promoteErr)
+	} else {
+		typologyPR = promote.PR
+	}
+
 	msg := p.message
 	if msg == "" {
 		msg = "digest complete"
@@ -578,6 +587,7 @@ func finishDigestRun(p finishParams) (Result, error) {
 		CursorAfter:   p.cursorAfter,
 		CommitsWalked: len(p.commits),
 		ContextPR:     pr,
+		TypologyPR:    typologyPR,
 		GateStatus:    string(p.gateSidecar.Status),
 		Message:       msg,
 	}, nil

@@ -226,6 +226,14 @@ func Push(g *Git, branch string) error {
 	return err
 }
 
+// PushForce force-pushes the named local branch to origin.
+// Used for typology promote heads that are recreated from default each digest.
+func PushForce(g *Git, branch string) error {
+	ref := "refs/heads/" + branch
+	_, err := g.run("push", "--force", "origin", ref+":"+ref)
+	return err
+}
+
 // InitOrphan initializes an empty repo and creates branch on an orphan commit.
 func InitOrphan(dir, branch string) (*Git, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {

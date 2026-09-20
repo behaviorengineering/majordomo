@@ -52,6 +52,7 @@ var majordomoInternalBranchPrefixes = []string{
 	"majordomo-context/",
 	"majordomo-inference-cache/",
 	"majordomo-poll-cache/",
+	"majordomo-typology/",
 	// Legacy prefixes kept so orphaned refs never look like product PRs.
 	"majordomo-pr-reviewer-cache/",
 	"majordomo-digest-cache/",
