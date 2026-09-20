@@ -1,0 +1,25 @@
+{
+  "kind": "inspect",
+  "fingerprint": "534b478f86e8f0f34719007df3864ae50ad8b16750648e2172038c7e96c33a00",
+  "created_at": "2026-09-20T15:24:31Z",
+  "payload": {
+    "path": "internal/cli",
+    "role": "cli",
+    "confidence": 0.8,
+    "evidence": [
+      "cli_flag_parse",
+      "cli_subcommand",
+      "imports_cli_framework",
+      "rlm:\"wires majordomo subcommands\", \"newRunCmd\", \"newPublishCmd\" contradiction_rejected"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "cli",
+    "llm_role": "unknown",
+    "agreement": "abstain",
+    "rlm_iterations": 12,
+    "prompt_tokens": 28586,
+    "completion_tokens": 3580,
+    "total_tokens": 32166
+  }
+}
