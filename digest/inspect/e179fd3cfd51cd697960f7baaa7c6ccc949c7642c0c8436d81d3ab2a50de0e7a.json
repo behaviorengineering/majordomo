@@ -1,0 +1,23 @@
+{
+  "kind": "inspect",
+  "fingerprint": "e179fd3cfd51cd697960f7baaa7c6ccc949c7642c0c8436d81d3ab2a50de0e7a",
+  "created_at": "2026-09-20T15:24:40Z",
+  "payload": {
+    "path": "internal/observability",
+    "role": "observability",
+    "confidence": 0.95,
+    "evidence": [
+      "imports_otel",
+      "rlm:Package observability provides OpenTelemetry tracing and inference failure dumps"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "observability",
+    "llm_role": "observability",
+    "agreement": "match",
+    "rlm_iterations": 2,
+    "prompt_tokens": 1875,
+    "completion_tokens": 250,
+    "total_tokens": 2125
+  }
+}
