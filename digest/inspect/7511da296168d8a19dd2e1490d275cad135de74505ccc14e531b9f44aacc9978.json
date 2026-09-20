@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "7511da296168d8a19dd2e1490d275cad135de74505ccc14e531b9f44aacc9978",
+  "created_at": "2026-09-20T15:24:59Z",
+  "payload": {
+    "path": "internal/outbound",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"Client\", \"DoWithRetry\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 2,
+    "prompt_tokens": 1956,
+    "completion_tokens": 249,
+    "total_tokens": 2205
+  }
+}
