@@ -1,0 +1,24 @@
+{
+  "kind": "inspect",
+  "fingerprint": "5fab95ec408f8eaaf300fbc74afb6382a3f1ec2cbc7c7e10953768bbf2209ce2",
+  "created_at": "2026-09-20T15:23:30Z",
+  "payload": {
+    "path": "internal/judge",
+    "role": "pipeline",
+    "confidence": 0.8,
+    "evidence": [
+      "pipeline_registry_param",
+      "pipeline_runner_type",
+      "rlm:\"Dispatch\", \"Runtime\", \"Evaluate\" contradiction_rejected"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "pipeline",
+    "llm_role": "unknown",
+    "agreement": "abstain",
+    "rlm_iterations": 12,
+    "prompt_tokens": 29021,
+    "completion_tokens": 4436,
+    "total_tokens": 33457
+  }
+}
