@@ -1,0 +1,43 @@
+{
+  "kind": "ledger",
+  "fingerprint": "5b4ef9904e5eb73e92191ec61590929ea648a9a516aad84b50e33755e7d307f1",
+  "created_at": "2026-09-20T15:27:58Z",
+  "payload": {
+    "id": "operations",
+    "owned_paths": [
+      "internal/poll",
+      "internal/outbound",
+      "internal/githttps",
+      "internal/config",
+      "internal/aigateway",
+      "internal/observability",
+      "internal/submodule",
+      "internal/cli",
+      "cmd/majordomo"
+    ],
+    "evidence": [
+      "cmd/majordomo: hasMain:true, mechanicalRole:entrypoint",
+      "internal/aigateway: delivery:http, imports_net_http",
+      "internal/cli: mechanicalRole:cli",
+      "internal/config: role is config",
+      "internal/githttps: role is adapter",
+      "internal/observability: role is observability, imports_otel",
+      "internal/outbound: role is adapter",
+      "internal/submodule: role is exec_runner, imports_os_exec"
+    ],
+    "claims": [
+      "run_cli",
+      "orchestrate",
+      "serve_http",
+      "wire_handlers",
+      "config",
+      "adapt_external",
+      "fill_dto",
+      "observability",
+      "exec_process"
+    ],
+    "objective": "The operations slice manages CLI entrypoints, configuration, HTTP serving, external adapter functions, observability, and process execution.",
+    "verdict": "grounded",
+    "source": "slice_objective_rlm"
+  }
+}
