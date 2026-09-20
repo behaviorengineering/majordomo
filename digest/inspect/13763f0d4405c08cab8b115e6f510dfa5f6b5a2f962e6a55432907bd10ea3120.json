@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "13763f0d4405c08cab8b115e6f510dfa5f6b5a2f962e6a55432907bd10ea3120",
+  "created_at": "2026-09-20T15:24:49Z",
+  "payload": {
+    "path": "internal/status",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:Run, postBitbucket, postGitHub"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 3,
+    "prompt_tokens": 3579,
+    "completion_tokens": 481,
+    "total_tokens": 4060
+  }
+}
