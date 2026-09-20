@@ -1,0 +1,24 @@
+{
+  "kind": "inspect",
+  "fingerprint": "52e31a8a6f163bc83c3835833a3cddb2ecf6e46556680f9be3c2a4720f02989d",
+  "created_at": "2026-09-20T15:25:42Z",
+  "payload": {
+    "path": "internal/reviewrun",
+    "role": "exec_runner",
+    "confidence": 0.95,
+    "evidence": [
+      "imports_os_exec",
+      "exports_run_surface",
+      "rlm:\"Run\", \"StageClone\", \"StageSA\", \"StagePublish\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "exec_runner",
+    "llm_role": "exec_runner",
+    "agreement": "match",
+    "rlm_iterations": 5,
+    "prompt_tokens": 9063,
+    "completion_tokens": 1402,
+    "total_tokens": 10465
+  }
+}
