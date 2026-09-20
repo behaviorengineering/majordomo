@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "d58f5c7173b22ae91d4c84d01709dda16a50d90f76bad7c569a2ca4ae1f4a119",
+  "created_at": "2026-09-20T15:21:41Z",
+  "payload": {
+    "path": "internal/judge/evaluation/tech",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"Register\", \"CriterionIDBlankLinesFields\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 12,
+    "prompt_tokens": 28003,
+    "completion_tokens": 3026,
+    "total_tokens": 31029
+  }
+}
