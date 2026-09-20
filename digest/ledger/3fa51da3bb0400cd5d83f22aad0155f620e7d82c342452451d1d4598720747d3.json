@@ -1,0 +1,30 @@
+{
+  "kind": "ledger",
+  "fingerprint": "3fa51da3bb0400cd5d83f22aad0155f620e7d82c342452451d1d4598720747d3",
+  "created_at": "2026-09-20T15:27:51Z",
+  "payload": {
+    "id": "context",
+    "owned_paths": [
+      "internal/contextstore",
+      "internal/contextdigest",
+      "internal/contextgate",
+      "internal/agenting"
+    ],
+    "evidence": [
+      "internal/agenting notes: Package agenting loads and selects context-branch grounding packs for review prep.",
+      "internal/contextdigest notes: Package contextdigest runs the served-repo context catch-up job.",
+      "internal/contextdigest evidence: imports_otel",
+      "internal/contextdigest evidence: imports_os_exec",
+      "internal/contextdigest evidence: imports_net_http",
+      "internal/contextstore notes: Package contextstore validates the served-repo context branch tree (meta.yaml, chronology.md, and required dossier files)."
+    ],
+    "claims": [
+      "observability",
+      "adapt_external",
+      "fill_dto"
+    ],
+    "objective": "The context domain manages grounding pack selection, repository context catch-up, tree validation, and observability via telemetry.",
+    "verdict": "grounded",
+    "source": "slice_objective_rlm"
+  }
+}
