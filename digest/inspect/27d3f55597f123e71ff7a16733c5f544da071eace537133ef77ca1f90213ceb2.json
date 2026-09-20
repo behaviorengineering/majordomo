@@ -1,0 +1,24 @@
+{
+  "kind": "inspect",
+  "fingerprint": "27d3f55597f123e71ff7a16733c5f544da071eace537133ef77ca1f90213ceb2",
+  "created_at": "2026-09-20T15:26:43Z",
+  "payload": {
+    "path": "internal/sa",
+    "role": "exec_runner",
+    "confidence": 0.95,
+    "evidence": [
+      "imports_os_exec",
+      "exports_run_surface",
+      "rlm:\"Run\", \"ToolRunner\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "exec_runner",
+    "llm_role": "exec_runner",
+    "agreement": "match",
+    "rlm_iterations": 6,
+    "prompt_tokens": 10275,
+    "completion_tokens": 979,
+    "total_tokens": 11254
+  }
+}
