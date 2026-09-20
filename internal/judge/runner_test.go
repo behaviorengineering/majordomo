@@ -3,8 +3,8 @@ package judge_test
 import (
 	"testing"
 
-	"github.com/behaviorengineering/strop/dspy/registry"
-	"github.com/behaviorengineering/strop/evaluation/criteria"
+	"github.com/behaviorengineering/strop/pkg/dspy/registry"
+	"github.com/behaviorengineering/strop/pkg/evaluation/criteria"
 
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	summarypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/summary"

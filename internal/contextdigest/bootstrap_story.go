@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	stropvalidation "github.com/behaviorengineering/strop/dspy/validation"
-	"github.com/behaviorengineering/strop/evaluation"
+	stropvalidation "github.com/behaviorengineering/strop/pkg/dspy/validation"
+	"github.com/behaviorengineering/strop/pkg/evaluation"
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"

@@ -13,7 +13,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	"github.com/behaviorengineering/majordomo/internal/judge"
-	"github.com/behaviorengineering/strop/evaluation"
+	"github.com/behaviorengineering/strop/pkg/evaluation"
 )
 
 func TestValidateResumeOptions(t *testing.T) {

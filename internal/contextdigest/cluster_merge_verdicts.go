@@ -130,13 +130,7 @@ func mergesFromClusterOut(out map[string]interface{}) ([]proposedMerge, error) {
 		if len(pkgList) == 0 {
 			return nil, fmt.Errorf("merge %q has no packages", id)
 		}
-		intent := strings.ToLower(strings.TrimSpace(intents[i]))
-		if intent == "" {
-			intent = mergeIntentSlice
-		}
-		if intent != mergeIntentSlice && intent != mergeIntentNickname {
-			return nil, fmt.Errorf("merge %q intent %q must be slice or nickname", id, intents[i])
-		}
+		intent := coerceMergeIntent(intents[i])
 		rows = append(rows, proposedMerge{ID: id, Packages: pkgList, Intent: intent})
 	}
 	if len(rows) > maxClusterAuditMerges {
@@ -232,6 +226,21 @@ func splitCommaPackages(raw string) []string {
 	return out
 }
 
+func coerceMergeIntent(raw string) string {
+	intent := strings.ToLower(strings.TrimSpace(raw))
+	switch intent {
+	case "", mergeIntentSlice:
+		return mergeIntentSlice
+	case mergeIntentNickname:
+		return mergeIntentNickname
+	default:
+		// A free-form token in merge_intents usually means the model repeated the
+		// nickname from merge_ids. Treat it as nickname so the run can keep going,
+		// while the audit and membership gates still decide whether it is acceptable.
+		return mergeIntentNickname
+	}
+}
+
 // marshalClusterMergeProposal encodes the proposal evidence file body.
 func marshalClusterMergeProposal(merges []proposedMerge) (string, error) {
 	if merges == nil {
@@ -269,13 +278,7 @@ func parseProposedMergesYAML(raw string) ([]proposedMerge, error) {
 		if len(pkgs) == 0 {
 			return nil, fmt.Errorf("cluster_merge_proposal %q has no packages", id)
 		}
-		intent := strings.ToLower(strings.TrimSpace(row.Intent))
-		if intent == "" {
-			intent = mergeIntentSlice
-		}
-		if intent != mergeIntentSlice && intent != mergeIntentNickname {
-			return nil, fmt.Errorf("cluster_merge_proposal %q intent %q must be slice or nickname", id, row.Intent)
-		}
+		intent := coerceMergeIntent(row.Intent)
 		out = append(out, proposedMerge{ID: id, Packages: pkgs, Intent: intent})
 	}
 	if len(out) > maxClusterAuditMerges {

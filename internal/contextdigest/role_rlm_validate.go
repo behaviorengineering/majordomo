@@ -16,8 +16,8 @@ import (
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
-	stropdspy "github.com/behaviorengineering/strop/dspy"
-	"github.com/behaviorengineering/strop/dspy/factory"
+	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
+	"github.com/behaviorengineering/strop/pkg/dspy/factory"
 	typroles "github.com/behaviorengineering/typology/roles"
 	"gopkg.in/yaml.v3"
 )

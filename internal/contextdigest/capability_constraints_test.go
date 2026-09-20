@@ -206,6 +206,36 @@ func TestAppendConstraintClaimIssuesAcceptsDataShape(t *testing.T) {
 	}
 }
 
+func TestAppendConstraintClaimIssuesAllowsUnclaimedWhenAllPortableCodesAreBlocked(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{
+			{
+				ID:        "context",
+				Objective: "Maintain durable repository context.",
+				Owns: []catalog.Component{
+					{ID: "contextstore", Path: "internal/contextstore"},
+					{ID: "contextgate", Path: "internal/contextgate"},
+					{ID: "contextdigest", Path: "internal/contextdigest"},
+					{ID: "agenting", Path: "internal/agenting"},
+				},
+			},
+		},
+	}
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/contextstore", Role: roleAdapter},
+			{Path: "internal/contextgate", Role: roleAdapter},
+			{Path: "internal/contextdigest", Role: roleObservability},
+			{Path: "internal/agenting", Role: roleUnknown},
+		},
+	})
+	claims := sliceObjectiveClaimsDoc{}
+	if issues := appendConstraintClaimIssues(typo, constraints, claims, nil); len(issues) != 0 {
+		t.Fatalf("expected unclaimed slice to pass when every portable code is blocked, got %v", issues)
+	}
+}
+
 func TestClusterProposalHasCapabilityConstraints(t *testing.T) {
 	t.Parallel()
 	doc := packageCapabilityConstraintsDoc{

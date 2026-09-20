@@ -1,6 +1,6 @@
 package typology
 
-import "github.com/behaviorengineering/strop/evaluation/criteria"
+import "github.com/behaviorengineering/strop/pkg/evaluation/criteria"
 
 const (
 	CriterionIDSurfaces          criteria.CriterionID = "majordomo_typology_surfaces"

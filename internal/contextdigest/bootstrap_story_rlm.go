@@ -13,9 +13,9 @@ import (
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
-	stropdspy "github.com/behaviorengineering/strop/dspy"
-	"github.com/behaviorengineering/strop/dspy/factory"
-	stropvalidation "github.com/behaviorengineering/strop/dspy/validation"
+	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
+	"github.com/behaviorengineering/strop/pkg/dspy/factory"
+	stropvalidation "github.com/behaviorengineering/strop/pkg/dspy/validation"
 	"go.opentelemetry.io/otel/attribute"
 	"gopkg.in/yaml.v3"
 )

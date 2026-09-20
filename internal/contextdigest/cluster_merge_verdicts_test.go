@@ -98,6 +98,23 @@ func TestMergesFromClusterOutLengthMismatch(t *testing.T) {
 	}
 }
 
+func TestMergesFromClusterOutCoercesFreeFormIntentToNickname(t *testing.T) {
+	got, err := mergesFromClusterOut(map[string]interface{}{
+		"merge_ids":      "judge_eval",
+		"merge_packages": "internal/judge/evaluation/digest,internal/judge/evaluation/tech",
+		"merge_intents":  "judge_evaluation_suite",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("rows=%v", got)
+	}
+	if got[0].Intent != mergeIntentNickname {
+		t.Fatalf("intent=%q", got[0].Intent)
+	}
+}
+
 func TestStickyVerdictMapIgnoresNicknameRename(t *testing.T) {
 	sticky := stickyVerdictMap{}
 	sticky.put(clusterMergeVerdict{

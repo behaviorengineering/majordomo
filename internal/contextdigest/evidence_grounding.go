@@ -54,6 +54,9 @@ func appendConstraintClaimIssues(
 		paths := slicePackagePaths(s)
 		claimed, ok := bySlice[id]
 		if !ok || len(claimed) == 0 {
+			if sliceAllCapabilityCodesMustNot(paths, byPath) {
+				continue
+			}
 			// Require claims whenever owned packages carry constraints.
 			needsClaims := false
 			for _, p := range paths {

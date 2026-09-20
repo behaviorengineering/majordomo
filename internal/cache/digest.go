@@ -27,7 +27,8 @@ const (
 	// DigestInspectPromptV1 labels the inspect RLM prompt contract.
 	DigestInspectPromptV1 = "typology_inspect_rlm_v1"
 	// DigestLedgerPromptV1 labels the objective-ledger RLM prompt contract.
-	DigestLedgerPromptV1 = "typology_objective_ledger_rlm_v1"
+	// Bumped to v2 when evidence gathering split into per-package steps + synthesis.
+	DigestLedgerPromptV1 = "typology_objective_ledger_rlm_v2"
 	// DigestClusterAuditSchemaV1 keys full-list cluster merge audits.
 	DigestClusterAuditSchemaV1 = "cluster-audit-v1"
 	// DigestClusterAuditPromptV1 labels the cluster audit RLM prompt contract.
@@ -40,8 +41,8 @@ const (
 	// DigestClusterCoTSchemaV3 also normalizes draft catalog ids and binding order.
 	DigestClusterCoTSchemaV3 = "cluster-cot-v3"
 	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract
-	// (v2 stops forced companion invent; empty/none folds are an allowed default).
-	DigestClusterCoTPromptV1 = "typology_cluster_cot_v2"
+	// (v3: merge_intents are literal slice|nickname only; free-form names stay in merge_ids).
+	DigestClusterCoTPromptV1 = "typology_cluster_cot_v3"
 	// DigestRefineSchemaV1 keys typology refine CoT catalogs (full verdicts YAML).
 	DigestRefineSchemaV1 = "refine-v1"
 	// DigestRefineSchemaV2 keys refine on role/verdict identity hashes (no duration/trace/prose).

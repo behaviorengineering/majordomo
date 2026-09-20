@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/behaviorengineering/strop/humanreview"
-	"github.com/behaviorengineering/strop/regenerate"
+	"github.com/behaviorengineering/strop/pkg/humanreview"
+	"github.com/behaviorengineering/strop/pkg/regenerate"
 )
 
 // RegenOptions builds strop regenerate options from a gate reject reason.

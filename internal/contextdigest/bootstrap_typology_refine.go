@@ -16,7 +16,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
-	"github.com/behaviorengineering/strop/runreport"
+	"github.com/behaviorengineering/strop/pkg/runreport"
 	"github.com/behaviorengineering/typology/catalog"
 	"gopkg.in/yaml.v3"
 )
@@ -795,7 +795,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 	if err != nil {
 		return "", annotateCatalogYAMLError("typology refine load catalog", raw, err)
 	}
-	draft, allowed, err := loadDraftCatalog(draftYAML)
+	draft, draftAllowed, err := loadDraftCatalog(draftYAML)
 	if err != nil {
 		return "", err
 	}
@@ -805,6 +805,15 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 		cur := strings.TrimSpace(typo.ID)
 		if cur == "" || strings.HasPrefix(cur, "majordomo-typology-") || strings.Contains(cur, "/") {
 			typo.ID = id
+		}
+	}
+	allowed := make(map[string]struct{}, len(draftAllowed)+len(roles))
+	for p := range draftAllowed {
+		allowed[p] = struct{}{}
+	}
+	for p := range roles {
+		if norm := normalizeRolePath(p); norm != "" {
+			allowed[norm] = struct{}{}
 		}
 	}
 	if len(allowed) > 0 {
@@ -834,7 +843,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 	if err := rejectInventedCatalogPaths(typo, allowed); err != nil {
 		return "", err
 	}
-	if err := rejectMissingDraftPackages(typo, allowed); err != nil {
+	if err := rejectMissingDraftPackages(typo, draftAllowed); err != nil {
 		return "", err
 	}
 	return string(sanitized), nil
@@ -1017,6 +1026,9 @@ func uniqueNearestDraftPath(invented string, allowed []string) string {
 	for _, a := range allowed {
 		aBase := filepath.Base(a)
 		if aBase == "" || base == "" {
+			continue
+		}
+		if len(aBase) < 3 || len(base) < 3 {
 			continue
 		}
 		if strings.Contains(aBase, base) || strings.Contains(base, aBase) {
@@ -1546,9 +1558,16 @@ func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]pac
 			continue
 		}
 		sid := uniqueSliceID(strings.TrimSpace(s.ID) + "-http")
+		// Meaning travels with the packages. alignLedgerToRefinedCatalog requires
+		// a contributing ledger objective verbatim, so copy the parent objective
+		// instead of inventing a prestige delivery sentence the ledger never wrote.
+		obj := strings.TrimSpace(s.Objective)
+		if obj == "" {
+			obj = "Delivery surface separated from the CLI entrypoint."
+		}
 		extra = append(extra, catalog.Slice{
 			ID:        sid,
-			Objective: "Delivery surface separated from the CLI entrypoint.",
+			Objective: obj,
 			Surfaces: []catalog.Surface{{
 				ID:         sid + "-" + string(httpKind),
 				Kind:       httpKind,

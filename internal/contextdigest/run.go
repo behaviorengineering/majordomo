@@ -14,7 +14,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/judge"
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
-	"github.com/behaviorengineering/strop/runreport"
+	"github.com/behaviorengineering/strop/pkg/runreport"
 )
 
 // Result describes one digest run outcome.

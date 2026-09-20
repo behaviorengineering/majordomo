@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	stropdspy "github.com/behaviorengineering/strop/dspy"
+	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
 )
 
 // Job keys for task/module provider selection (job_configs.<job>.modules.<task>).

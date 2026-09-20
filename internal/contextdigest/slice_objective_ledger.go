@@ -34,13 +34,13 @@ type sliceObjectiveLedgerDoc struct {
 }
 
 type sliceObjectiveLedgerEntry struct {
-	ID         string   `yaml:"id"`
-	OwnedPaths []string `yaml:"owned_paths,omitempty"`
-	Evidence   []string `yaml:"evidence"`
-	Claims     []string `yaml:"claims"`
-	Objective  string   `yaml:"objective"`
-	Verdict    string   `yaml:"verdict"`
-	Source     string   `yaml:"source,omitempty"`
+	ID         string   `yaml:"id" json:"id"`
+	OwnedPaths []string `yaml:"owned_paths,omitempty" json:"owned_paths,omitempty"`
+	Evidence   []string `yaml:"evidence" json:"evidence"`
+	Claims     []string `yaml:"claims" json:"claims"`
+	Objective  string   `yaml:"objective" json:"objective"`
+	Verdict    string   `yaml:"verdict" json:"verdict"`
+	Source     string   `yaml:"source,omitempty" json:"source,omitempty"`
 }
 
 func writeObjectiveLedger(path string, doc sliceObjectiveLedgerDoc) error {

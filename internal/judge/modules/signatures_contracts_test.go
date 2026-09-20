@@ -141,6 +141,7 @@ func TestTypologyRefineModuleLibrariesStance(t *testing.T) {
 		"must not invent libraries",
 		"package_roles",
 		"folder names are never evidence",
+		"one owns block",
 		"exec_runner",
 		"aggregator",
 		"slice_objective_ledger",

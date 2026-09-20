@@ -1,7 +1,7 @@
 package summary
 
 import (
-	"github.com/behaviorengineering/strop/evaluation/criteria"
+	"github.com/behaviorengineering/strop/pkg/evaluation/criteria"
 )
 
 // Majordomo summary-score criterion IDs (product pack; not inside strop).

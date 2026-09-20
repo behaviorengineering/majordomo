@@ -2,7 +2,7 @@ package modules
 
 import (
 	"github.com/XiaoConstantine/dspy-go/pkg/core"
-	dspymodules "github.com/behaviorengineering/strop/dspy/modules"
+	dspymodules "github.com/behaviorengineering/strop/pkg/dspy/modules"
 )
 
 func in(name, desc string) core.InputField {
@@ -142,9 +142,9 @@ func typologyClusterModule() *dspymodules.DirectivesCoT {
 			// Flat strings (not XML arrays): empty [] fails strop mandatory validation.
 			// When proposing no folds, emit the literal "none" in each field.
 			// Go splits and zips into cluster_merge_proposal.yaml.
-			out("merge_ids", "Comma-separated merge nickname ids, or the literal none when proposing no folds"),
+			out("merge_ids", "Comma-separated free-form merge nickname ids, or the literal none when proposing no folds"),
 			out("merge_packages", "Semicolon-separated package groups (comma-separated paths inside each group), same order as merge_ids; or none"),
-			out("merge_intents", "Comma-separated intents per merge (slice or nickname), same order as merge_ids; or none"),
+			out("merge_intents", "Comma-separated intents: each value MUST be exactly the literal slice or nickname (same order as merge_ids; never repeat the merge id); or none"),
 		},
 	).WithInstruction(`You are the unattended Typology cluster-pass for Majordomo context digest.
 A discover draft is package-level inventory. package_roles is the factual observed topology. Clustering is an optional overlay and MUST NOT contradict package_roles.
@@ -188,9 +188,9 @@ Enforce anti-patterns:
 Declare domain-free utilities under libraries[] when the draft or graph shows them.
 
 Emit three parallel flat strings of the same length (or all the literal none):
-- merge_ids: comma-separated nicknames, or the literal none (example when no folds: none)
+- merge_ids: comma-separated free-form nicknames, or the literal none (example when no folds: none; positive example: git-adapters)
 - merge_packages: semicolon-separated groups; inside each group comma-separated repo-relative paths, or the literal none (example when no folds: none; positive example: internal/adaptera,internal/adapterb)
-- merge_intents: comma-separated slice or nickname per id, or the literal none (example when no folds: none; positive example: nickname)
+- merge_intents: comma-separated; each token MUST be exactly the literal slice or nickname (not a purpose label or package stem). Never repeat the merge id or nickname here. For example: if merge_ids is "judge-eval", merge_intents must be "slice" (never "judge-eval"). Example when folds exist: nickname,slice. Or the literal none when no folds.
 When proposing no folds, set each field to the literal none (not empty tags).
 Do not emit markdown counsel or catalog YAML in this step.`)
 	return newGenerator(sig, TaskTypologyCluster)
@@ -244,6 +244,7 @@ MUST NOT invent "forge depends on UI" or "localgit depends on CLI" smells from f
 Catalog rules:
 - Every slice MUST have a non-empty business objective that states why the bounded context exists in one concrete sentence.
 - MUST NOT use hollow template objectives such as "Provide X functionality", "Provide X capabilities", or "Provide X services".
+- Each slice MUST use at most one owns block, one surfaces block, and one libraries block. List every package for that slice inside the same block instead of repeating the key.
 - Components are packages under owns, under surfaces, or under libraries[].owns.
 - Libraries are technical package groups with a purpose and owns[] only.
 - MUST NOT invent libraries[] membership solely to clear findings.

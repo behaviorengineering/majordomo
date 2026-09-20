@@ -1,10 +1,10 @@
 package judge
 
 import (
-	"github.com/behaviorengineering/strop/dspy/registry"
-	"github.com/behaviorengineering/strop/dspy/runner"
-	"github.com/behaviorengineering/strop/evaluation/criteria"
-	stroplog "github.com/behaviorengineering/strop/log"
+	"github.com/behaviorengineering/strop/pkg/dspy/registry"
+	"github.com/behaviorengineering/strop/pkg/dspy/runner"
+	"github.com/behaviorengineering/strop/pkg/evaluation/criteria"
+	stroplog "github.com/behaviorengineering/strop/pkg/log"
 
 	bootstrappack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/bootstrap"
 	digestpack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/digest"

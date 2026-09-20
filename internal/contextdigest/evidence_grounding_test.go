@@ -142,6 +142,14 @@ sliceBindings:
 	if !strings.Contains(out, "from: gitboard-http") {
 		t.Fatalf("expected bindings remounted to gitboard-http, got %s", out)
 	}
+	// Mechanical HTTP split must copy the parent objective so ledger alignment
+	// can accept a contributing ledger sentence verbatim.
+	if !strings.Contains(out, "id: gitboard-http") || !strings.Contains(out, "objective: Deliver the gitboard CLI.") {
+		t.Fatalf("expected gitboard-http to copy parent objective, got %s", out)
+	}
+	if strings.Contains(out, "Delivery surface separated from the CLI entrypoint.") {
+		t.Fatalf("must not invent prestige delivery objective, got %s", out)
+	}
 }
 
 func TestMissingGroundedObjectivesDetectsAbsent(t *testing.T) {
