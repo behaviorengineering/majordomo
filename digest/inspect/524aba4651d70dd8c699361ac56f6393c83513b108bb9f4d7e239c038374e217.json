@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "524aba4651d70dd8c699361ac56f6393c83513b108bb9f4d7e239c038374e217",
+  "created_at": "2026-09-20T15:23:12Z",
+  "payload": {
+    "path": "internal/report",
+    "role": "adapter",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:ConvertToJUnit, ConvertMarkdownToHTML"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "adapter",
+    "agreement": "match",
+    "rlm_iterations": 9,
+    "prompt_tokens": 17901,
+    "completion_tokens": 1663,
+    "total_tokens": 19564
+  }
+}
