@@ -1,0 +1,22 @@
+{
+  "kind": "inspect",
+  "fingerprint": "fe13e553e95584024bbb336d586db6dd2924f4c6e51b8f91204e0cf287d3e7fe",
+  "created_at": "2026-09-20T15:23:52Z",
+  "payload": {
+    "path": "internal/llmusage",
+    "role": "aggregator",
+    "confidence": 0.75,
+    "evidence": [
+      "rlm:\"aggregates provider-reported LLM token usage\", \"Collector.AddTokenUsageValue\""
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "unknown",
+    "llm_role": "aggregator",
+    "agreement": "match",
+    "rlm_iterations": 4,
+    "prompt_tokens": 5436,
+    "completion_tokens": 764,
+    "total_tokens": 6200
+  }
+}
