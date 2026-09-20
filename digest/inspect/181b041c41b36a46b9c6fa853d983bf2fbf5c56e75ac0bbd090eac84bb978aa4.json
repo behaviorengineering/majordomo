@@ -1,0 +1,24 @@
+{
+  "kind": "inspect",
+  "fingerprint": "181b041c41b36a46b9c6fa853d983bf2fbf5c56e75ac0bbd090eac84bb978aa4",
+  "created_at": "2026-09-20T15:22:38Z",
+  "payload": {
+    "path": "internal/contextdigest",
+    "role": "observability",
+    "confidence": 0.9,
+    "evidence": [
+      "imports_otel",
+      "rlm:Forge, BootstrapSurveyRunner, LocalSeedWorkspace",
+      "rlm_disagree_kept_stage1"
+    ],
+    "inspected_stage": 3,
+    "language": "go",
+    "mechanical_role": "observability",
+    "llm_role": "exec_runner",
+    "agreement": "disagree",
+    "rlm_iterations": 12,
+    "prompt_tokens": 23518,
+    "completion_tokens": 2623,
+    "total_tokens": 26141
+  }
+}
