@@ -14,10 +14,10 @@ func DigestStoryModule() core.Module { return digestStoryModule() }
 // BootstrapStoryModule builds the bootstrap story generator.
 func BootstrapStoryModule() core.Module { return bootstrapStoryModule() }
 
-// TypologyClusterModule builds the unattended typology cluster-pass generator.
+// TypologyClusterModule builds the unattended typology slice-grouping generator.
 func TypologyClusterModule() core.Module { return typologyClusterModule() }
 
-// TypologyRefineModule builds the unattended typology refine generator.
+// TypologyRefineModule builds the unattended typology slice-catalog generator.
 func TypologyRefineModule() core.Module { return typologyRefineModule() }
 
 // TypologyInspectModule builds the low-confidence package role inspector.
