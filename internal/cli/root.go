@@ -955,7 +955,7 @@ func newContextCmd() *cobra.Command {
 	digest.Flags().StringVar(&digestModuleScope, "module-scope", os.Getenv("MAJORDOMO_TYPOLOGY_MODULE_SCOPE"), "Typology module scope within the served repo")
 	digest.Flags().StringVar(&digestBootstrapPolicy, "bootstrap-survey-policy", "auto", "bootstrap survey policy: auto|always|never")
 	digest.Flags().IntVar(&digestResumePR, "resume-pr", 0, "PR-seeded stage replay: load this context PR head as local evidence (requires --from-stage; never pushes context/PR)")
-	digest.Flags().StringVar(&digestFromStage, "from-stage", "", "stage start: refine|intervention|story (with --resume-pr); survey|refine|intervention|story (with --local-seed-dir)")
+	digest.Flags().StringVar(&digestFromStage, "from-stage", "", "stage start: catalog|intervention|story (with --resume-pr); survey|catalog|intervention|story (with --local-seed-dir)")
 	digest.Flags().StringVar(&digestLocalSeedDir, "local-seed-dir", "", "filesystem-only seed workspace (no forge token, no context/cache branch push); conflicts with --resume-pr")
 	digest.Flags().BoolVar(&digestAllowSourceMove, "allow-source-move", false, "with --local-seed-dir, retarget workspace when workdir HEAD differs from workspace.yaml source_sha")
 	digest.Flags().BoolVar(&skipStory, "skip-story", false, "cursor/meta only; skip story and agenting updates")

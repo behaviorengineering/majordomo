@@ -97,12 +97,12 @@ var TypologyReadingOrder = []string{
 // TypologyAppendixFiles are machine/reference artifacts listed in the typology TOC only.
 var TypologyAppendixFiles = []string{
 	"mechanical_grouping.yaml",
-	"cluster_merge_proposal.yaml",
-	"cluster_merge_verdicts.yaml",
+	"slice_grouping_proposal.yaml",
+	"slice_grouping_verdicts.yaml",
 	"package_roles.yaml",
 	"package_capability_constraints.yaml",
-	"slice_objective_ledger.yaml",
-	"slice_objective_claims.yaml",
+	"slice_meaning_ledger.yaml",
+	"slice_meaning_claims.yaml",
 	"package_contracts.md",
 	"graph.txt",
 	"refined_snapshot.yaml",

@@ -31,12 +31,12 @@ func validateResumeOptions(opts Options) error {
 		return fmt.Errorf("--resume-pr required with --from-stage (or use --local-seed-dir for filesystem seed)")
 	}
 	if stage == "" {
-		return fmt.Errorf("--from-stage required with --resume-pr (refine|intervention|story)")
+		return fmt.Errorf("--from-stage required with --resume-pr (catalog|intervention|story)")
 	}
 	switch stage {
-	case ResumeStageRefine, ResumeStageIntervention, ResumeStageStory:
+	case ResumeStageCatalog, ResumeStageIntervention, ResumeStageStory:
 	default:
-		return fmt.Errorf("unsupported --from-stage %q (want refine|intervention|story)", opts.FromStage)
+		return fmt.Errorf("unsupported --from-stage %q (want catalog|intervention|story)", opts.FromStage)
 	}
 	if opts.SkipStory && stage == ResumeStageStory {
 		return fmt.Errorf("--skip-story conflicts with --from-stage story")

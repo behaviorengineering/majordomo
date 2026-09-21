@@ -35,7 +35,7 @@ func TestFlagHumanInterventionWritesPrioritiesAndWeaknesses(t *testing.T) {
 		contextstore.TypologyArchitectureBriefPath: arch,
 		"refined_snapshot.yaml":                    "id: demo\nslices: []\n",
 		"journey.md":                               "# Journey\n\n## Status\n\nRefinement complete.\n",
-		"cluster_merge_proposal.yaml":              "[]\n",
+		"slice_grouping_proposal.yaml":              "[]\n",
 	} {
 		if err := os.WriteFile(filepath.Join(evidence, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
@@ -51,7 +51,7 @@ func TestFlagHumanInterventionWritesPrioritiesAndWeaknesses(t *testing.T) {
 		SnapshotPath:         "snapshot.yaml",
 		GraphPath:            "graph.txt",
 		PackageContractsPath: "package_contracts.md",
-		ClusterProposalPath:  "cluster_merge_proposal.yaml",
+		ClusterProposalPath:  "slice_grouping_proposal.yaml",
 		RefinedSnapshotPath:  "refined_snapshot.yaml",
 		JourneyPath:          "journey.md",
 	}

@@ -30,9 +30,9 @@ func validateLocalSeedOptions(opts Options) error {
 	}
 	stage := normalizeResumeStage(opts.FromStage)
 	switch stage {
-	case "", LocalStageSurvey, LocalStageRefine, LocalStageIntervention, LocalStageStory:
+	case "", LocalStageSurvey, LocalStageCatalog, LocalStageIntervention, LocalStageStory:
 	default:
-		return fmt.Errorf("unsupported --from-stage %q for local seed (want survey|refine|intervention|story)", opts.FromStage)
+		return fmt.Errorf("unsupported --from-stage %q for local seed (want survey|catalog|intervention|story)", opts.FromStage)
 	}
 	if opts.SkipStory && stage == LocalStageStory {
 		return fmt.Errorf("--skip-story conflicts with --from-stage story")
@@ -180,8 +180,8 @@ func nextLocalStage(completed string) string {
 	case "":
 		return LocalStageSurvey
 	case LocalStageSurvey:
-		return LocalStageRefine
-	case LocalStageRefine, LocalStageIntervention:
+		return LocalStageCatalog
+	case LocalStageCatalog, LocalStageIntervention:
 		return LocalStageStory
 	case LocalStageStory:
 		return ""
@@ -198,9 +198,9 @@ func runLocalStages(ctx context.Context, ws *LocalSeedWorkspace, opts Options, c
 
 	start := normalizeResumeStage(fromStage)
 	runSurvey := start == LocalStageSurvey
-	runRefine := start == LocalStageSurvey || start == LocalStageRefine
+	runCatalog := start == LocalStageSurvey || start == LocalStageCatalog
 	runInterventionOnly := start == LocalStageIntervention
-	runStory := start == LocalStageSurvey || start == LocalStageRefine || start == LocalStageIntervention || start == LocalStageStory
+	runStory := start == LocalStageSurvey || start == LocalStageCatalog || start == LocalStageIntervention || start == LocalStageStory
 	if opts.SkipStory {
 		runStory = false
 	}
@@ -212,9 +212,9 @@ func runLocalStages(ctx context.Context, ws *LocalSeedWorkspace, opts Options, c
 				return err
 			}
 			// Match remote seed: policy never produces no typology evidence, so do not
-			// continue into refine/story in the same invocation that started at survey.
+			// continue into catalog/story in the same invocation that started at survey.
 			if start == LocalStageSurvey {
-				runRefine = false
+				runCatalog = false
 				runInterventionOnly = false
 				runStory = false
 			}
@@ -248,11 +248,11 @@ func runLocalStages(ctx context.Context, ws *LocalSeedWorkspace, opts Options, c
 		}
 	}
 
-	if runRefine {
-		if err := ws.BeginStage(LocalStageRefine, now); err != nil {
+	if runCatalog {
+		if err := ws.BeginStage(LocalStageCatalog, now); err != nil {
 			return err
 		}
-		if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, judgeGen); err != nil {
+		if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologySlicePipeline, judgeGen); err != nil {
 			return err
 		}
 		if err := ws.PersistAnalysisDrafts(analysisDir); err != nil {
@@ -292,7 +292,7 @@ func runLocalStages(ctx context.Context, ws *LocalSeedWorkspace, opts Options, c
 			return err
 		}
 		logf("INFO", "local seed checkpoint completed=story")
-	} else if runRefine || runInterventionOnly || runSurvey {
+	} else if runCatalog || runInterventionOnly || runSurvey {
 		if err := contextstore.ApplyReadingPath(ctxDir); err != nil {
 			return err
 		}

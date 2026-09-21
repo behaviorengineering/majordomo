@@ -141,8 +141,20 @@ func TestJobForTask(t *testing.T) {
 	if JobForTask("typology_inspect") != JobContextDigest {
 		t.Fatal("typology_inspect")
 	}
-	if JobForTask("typology_objective_grounding") != JobContextDigest {
-		t.Fatal("typology_objective_grounding")
+	if JobForTask("typology_slice_meaning") != JobContextDigest {
+		t.Fatal("typology_slice_meaning")
+	}
+	if JobForTask("typology_slice_grouping") != JobContextDigest {
+		t.Fatal("typology_slice_grouping")
+	}
+	if JobForTask("typology_slice_catalog") != JobContextDigest {
+		t.Fatal("typology_slice_catalog")
+	}
+	if JobForTask("typology_slice_grouping_audit") != JobContextDigest {
+		t.Fatal("typology_slice_grouping_audit")
+	}
+	if JobForTask("typology_cluster") != "" {
+		t.Fatal("old typology_cluster must not map")
 	}
 	if JobForTask("typology_human_intervention") != JobContextDigest {
 		t.Fatal("typology_human_intervention")

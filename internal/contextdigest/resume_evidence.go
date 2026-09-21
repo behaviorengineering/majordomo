@@ -22,7 +22,7 @@ func validateResumeEvidence(ctxDir, stage string) error {
 	}
 	stage = normalizeResumeStage(stage)
 	switch stage {
-	case ResumeStageRefine:
+	case ResumeStageCatalog:
 		return requireEvidenceFiles(evidenceDir, refineEvidenceReqs(manifest))
 	case ResumeStageIntervention:
 		return requireEvidenceFiles(evidenceDir, interventionEvidenceReqs(manifest))

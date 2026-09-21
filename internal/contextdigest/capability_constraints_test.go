@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 func TestBuildCapabilityConstraintsDTOAndFillsDTO(t *testing.T) {

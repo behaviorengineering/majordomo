@@ -13,9 +13,9 @@ Covered today (gitboard seed):
 | `typology_inspect` | `gitboard_typology_inspect_span.json` | `internal/cliexec` |
 | `bootstrap_story` | `gitboard_bootstrap_story_span.json` | `readme` section; query = `bootstrap_story_rlm_v2` raw-markdown contract; recorded answer still YAML `markdown: \|` leak for offline unwrap |
 | `bootstrap_story` | `gitboard_bootstrap_story_*_envelope_span.json` | envelope leaks from local-seed `20260917-041109Z` (`mission`, `architecture`, `grounding`; truncated context; queries aligned to v2) |
-| `typology_cluster_audit` | `gitboard_typology_cluster_audit_span.json` | synthetic recorded YAML (seed had no `final_answer`) |
+| `typology_slice_grouping_audit` | `gitboard_typology_slice_grouping_audit_span.json` | synthetic recorded YAML (seed had no `final_answer`) |
 
-`typology_objective_grounding` skips until a TraceDir dump exists.
+`typology_slice_meaning` skips until a TraceDir dump exists.
 
 **Prompt contract:** Live bootstrap_story replay uses the main span `query` (refreshed for
 `bootstrap_story_rlm_v2`: raw markdown body, no YAML/`markdown: |` envelope). Recorded

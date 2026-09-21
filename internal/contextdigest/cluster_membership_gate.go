@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 // assertAcceptedMembership reports illegal multi-package ownership that is not an accept verdict

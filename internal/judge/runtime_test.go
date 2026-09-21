@@ -142,8 +142,8 @@ func TestNewRuntimeRegistersDigestEvaluationWorkflows(t *testing.T) {
 			config.JobContextDigest: {
 				Modules: map[string]config.ModuleTaskConfig{
 					jmodules.TaskTypologyInspect:                {Provider: "poly"},
-					jmodules.TaskTypologyCluster:                {Provider: "poly"},
-					jmodules.TaskTypologyRefine:                 {Provider: "poly"},
+					jmodules.TaskTypologySliceGrouping:                {Provider: "poly"},
+					jmodules.TaskTypologySliceCatalog:                 {Provider: "poly"},
 					jmodules.TaskTypologyInterventionJourney:    {Provider: "poly"},
 					jmodules.TaskTypologyInterventionBrief:      {Provider: "poly"},
 					jmodules.TaskTypologyInterventionWeaknesses: {Provider: "poly"},
@@ -164,7 +164,7 @@ func TestNewRuntimeRegistersDigestEvaluationWorkflows(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, task := range []string{
-		jmodules.TaskTypologyRefine,
+		jmodules.TaskTypologySliceCatalog,
 		jmodules.TaskTypologyInterventionBrief,
 		jmodules.TaskTypologyFindingComment,
 		jmodules.TaskBootstrapStory,

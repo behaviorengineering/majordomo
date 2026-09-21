@@ -26,31 +26,35 @@ const (
 	DigestLedgerSchemaV2 = "ledger-v2"
 	// DigestInspectPromptV1 labels the inspect RLM prompt contract.
 	DigestInspectPromptV1 = "typology_inspect_rlm_v1"
-	// DigestLedgerPromptV1 labels the objective-ledger RLM prompt contract.
-	// Bumped to v2 when evidence gathering split into per-package steps + synthesis.
-	DigestLedgerPromptV1 = "typology_objective_ledger_rlm_v2"
-	// DigestClusterAuditSchemaV1 keys full-list cluster merge audits.
+	// DigestLedgerPromptV1 labels the slice-meaning RLM prompt contract.
+	// Bumped when evidence gathering split into per-package steps + synthesis; v3 domain rename.
+	DigestLedgerPromptV1 = "typology_slice_meaning_rlm_v3"
+	// DigestClusterAuditSchemaV1 keys full-list slice grouping audits.
 	DigestClusterAuditSchemaV1 = "cluster-audit-v1"
-	// DigestClusterAuditPromptV1 labels the cluster audit RLM prompt contract.
-	DigestClusterAuditPromptV1 = "typology_cluster_audit_rlm_v1"
-	// DigestClusterCoTSchemaV1 keys typology cluster CoT merge proposals (full roles YAML).
+	// DigestClusterAuditPromptV1 labels the slice grouping audit RLM prompt contract.
+	DigestClusterAuditPromptV1 = "typology_slice_grouping_audit_rlm_v1"
+	// DigestClusterCoTSchemaV1 keys typology slice grouping CoT merge proposals (full roles YAML).
 	DigestClusterCoTSchemaV1 = "cluster-cot-v1"
-	// DigestClusterCoTSchemaV2 keys cluster CoT on role identity + mechanical identity
+	// DigestClusterCoTSchemaV2 keys grouping CoT on role identity + mechanical identity
 	// (no ephemeral RLM evidence prose).
 	DigestClusterCoTSchemaV2 = "cluster-cot-v2"
 	// DigestClusterCoTSchemaV3 also normalizes draft catalog ids and binding order.
 	DigestClusterCoTSchemaV3 = "cluster-cot-v3"
-	// DigestClusterCoTPromptV1 labels the typology_cluster CoT prompt contract
+	// DigestClusterCoTPromptV1 labels the typology_slice_grouping CoT prompt contract
 	// (v3: merge_intents are literal slice|nickname only; free-form names stay in merge_ids).
-	DigestClusterCoTPromptV1 = "typology_cluster_cot_v3"
-	// DigestRefineSchemaV1 keys typology refine CoT catalogs (full verdicts YAML).
+	DigestClusterCoTPromptV1 = "typology_slice_grouping_cot_v1"
+	// DigestRefineSchemaV1 keys typology slice catalog CoT catalogs (full verdicts YAML).
 	DigestRefineSchemaV1 = "refine-v1"
-	// DigestRefineSchemaV2 keys refine on role/verdict identity hashes (no duration/trace/prose).
+	// DigestRefineSchemaV2 keys catalog on role/verdict identity hashes (no duration/trace/prose).
 	DigestRefineSchemaV2 = "refine-v2"
 	// DigestRefineSchemaV3 also normalizes draft catalog ids and binding order.
 	DigestRefineSchemaV3 = "refine-v3"
-	// DigestRefinePromptV1 labels the typology_refine CoT prompt contract.
-	DigestRefinePromptV1 = "typology_refine_cot_v1"
+	// DigestRefineSchemaV4 keys per-slice catalog RLM join (Go accept folds + fragments).
+	DigestRefineSchemaV4 = "refine-v4"
+	// DigestRefinePromptV1 labels the typology_slice_catalog CoT prompt contract (retired writer).
+	DigestRefinePromptV1 = "typology_slice_catalog_cot_v1"
+	// DigestRefinePromptV2 labels the per-slice typology_slice_catalog RLM prompt contract.
+	DigestRefinePromptV2 = "typology_slice_catalog_rlm_v1"
 	// DigestInterventionSchemaV1 keys human-intervention CoT outputs (full verdicts YAML).
 	DigestInterventionSchemaV1 = "intervention-v1"
 	// DigestInterventionSchemaV2 keys intervention on verdict identity (no duration/trace/prose).
@@ -280,7 +284,7 @@ func (s *DigestStore) recordTokenHit(prompt, completion, total int, bumpHits fun
 	s.stats.TokensSavedTotal += total
 }
 
-// RecordClusterCoTHit notes a typology_cluster CoT skip.
+// RecordClusterCoTHit notes a typology_slice_grouping CoT skip.
 func (s *DigestStore) RecordClusterCoTHit(prompt, completion, total int) {
 	if s == nil {
 		return
@@ -288,7 +292,7 @@ func (s *DigestStore) RecordClusterCoTHit(prompt, completion, total int) {
 	s.recordTokenHit(prompt, completion, total, func(st *DigestRunStats) { st.ClusterCoTHits++ }, &s.stats.clusterCoTStoredTotalSum, &s.stats.clusterCoTStoredTotalN)
 }
 
-// RecordClusterCoTMiss notes a typology_cluster provider call.
+// RecordClusterCoTMiss notes a typology_slice_grouping provider call.
 func (s *DigestStore) RecordClusterCoTMiss() {
 	if s == nil {
 		return
@@ -525,7 +529,7 @@ type ClusterAuditCached struct {
 	TotalTokens      int                       `json:"total_tokens,omitempty"`
 }
 
-// ClusterCoTFingerprint keys one typology_cluster CoT proposal.
+// ClusterCoTFingerprint keys one typology_slice_grouping CoT proposal.
 type ClusterCoTFingerprint struct {
 	DraftHash       string
 	RolesHash       string
@@ -546,7 +550,7 @@ type ClusterCoTCached struct {
 	TotalTokens      int    `json:"total_tokens,omitempty"`
 }
 
-// RefineFingerprint keys one typology_refine CoT catalog.
+// RefineFingerprint keys one typology_slice_catalog assemble result (per-slice RLM join).
 type RefineFingerprint struct {
 	DraftHash       string
 	RolesHash       string
@@ -703,11 +707,11 @@ func (fp ClusterCoTFingerprint) key() string {
 func (fp RefineFingerprint) key() string {
 	prompt := fp.PromptVersion
 	if prompt == "" {
-		prompt = DigestRefinePromptV1
+		prompt = DigestRefinePromptV2
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestRefineSchemaV3
+		schema = DigestRefineSchemaV4
 	}
 	return HashDigestParts(
 		"refine", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.LedgerHash, fp.VerdictsHash,
@@ -896,7 +900,7 @@ func (s *DigestStore) StoreClusterAudit(fp ClusterAuditFingerprint, entry Cluste
 	return nil
 }
 
-// LookupClusterCoT returns a cached typology_cluster CoT proposal when the fingerprint matches.
+// LookupClusterCoT returns a cached typology_slice_grouping CoT proposal when the fingerprint matches.
 func (s *DigestStore) LookupClusterCoT(fp ClusterCoTFingerprint) (ClusterCoTCached, bool, error) {
 	if s == nil || strings.TrimSpace(s.Dir) == "" {
 		return ClusterCoTCached{}, false, nil
@@ -913,7 +917,7 @@ func (s *DigestStore) LookupClusterCoT(fp ClusterCoTFingerprint) (ClusterCoTCach
 	return out, true, nil
 }
 
-// StoreClusterCoT writes a successful typology_cluster CoT proposal.
+// StoreClusterCoT writes a successful typology_slice_grouping CoT proposal.
 func (s *DigestStore) StoreClusterCoT(fp ClusterCoTFingerprint, entry ClusterCoTCached) error {
 	if s == nil || strings.TrimSpace(s.Dir) == "" {
 		return nil

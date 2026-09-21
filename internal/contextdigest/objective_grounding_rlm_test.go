@@ -9,7 +9,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 type countingLedgerCaller struct {

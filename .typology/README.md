@@ -31,7 +31,7 @@ Humans promote a proposal into the confirmed catalog with the interactive Typolo
 Before running Typology commands in a consumer, register the CLI as a Go tool:
 
 ```bash
-go run github.com/behaviorengineering/typology/cmd/typology@v0.0.7 init .
+go run github.com/behaviorengineering/typology/cmd/typology@v0.1.2 init .
 go tool typology version
 ```
 

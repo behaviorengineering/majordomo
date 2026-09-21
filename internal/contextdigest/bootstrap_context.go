@@ -46,7 +46,7 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 		return err
 	}
 	// Full seed walks refine (includes intervention) then story.
-	if err := runBootstrapFromStage(ctx, ctxDir, analysisDir, sourceSHA, at, opts, ResumeStageRefine); err != nil {
+	if err := runBootstrapFromStage(ctx, ctxDir, analysisDir, sourceSHA, at, opts, ResumeStageCatalog); err != nil {
 		return err
 	}
 	ctxGit := &Git{Dir: ctxDir}
@@ -63,9 +63,9 @@ func bootstrapContextBranch(ctxDir string, opts Options, repoID, sourceSHA strin
 }
 
 // runBootstrapFromStage runs the post-survey seed chain starting at fromStage.
-// Resume mode skips survey; full seed calls this with refine after survey.
+// Resume mode skips survey; full seed calls this with catalog after survey.
 //
-//	refine       → refineTypologyEvidence (includes flagHumanIntervention) → story
+//	catalog      → refineTypologyEvidence (includes flagHumanIntervention) → story
 //	intervention → flagHumanIntervention → story
 //	story        → writeBootstrapStory only
 func runBootstrapFromStage(ctx context.Context, ctxDir, analysisDir, sourceSHA string, at time.Time, opts Options, fromStage string) error {
@@ -77,7 +77,7 @@ func runBootstrapFromStage(ctx context.Context, ctxDir, analysisDir, sourceSHA s
 	judgeGen := opts.Judge
 
 	switch stage {
-	case ResumeStageRefine:
+	case ResumeStageCatalog:
 		manifest, err := contextstore.ParseTypologyManifest(filepath.Join(evidenceDir, "manifest.yaml"))
 		if err != nil {
 			return err
@@ -87,7 +87,7 @@ func runBootstrapFromStage(ctx context.Context, ctxDir, analysisDir, sourceSHA s
 				return err
 			}
 		}
-		if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologyRefineGenerator, judgeGen); err != nil {
+		if err := refineTypologyEvidence(ctx, opts, analysisDir, evidenceDir, opts.TypologySlicePipeline, judgeGen); err != nil {
 			return err
 		}
 		if err := writeBootstrapStory(ctx, ctxDir, analysisDir, at, sourceSHA, opts); err != nil {

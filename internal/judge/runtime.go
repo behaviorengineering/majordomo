@@ -36,8 +36,8 @@ var errGatewayUnavailable = errors.New("embedded gateway unavailable")
 func DigestTasks() []string {
 	return []string{
 		jmodules.TaskTypologyInspect,
-		jmodules.TaskTypologyCluster,
-		jmodules.TaskTypologyRefine,
+		jmodules.TaskTypologySliceGrouping,
+		jmodules.TaskTypologySliceCatalog,
 		jmodules.TaskTypologyInterventionJourney,
 		jmodules.TaskTypologyInterventionBrief,
 		jmodules.TaskTypologyInterventionWeaknesses,
@@ -58,8 +58,8 @@ func AllGeneratorTasks() []string {
 	return []string{
 		jmodules.TaskFileReview,
 		jmodules.TaskTypologyInspect,
-		jmodules.TaskTypologyCluster,
-		jmodules.TaskTypologyRefine,
+		jmodules.TaskTypologySliceGrouping,
+		jmodules.TaskTypologySliceCatalog,
 		jmodules.TaskTypologyHumanIntervention,
 		jmodules.TaskTypologyInterventionJourney,
 		jmodules.TaskTypologyInterventionBrief,
@@ -148,11 +148,11 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 	interceptorSetup.RegisterRequiredInputs(jmodules.TaskBootstrapStory, []string{
 		"repo_id", "readme_snapshot",
 	})
-	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologyCluster, []string{
+	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologySliceGrouping, []string{
 		"repo_id", "package_roles", "mechanical_grouping_yaml", "readme_snapshot",
 	})
-	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologyRefine, []string{
-		"repo_id", "slice_objective_ledger_yaml", "package_roles", "readme_snapshot",
+	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologySliceCatalog, []string{
+		"repo_id", "slice_meaning_ledger_yaml", "package_roles", "readme_snapshot",
 	})
 	configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
 	genFactory := factory.NewGeneratorFactory(configurator)
@@ -168,8 +168,8 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 	ctors := map[string]func() core.Module{
 		jmodules.TaskFileReview:                     jmodules.FileReviewModule,
 		jmodules.TaskTypologyInspect:                jmodules.TypologyInspectModule,
-		jmodules.TaskTypologyCluster:                jmodules.TypologyClusterModule,
-		jmodules.TaskTypologyRefine:                 jmodules.TypologyRefineModule,
+		jmodules.TaskTypologySliceGrouping:                jmodules.TypologyClusterModule,
+		jmodules.TaskTypologySliceCatalog:                 jmodules.TypologyRefineModule,
 		jmodules.TaskTypologyHumanIntervention:      jmodules.TypologyHumanInterventionModule,
 		jmodules.TaskTypologyInterventionJourney:    jmodules.TypologyInterventionJourneyModule,
 		jmodules.TaskTypologyInterventionBrief:      jmodules.TypologyInterventionBriefModule,

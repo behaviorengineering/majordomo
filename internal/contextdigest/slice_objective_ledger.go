@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	sliceObjectiveLedgerRel  = "slice_objective_ledger.yaml"
+	sliceObjectiveLedgerRel  = "slice_meaning_ledger.yaml"
 	ledgerVerdictGrounded    = "grounded"
 	ledgerVerdictOverclaim   = "overclaim"
 	ledgerSourceRLM          = "slice_objective_rlm"
@@ -68,11 +68,11 @@ func marshalLedger(doc sliceObjectiveLedgerDoc) (string, error) {
 func parseObjectiveLedgerYAML(raw string) (sliceObjectiveLedgerDoc, error) {
 	raw = strings.TrimSpace(stripCodeFence(raw))
 	if raw == "" {
-		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_objective_ledger_yaml is required")
+		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_meaning_ledger_yaml is required")
 	}
 	var doc sliceObjectiveLedgerDoc
 	if err := yaml.Unmarshal([]byte(raw), &doc); err != nil {
-		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_objective_ledger_yaml decode: %w", err)
+		return sliceObjectiveLedgerDoc{}, fmt.Errorf("slice_meaning_ledger_yaml decode: %w", err)
 	}
 	if err := validateObjectiveLedgerDoc(doc); err != nil {
 		return sliceObjectiveLedgerDoc{}, err
@@ -82,27 +82,27 @@ func parseObjectiveLedgerYAML(raw string) (sliceObjectiveLedgerDoc, error) {
 
 func validateObjectiveLedgerDoc(doc sliceObjectiveLedgerDoc) error {
 	if len(doc.Slices) == 0 {
-		return fmt.Errorf("slice_objective_ledger_yaml has no slices")
+		return fmt.Errorf("slice_meaning_ledger_yaml has no slices")
 	}
 	known := knownCapabilityCodes()
 	for i, s := range doc.Slices {
 		id := strings.TrimSpace(s.ID)
 		if id == "" {
-			return fmt.Errorf("slice_objective_ledger_yaml slice[%d] missing id", i)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice[%d] missing id", i)
 		}
 		if strings.TrimSpace(s.Objective) == "" {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q missing objective", id)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice %q missing objective", id)
 		}
 		verdict := strings.ToLower(strings.TrimSpace(s.Verdict))
 		if verdict != ledgerVerdictGrounded {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q verdict %q is not grounded", id, s.Verdict)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice %q verdict %q is not grounded", id, s.Verdict)
 		}
 		if len(normalizeEvidenceList(s.Evidence)) == 0 {
-			return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty evidence", id)
+			return fmt.Errorf("slice_meaning_ledger_yaml slice %q has empty evidence", id)
 		}
 		if len(s.Claims) == 0 {
 			if strings.TrimSpace(s.Source) != ledgerSourceUnclaimed {
-				return fmt.Errorf("slice_objective_ledger_yaml slice %q has empty claims", id)
+				return fmt.Errorf("slice_meaning_ledger_yaml slice %q has empty claims", id)
 			}
 		} else {
 			for _, c := range s.Claims {
@@ -111,7 +111,7 @@ func validateObjectiveLedgerDoc(doc sliceObjectiveLedgerDoc) error {
 					continue
 				}
 				if _, ok := known[c]; !ok {
-					return fmt.Errorf("slice_objective_ledger_yaml slice %q unknown claim code %q", id, c)
+					return fmt.Errorf("slice_meaning_ledger_yaml slice %q unknown claim code %q", id, c)
 				}
 			}
 		}
@@ -218,6 +218,12 @@ func alignLedgerToRefinedCatalog(
 		// Contributor ledgers may cover wider draft ownership. Keep only claims
 		// allowed by at least one refined owned package's is=[] prior.
 		claimCodes = filterClaimsToOwnedIs(uniqueStrings(claimCodes), paths, constraintByPath)
+		if len(claimCodes) == 0 {
+			// Fold renames / membership splits can leave ledger claims with no
+			// intersection (e.g. review claims vs judge-eval eval packages). Fall
+			// back to the owned is=[] codes themselves so teaching stays grounded.
+			claimCodes = ownedIsCodes(paths, constraintByPath)
+		}
 		source := "slice_objective_rlm_aligned"
 		if len(claimCodes) == 0 {
 			if !sliceAllCapabilityCodesMustNot(paths, constraintByPath) {
@@ -292,6 +298,19 @@ func ownedIsSet(paths []string, byPath map[string]packageCapabilityConstraint) m
 			}
 		}
 	}
+	return out
+}
+
+func ownedIsCodes(paths []string, byPath map[string]packageCapabilityConstraint) []string {
+	set := ownedIsSet(paths, byPath)
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for code := range set {
+		out = append(out, code)
+	}
+	sort.Strings(out)
 	return out
 }
 

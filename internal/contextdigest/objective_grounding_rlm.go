@@ -21,8 +21,8 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
 	"github.com/behaviorengineering/strop/pkg/dspy/factory"
-	"github.com/behaviorengineering/typology/catalog"
-	typroles "github.com/behaviorengineering/typology/roles"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	typroles "github.com/behaviorengineering/typology/pkg/roles"
 	"gopkg.in/yaml.v3"
 )
 
@@ -71,13 +71,13 @@ func newObjectiveLedgerPredictModule(llm core.LLM) *dspymod.Predict {
 		},
 	).WithInstruction(`You write one grounded Typology teaching-slice ledger entry from distilled evidence.
 Follow the query exactly. Emit only the YAML object described there (no markdown fences, no REPL, no tool use).`)
-	predict := dspymod.NewPredict(sig).WithName(jmodules.TaskTypologyObjectiveGrounding)
+	predict := dspymod.NewPredict(sig).WithName(jmodules.TaskTypologySliceMeaning)
 	predict.SetLLM(llm)
 	return predict
 }
 
 func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig, workStoryDir string) (sliceObjectiveLedgerBuilder, error) {
-	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologyObjectiveGrounding)
+	provider, ok, err := cfg.ResolveTaskProvider(jmodules.TaskTypologySliceMeaning)
 	if err != nil || !ok {
 		// Fall back to typology_inspect when the dedicated task is unset or unknown.
 		provider, ok, err = cfg.ResolveTaskProvider(jmodules.TaskTypologyInspect)
@@ -85,7 +85,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig,
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("typology_objective_grounding provider not configured")
+			return nil, fmt.Errorf("typology_slice_meaning provider not configured")
 		}
 	}
 	stropProvider := provider.ToStrop()
@@ -97,7 +97,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig,
 	llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
 	llm, err := llmFactory.CreateLLM(ctx, stropProvider)
 	if err != nil {
-		return nil, fmt.Errorf("typology_objective_grounding Predict LLM: %w", err)
+		return nil, fmt.Errorf("typology_slice_meaning Predict LLM: %w", err)
 	}
 	llm = judge.WrapLLMWithRetry(llm, judge.DefaultModuleRetryConfig())
 	module := newObjectiveLedgerPredictModule(llm)
@@ -127,7 +127,7 @@ func newStropSliceObjectiveLedgerRLM(ctx context.Context, cfg config.RepoConfig,
 					answer = s
 				}
 			}
-			llmusage.FromContext(ctx).Add(jmodules.TaskTypologyObjectiveGrounding, 0, 0, 0)
+			llmusage.FromContext(ctx).Add(jmodules.TaskTypologySliceMeaning, 0, 0, 0)
 			return strings.TrimSpace(answer), 1, 0, 0, 0, nil
 		}},
 	}, nil

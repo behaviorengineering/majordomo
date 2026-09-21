@@ -76,7 +76,7 @@ func pushDigestCacheWorktree(dir, branch, token, scm string, served *Git) error 
 }
 
 func digestModelID(cfg config.RepoConfig) string {
-	for _, task := range []string{jmodules.TaskTypologyObjectiveGrounding, jmodules.TaskTypologyInspect} {
+	for _, task := range []string{jmodules.TaskTypologySliceMeaning, jmodules.TaskTypologyInspect} {
 		provider, ok, err := cfg.ResolveTaskProvider(task)
 		if err != nil || !ok {
 			continue

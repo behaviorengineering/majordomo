@@ -32,7 +32,7 @@ const (
 	edgeServesServer = "serves_server"
 
 	packageCapabilityConstraintsRel = "package_capability_constraints.yaml"
-	sliceObjectiveClaimsRel         = "slice_objective_claims.yaml"
+	sliceObjectiveClaimsRel = "slice_meaning_claims.yaml"
 	packageRolesRel                 = "package_roles.yaml"
 	refinedSnapshotRel              = "refined_snapshot.yaml"
 

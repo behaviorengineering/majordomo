@@ -30,7 +30,7 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 				foundMechanical = true
 			case "package_capability_constraints":
 				foundConstraints = true
-			case "slice_objective_ledger_yaml":
+			case "slice_meaning_ledger_yaml":
 				foundLedger = true
 			}
 		}
@@ -51,13 +51,13 @@ func TestTypologyModulesIncludePackageContractsInput(t *testing.T) {
 		if !foundConstraints {
 			t.Fatalf("module %s missing package_capability_constraints input", mod.GetDisplayName())
 		}
-		if mod.GetDisplayName() == jmodules.TaskTypologyCluster && !foundMechanical {
+		if mod.GetDisplayName() == jmodules.TaskTypologySliceGrouping && !foundMechanical {
 			t.Fatalf("module %s missing mechanical_grouping_yaml input", mod.GetDisplayName())
 		}
-		if mod.GetDisplayName() == jmodules.TaskTypologyRefine && !foundLedger {
-			t.Fatalf("module %s missing slice_objective_ledger_yaml input", mod.GetDisplayName())
+		if mod.GetDisplayName() == jmodules.TaskTypologySliceCatalog && !foundLedger {
+			t.Fatalf("module %s missing slice_meaning_ledger_yaml input", mod.GetDisplayName())
 		}
-		if mod.GetDisplayName() == jmodules.TaskTypologyRefine && foundClaimsOut {
+		if mod.GetDisplayName() == jmodules.TaskTypologySliceCatalog && foundClaimsOut {
 			t.Fatalf("module %s must not emit objective_claims_yaml; claims come from the ledger in Go", mod.GetDisplayName())
 		}
 	}
@@ -144,9 +144,9 @@ func TestTypologyRefineModuleLibrariesStance(t *testing.T) {
 		"one owns block",
 		"exec_runner",
 		"aggregator",
-		"slice_objective_ledger",
+		"slice_meaning_ledger",
 		"copy the ledger objective",
-		"cluster_merge_verdicts_yaml",
+		"slice_grouping_verdicts_yaml",
 		"do not emit journey markdown",
 	} {
 		if !strings.Contains(inst, needle) {

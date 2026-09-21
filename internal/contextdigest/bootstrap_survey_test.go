@@ -164,15 +164,15 @@ func TestBootstrapContextBranchWritesLLMStory(t *testing.T) {
 			GroundingMD:    "# Overview\n\nSeeded.\n",
 		}, nil
 	})
-	fakeRefine := typologyRefineGeneratorFunc(func(_ context.Context, _ TypologyRefineInput) (TypologyRefineOutput, error) {
+	fakeRefine := typologySlicePipelineFunc(func(_ context.Context, _ TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 		t.Fatal("fallback survey must skip refine")
-		return TypologyRefineOutput{}, nil
+		return TypologySlicePipelineOutput{}, nil
 	})
 	if err := bootstrapContextBranch(ctxDir, Options{
 		WorkDir:                 workDir,
 		BootstrapSurveyPolicy:   "auto",
 		BootstrapStoryGenerator: fakeGen,
-		TypologyRefineGenerator: fakeRefine,
+		TypologySlicePipeline: fakeRefine,
 	}, "demo", served.head, at); err != nil {
 		t.Fatal(err)
 	}
@@ -209,9 +209,9 @@ func (f bootstrapStoryGeneratorFunc) Generate(ctx context.Context, input Bootstr
 	return f(ctx, input)
 }
 
-type typologyRefineGeneratorFunc func(context.Context, TypologyRefineInput) (TypologyRefineOutput, error)
+type typologySlicePipelineFunc func(context.Context, TypologySlicePipelineInput) (TypologySlicePipelineOutput, error)
 
-func (f typologyRefineGeneratorFunc) Refine(ctx context.Context, input TypologyRefineInput) (TypologyRefineOutput, error) {
+func (f typologySlicePipelineFunc) Assemble(ctx context.Context, input TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 	return f(ctx, input)
 }
 

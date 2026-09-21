@@ -14,8 +14,16 @@ import (
 
 // digestGeneratorReplayTasks are CoT/Predict digest generators that should gain
 // env-gated live replay fixtures (golang-quality C17 / dspy-pipeline-isolation).
+// typology_slice_catalog assemble is per-slice RLM; see digestRLMReplayTasks.
 func digestGeneratorReplayTasks() []string {
-	return judge.DigestTasks()
+	var out []string
+	for _, task := range judge.DigestTasks() {
+		if task == jmodules.TaskTypologySliceCatalog {
+			continue
+		}
+		out = append(out, task)
+	}
+	return out
 }
 
 // TestGeneratorReplayFixturesOffline loads every present generator_replay span
@@ -34,16 +42,12 @@ func TestGeneratorReplayFixturesOffline(t *testing.T) {
 				t.Fatal("recorded_outputs empty")
 			}
 			switch task {
-			case jmodules.TaskTypologyCluster:
+			case jmodules.TaskTypologySliceGrouping:
 				rows, err := mergesFromClusterOut(doc.RecordedOutputs)
 				if err != nil {
 					t.Fatal(err)
 				}
 				t.Logf("recorded merge rows=%d", len(rows))
-			case jmodules.TaskTypologyRefine:
-				if stringField(doc.RecordedOutputs, "refined_catalog_yaml") == "" {
-					t.Fatal("recorded refined_catalog_yaml empty")
-				}
 			}
 		})
 	}
@@ -123,16 +127,12 @@ func TestLiveDigestGeneratorReplay(t *testing.T) {
 			}
 
 			switch task {
-			case jmodules.TaskTypologyCluster:
+			case jmodules.TaskTypologySliceGrouping:
 				rows, err := mergesFromClusterOut(out)
 				if err != nil {
 					t.Fatalf("zip merges: %v", err)
 				}
 				t.Logf("proposed_merge_rows=%d", len(rows))
-			case jmodules.TaskTypologyRefine:
-				if stringField(out, "refined_catalog_yaml") == "" {
-					t.Fatal("live refined_catalog_yaml empty")
-				}
 			}
 
 			entries, err := os.ReadDir(traceDir)

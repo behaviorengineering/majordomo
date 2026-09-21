@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	clusterMergeVerdictsRel = "cluster_merge_verdicts.yaml"
-	clusterMergeProposalRel = "cluster_merge_proposal.yaml"
+	clusterMergeVerdictsRel = "slice_grouping_verdicts.yaml"
+	clusterMergeProposalRel = "slice_grouping_proposal.yaml"
 	maxClusterAuditMerges   = 32
 
 	mergeIntentSlice    = "slice"
@@ -253,7 +253,7 @@ func marshalClusterMergeProposal(merges []proposedMerge) (string, error) {
 	return string(raw), nil
 }
 
-// parseProposedMergesYAML decodes cluster_merge_proposal.yaml (or equivalent YAML body).
+// parseProposedMergesYAML decodes slice_grouping_proposal.yaml (or equivalent YAML body).
 func parseProposedMergesYAML(raw string) ([]proposedMerge, error) {
 	body := strings.TrimSpace(stripCodeFence(raw))
 	if body == "" || body == "[]" || strings.EqualFold(body, "none") || strings.EqualFold(body, "- []") {

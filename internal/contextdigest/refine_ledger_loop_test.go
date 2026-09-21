@@ -9,6 +9,7 @@ import (
 
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/strop/pkg/evaluation"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 type stubJudgeGen struct {
@@ -16,8 +17,6 @@ type stubJudgeGen struct {
 	mergePackages      []string
 	mergeIntents       []string
 	proposedMergesYAML string
-	refined            string
-	ledgerNeedle       string // when set, refine Generate requires this substring in the ledger field
 	calls              int
 }
 
@@ -45,21 +44,11 @@ func (s *stubJudgeGen) clusterOut() map[string]interface{} {
 	}
 }
 
-func (s *stubJudgeGen) Generate(_ context.Context, task string, fields map[string]interface{}, _ int) (map[string]interface{}, error) {
+func (s *stubJudgeGen) Generate(_ context.Context, task string, _ map[string]interface{}, _ int) (map[string]interface{}, error) {
 	s.calls++
 	switch task {
-	case jmodules.TaskTypologyCluster:
+	case jmodules.TaskTypologySliceGrouping:
 		return s.clusterOut(), nil
-	case jmodules.TaskTypologyRefine:
-		if needle := strings.TrimSpace(s.ledgerNeedle); needle != "" {
-			ledger, ok := fields["slice_objective_ledger_yaml"].(string)
-			if !ok || !strings.Contains(ledger, needle) {
-				return nil, context.Canceled // force visible failure if ledger missing
-			}
-		}
-		return map[string]interface{}{
-			"refined_catalog_yaml": s.refined,
-		}, nil
 	default:
 		return map[string]interface{}{}, nil
 	}
@@ -71,6 +60,41 @@ func (s *stubJudgeGen) Evaluate(context.Context, string, map[string]interface{},
 
 func (s *stubJudgeGen) Ready() bool             { return true }
 func (s *stubJudgeGen) TaskModel(string) string { return "stub" }
+
+// stubCatalogAssembler emits one fragment per owned folded slice, copying ledger objectives.
+type stubCatalogAssembler struct {
+	override map[string]catalog.Slice
+	issues   []string
+	err      error
+}
+
+func (s stubCatalogAssembler) AssembleSlices(_ context.Context, req sliceCatalogAssembleRequest) (sliceCatalogAssembleResult, error) {
+	if s.err != nil {
+		return sliceCatalogAssembleResult{}, s.err
+	}
+	if len(s.issues) > 0 {
+		return sliceCatalogAssembleResult{Issues: append([]string(nil), s.issues...)}, nil
+	}
+	ledgerObj := map[string]string{}
+	for _, e := range req.LedgerDoc.Slices {
+		if id := strings.TrimSpace(e.ID); id != "" {
+			ledgerObj[id] = strings.TrimSpace(e.Objective)
+		}
+	}
+	var frags []catalog.Slice
+	for _, t := range catalogAssembleTargets(req.FoldedTypo) {
+		if o, ok := s.override[t.id]; ok {
+			frags = append(frags, o)
+			continue
+		}
+		frag := t.slice
+		if obj := ledgerObj[t.id]; obj != "" {
+			frag.Objective = obj
+		}
+		frags = append(frags, frag)
+	}
+	return sliceCatalogAssembleResult{Fragments: frags}, nil
+}
 
 func TestJudgeTypologyRefineUsesLedgerObjectives(t *testing.T) {
 	t.Parallel()
@@ -91,14 +115,6 @@ slices:
       - id: board-core
         path: internal/board
 `
-	refined := `id: demo
-slices:
-  - id: board
-    objective: Shared board payload shapes.
-    owns:
-      - id: board-core
-        path: internal/board
-`
 	roles := `packages:
   - path: internal/board
     role: dto
@@ -113,10 +129,7 @@ edges:
 	if err != nil {
 		t.Fatal(err)
 	}
-	stub := &stubJudgeGen{
-		refined:      refined,
-		ledgerNeedle: "Shared board payload shapes",
-	}
+	stub := &stubJudgeGen{}
 	ledger := stubLedgerBuilder{
 		doc: sliceObjectiveLedgerDoc{Slices: []sliceObjectiveLedgerEntry{{
 			ID: "board", OwnedPaths: []string{"internal/board"},
@@ -124,7 +137,7 @@ edges:
 			Objective: "Shared board payload shapes.", Verdict: "grounded",
 		}}},
 	}
-	out, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
+	out, err := (JudgeTypologySlicePipeline{Gen: stub}).Assemble(context.Background(), TypologySlicePipelineInput{
 		RepoID: "demo", ModuleScope: ".",
 		DraftCatalogYAML:      draft,
 		PackageRoles:          roles,
@@ -133,6 +146,7 @@ edges:
 		AnalysisDir:           dir,
 		EvidenceDir:           evidence,
 		LedgerBuilder:         ledger,
+		CatalogAssembler:      stubCatalogAssembler{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -173,17 +187,8 @@ slices:
     inspected_stage: 2
 `
 	once := &flippingLedgerBuilder{}
-	stub := &stubJudgeGen{
-		refined: `id: demo
-slices:
-  - id: board
-    objective: Shared board payload shapes.
-    owns:
-      - id: board-core
-        path: internal/board
-`,
-	}
-	_, err := (JudgeTypologyRefineGenerator{Gen: stub}).Refine(context.Background(), TypologyRefineInput{
+	stub := &stubJudgeGen{}
+	_, err := (JudgeTypologySlicePipeline{Gen: stub}).Assemble(context.Background(), TypologySlicePipelineInput{
 		RepoID: "demo", ModuleScope: ".",
 		DraftCatalogYAML: draft,
 		PackageRoles:     roles,
@@ -198,6 +203,7 @@ slices:
 		AnalysisDir:       dir,
 		EvidenceDir:       evidence,
 		LedgerBuilder:     once,
+		CatalogAssembler:  stubCatalogAssembler{},
 	})
 	if err == nil {
 		t.Fatal("expected residual ledger issues to fail Refine")

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/behaviorengineering/majordomo/internal/cache"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 type countingInspectValidator struct {

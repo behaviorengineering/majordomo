@@ -15,7 +15,7 @@ import (
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	"github.com/behaviorengineering/strop/pkg/orchestration"
 	"github.com/behaviorengineering/strop/pkg/stepplan"
-	typroles "github.com/behaviorengineering/typology/roles"
+	typroles "github.com/behaviorengineering/typology/pkg/roles"
 )
 
 const (
