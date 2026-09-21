@@ -9,13 +9,13 @@ import (
 	"strings"
 
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"gopkg.in/yaml.v3"
 )
 
 const (
-	sliceObjectiveLedgerRel = "slice_meaning_ledger.yaml"
-	ledgerVerdictGrounded   = "grounded"
+	sliceObjectiveLedgerRel  = "slice_meaning_ledger.yaml"
+	ledgerVerdictGrounded    = "grounded"
 	ledgerVerdictOverclaim   = "overclaim"
 	ledgerSourceRLM          = "slice_objective_rlm"
 	ledgerSourceUnclaimed    = "slice_objective_rlm_unclaimed"
@@ -218,6 +218,12 @@ func alignLedgerToRefinedCatalog(
 		// Contributor ledgers may cover wider draft ownership. Keep only claims
 		// allowed by at least one refined owned package's is=[] prior.
 		claimCodes = filterClaimsToOwnedIs(uniqueStrings(claimCodes), paths, constraintByPath)
+		if len(claimCodes) == 0 {
+			// Fold renames / membership splits can leave ledger claims with no
+			// intersection (e.g. review claims vs judge-eval eval packages). Fall
+			// back to the owned is=[] codes themselves so teaching stays grounded.
+			claimCodes = ownedIsCodes(paths, constraintByPath)
+		}
 		source := "slice_objective_rlm_aligned"
 		if len(claimCodes) == 0 {
 			if !sliceAllCapabilityCodesMustNot(paths, constraintByPath) {
@@ -292,6 +298,19 @@ func ownedIsSet(paths []string, byPath map[string]packageCapabilityConstraint) m
 			}
 		}
 	}
+	return out
+}
+
+func ownedIsCodes(paths []string, byPath map[string]packageCapabilityConstraint) []string {
+	set := ownedIsSet(paths, byPath)
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for code := range set {
+		out = append(out, code)
+	}
+	sort.Strings(out)
 	return out
 }
 

@@ -18,7 +18,7 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/observability"
 	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
 	"github.com/behaviorengineering/strop/pkg/dspy/factory"
-	typroles "github.com/behaviorengineering/typology/roles"
+	typroles "github.com/behaviorengineering/typology/pkg/roles"
 	"gopkg.in/yaml.v3"
 )
 

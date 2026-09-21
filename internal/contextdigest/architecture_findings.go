@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 const (

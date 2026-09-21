@@ -21,8 +21,8 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/llmusage"
 	"github.com/behaviorengineering/majordomo/internal/observability"
 	"github.com/behaviorengineering/strop/pkg/dspy/factory"
-	"github.com/behaviorengineering/typology/catalog"
-	typroles "github.com/behaviorengineering/typology/roles"
+	"github.com/behaviorengineering/typology/pkg/catalog"
+	typroles "github.com/behaviorengineering/typology/pkg/roles"
 	"gopkg.in/yaml.v3"
 )
 

@@ -82,8 +82,8 @@ github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPn
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
 github.com/behaviorengineering/strop v0.3.8 h1:wZqKtszLE+zLfxvtThL+8IY8xqWaQ8xZ16OksIEU2Dg=
 github.com/behaviorengineering/strop v0.3.8/go.mod h1:ZXzOR9YRdQhE7RaajwqhxwQSQmu8P1bYF6F9P9TKGYM=
-github.com/behaviorengineering/typology v0.0.34 h1:ETL0VGHHzGgOaLFvEEINDUU97HqjzE7GYKLDTfPrXvE=
-github.com/behaviorengineering/typology v0.0.34/go.mod h1:qJK2fWhvo0+3zSn1EVBaqNw2S544yRJDBP7GiNvxbHE=
+github.com/behaviorengineering/typology v0.1.2 h1:YleaJxwFXmFB6YZ5CkIaIsjjU+PvToCfkrA8+Gv517A=
+github.com/behaviorengineering/typology v0.1.2/go.mod h1:qJK2fWhvo0+3zSn1EVBaqNw2S544yRJDBP7GiNvxbHE=
 github.com/buger/jsonparser v1.2.0 h1:4EFcvK1kD4jyj6YqNK6skK6w+y7FHHBR+XBCtxwu/6g=
 github.com/buger/jsonparser v1.2.0/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
 github.com/bytedance/gopkg v0.1.3 h1:TPBSwH8RsouGCBcMBktLt1AymVo2TVsBVCY4b6TnZ/M=

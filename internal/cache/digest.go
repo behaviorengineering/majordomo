@@ -49,8 +49,12 @@ const (
 	DigestRefineSchemaV2 = "refine-v2"
 	// DigestRefineSchemaV3 also normalizes draft catalog ids and binding order.
 	DigestRefineSchemaV3 = "refine-v3"
-	// DigestRefinePromptV1 labels the typology_slice_catalog CoT prompt contract.
+	// DigestRefineSchemaV4 keys per-slice catalog RLM join (Go accept folds + fragments).
+	DigestRefineSchemaV4 = "refine-v4"
+	// DigestRefinePromptV1 labels the typology_slice_catalog CoT prompt contract (retired writer).
 	DigestRefinePromptV1 = "typology_slice_catalog_cot_v1"
+	// DigestRefinePromptV2 labels the per-slice typology_slice_catalog RLM prompt contract.
+	DigestRefinePromptV2 = "typology_slice_catalog_rlm_v1"
 	// DigestInterventionSchemaV1 keys human-intervention CoT outputs (full verdicts YAML).
 	DigestInterventionSchemaV1 = "intervention-v1"
 	// DigestInterventionSchemaV2 keys intervention on verdict identity (no duration/trace/prose).
@@ -546,7 +550,7 @@ type ClusterCoTCached struct {
 	TotalTokens      int    `json:"total_tokens,omitempty"`
 }
 
-// RefineFingerprint keys one typology_refine CoT catalog.
+// RefineFingerprint keys one typology_slice_catalog assemble result (per-slice RLM join).
 type RefineFingerprint struct {
 	DraftHash       string
 	RolesHash       string
@@ -703,11 +707,11 @@ func (fp ClusterCoTFingerprint) key() string {
 func (fp RefineFingerprint) key() string {
 	prompt := fp.PromptVersion
 	if prompt == "" {
-		prompt = DigestRefinePromptV1
+		prompt = DigestRefinePromptV2
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestRefineSchemaV3
+		schema = DigestRefineSchemaV4
 	}
 	return HashDigestParts(
 		"refine", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.LedgerHash, fp.VerdictsHash,

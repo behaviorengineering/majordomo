@@ -7,7 +7,7 @@ import (
 
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/strop/pkg/evaluation"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 func TestParseClusterAuditAnswerThemeRejects(t *testing.T) {
@@ -184,13 +184,11 @@ slices:
     owns:
       - path: internal/remotegit
 `
-	refined := draft
 	stub := &stubJudgeGen{
 		proposedMergesYAML: `- id: git
   packages: [internal/localgit, internal/remotegit]
   intent: slice
 `,
-		refined: refined,
 	}
 	auditor := &stubClusterAuditor{}
 	out, err := (JudgeTypologySlicePipeline{Gen: stub}).Assemble(context.Background(), TypologySlicePipelineInput{
@@ -200,6 +198,7 @@ slices:
 		PackageRoles:      roles,
 		ArchitectureDraft: "# Draft\n",
 		ClusterAuditor:    auditor,
+		CatalogAssembler:  stubCatalogAssembler{},
 		LedgerBuilder: stubLedgerBuilder{doc: sliceObjectiveLedgerDoc{Slices: []sliceObjectiveLedgerEntry{
 			{ID: "localgit", OwnedPaths: []string{"internal/localgit"}, Evidence: []string{"Clone"}, Claims: []string{capAdaptExternal}, Objective: "Local forge adapter.", Verdict: "grounded"},
 			{ID: "remotegit", OwnedPaths: []string{"internal/remotegit"}, Evidence: []string{"Fetch"}, Claims: []string{capAdaptExternal}, Objective: "Remote forge adapter.", Verdict: "grounded"},
@@ -263,7 +262,6 @@ slices:
   packages: [internal/c]
   intent: nickname
 `,
-		refined: draft,
 	}
 	auditor := &countingRejectAuditor{}
 	_, err := (JudgeTypologySlicePipeline{Gen: flip}).Assemble(context.Background(), TypologySlicePipelineInput{
@@ -273,6 +271,7 @@ slices:
 		PackageRoles:      roles,
 		ArchitectureDraft: "# Draft\n",
 		ClusterAuditor:    auditor,
+		CatalogAssembler:  stubCatalogAssembler{},
 		LedgerBuilder: stubLedgerBuilder{doc: sliceObjectiveLedgerDoc{Slices: []sliceObjectiveLedgerEntry{
 			{ID: "a", OwnedPaths: []string{"internal/a"}, Evidence: []string{"A"}, Claims: []string{capAdaptExternal}, Objective: "A.", Verdict: "grounded"},
 			{ID: "b", OwnedPaths: []string{"internal/b"}, Evidence: []string{"B"}, Claims: []string{capAdaptExternal}, Objective: "B.", Verdict: "grounded"},
@@ -288,8 +287,8 @@ slices:
 }
 
 type flippingClusterJudge struct {
-	firstYAML, secondYAML, refined string
-	clusterCalls                   int
+	firstYAML, secondYAML string
+	clusterCalls          int
 }
 
 func (s *flippingClusterJudge) clusterLists(yaml string) map[string]interface{} {
@@ -328,8 +327,6 @@ func (s *flippingClusterJudge) Generate(_ context.Context, task string, _ map[st
 			yaml = s.secondYAML
 		}
 		return s.clusterLists(yaml), nil
-	case jmodules.TaskTypologySliceCatalog:
-		return map[string]interface{}{"refined_catalog_yaml": s.refined}, nil
 	default:
 		return map[string]interface{}{}, nil
 	}

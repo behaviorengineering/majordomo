@@ -68,10 +68,13 @@ Reject process-exec adapters (cliexec) marked kind: cli.
 Reject folding server / goEmbed / NewMux packages into the CLI surface solely because cmd is the sole importer.
 Reject catalog folds that ignore slice_grouping_verdicts_yaml accept rows.
 Reject objectives that drift from slice_meaning_ledger_yaml.
-Reject journey markdown in this pass; journey is written later by human-intervention.`,
+Reject journey markdown in this pass; journey is written later by human-intervention.
+MUST accept an objective that copies a contributing slice_meaning_ledger_yaml sentence verbatim (role_grounding requires that).
+MUST accept a mechanical *-http sibling slice that reuses its parent slice objective after CLI/HTTP separation; do not demand a unique prestige sentence the ledger never wrote.`,
 		scoreSuffix: `Prefer low scores when objectives are template language, surfaces misuse kind: cli for exec adapters,
-HTTP/embed packages are CLI furniture, or catalog membership contradicts accepted merge verdicts.`,
-		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog fixes over style notes.",
+HTTP/embed packages are CLI furniture, or catalog membership contradicts accepted merge verdicts.
+Do not lower score solely because a ledger-verbatim objective is shared with a contributing ledger row or a parent *-http split.`,
+		consolidatorSuffix: "Merge typology refine feedback. Prefer concrete catalog fixes over style notes. Drop uniqueness complaints about ledger-verbatim or mechanical *-http parent objectives.",
 	},
 	jmodules.TaskTypologyHumanIntervention: {
 		evaluatorKey:      "typology_intervention_quality",

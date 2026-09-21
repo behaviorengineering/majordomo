@@ -3,7 +3,7 @@ package contextdigest
 import (
 	"fmt"
 
-	"github.com/behaviorengineering/typology/roles"
+	"github.com/behaviorengineering/typology/pkg/roles"
 	"gopkg.in/yaml.v3"
 )
 

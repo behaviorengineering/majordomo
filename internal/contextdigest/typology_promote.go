@@ -9,7 +9,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/config"
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"gopkg.in/yaml.v3"
 )
 

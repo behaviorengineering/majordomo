@@ -17,7 +17,7 @@ import (
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
 	jmodules "github.com/behaviorengineering/majordomo/internal/judge/modules"
 	"github.com/behaviorengineering/strop/pkg/runreport"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -50,6 +50,7 @@ type TypologySlicePipelineInput struct {
 	EvidenceDir           string
 	LedgerBuilder         sliceObjectiveLedgerBuilder
 	ClusterAuditor        clusterMergeAuditor
+	CatalogAssembler      sliceCatalogAssembler
 	DigestCache           *cache.DigestStore
 	DigestSkips           bool
 	DigestModelID         string
@@ -66,12 +67,12 @@ type TypologySlicePipelineOutput struct {
 	ObjectiveClaimsYAML      string
 }
 
-// JudgeTypologySlicePipeline runs typology_slice_grouping then typology_slice_catalog tasks.
+// JudgeTypologySlicePipeline runs slice grouping CoT, then meaning + per-slice catalog RLM assemble.
 type JudgeTypologySlicePipeline struct {
 	Gen judge.Generator
 }
 
-// Assemble runs grouping, then meaning ledger, then catalog generate→sanitize→gate→LLM eval attempts.
+// Assemble runs grouping, then meaning ledger, then per-slice catalog RLM→join→sanitize→gate→LLM eval.
 func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input TypologySlicePipelineInput) (TypologySlicePipelineOutput, error) {
 	gen := g.Gen
 	if gen == nil {
@@ -319,8 +320,8 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 		VerdictsHash:    clusterVerdictsIdentitySHA(verdictsYAML),
 		MechanicalHash:  mechIdentityHash,
 		ModelID:         input.DigestModelID,
-		PromptVersion:   cache.DigestRefinePromptV1,
-		SchemaVersion:   cache.DigestRefineSchemaV3,
+		PromptVersion:   cache.DigestRefinePromptV2,
+		SchemaVersion:   cache.DigestRefineSchemaV4,
 	}
 	if input.DigestSkips && input.DigestCache != nil && strings.TrimSpace(feedback) == "" {
 		if hit, ok, err := input.DigestCache.LookupRefine(refineFP); err == nil && ok && strings.TrimSpace(hit.RefinedCatalogYAML) != "" {
@@ -340,6 +341,16 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 		}
 	}
 
+	foldedTypo, foldErr := applyAcceptedMerges(draftTypo, mergeVerdicts)
+	if foldErr != nil {
+		return TypologySlicePipelineOutput{}, fmt.Errorf("typology slice catalog apply accepts: %w", foldErr)
+	}
+	needsCatalogRLM := len(catalogAssembleTargets(foldedTypo)) > 0
+	if needsCatalogRLM && input.CatalogAssembler == nil {
+		return TypologySlicePipelineOutput{}, fmt.Errorf("typology_slice_catalog RLM is required for owned packages but no catalog assembler is configured")
+	}
+
+	keptFragments := map[string]catalog.Slice{}
 	for attempt := 1; attempt <= maxTypologyRefineAttempts; attempt++ {
 		if input.DigestCache != nil && attempt == 1 {
 			input.DigestCache.RecordRefineMiss()
@@ -348,31 +359,75 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 			"repo_id":                        input.RepoID,
 			"module_scope":                   input.ModuleScope,
 			"draft_catalog_yaml":             input.DraftCatalogYAML,
-			"slice_grouping_proposal_yaml":    proposalYAML,
-			"slice_grouping_verdicts_yaml":    verdictsYAML,
+			"slice_grouping_proposal_yaml":   proposalYAML,
+			"slice_grouping_verdicts_yaml":   verdictsYAML,
 			"package_contracts":              input.PackageContracts,
 			"package_roles":                  input.PackageRoles,
 			"package_capability_constraints": constraintsYAML,
-			"slice_meaning_ledger_yaml":    ledgerYAML,
+			"slice_meaning_ledger_yaml":      ledgerYAML,
 			"architecture_draft":             input.ArchitectureDraft,
 			"repo_layout":                    input.RepoLayout,
 			"readme_snapshot":                input.ReadmeSnapshot,
 			"validation_feedback":            feedback,
 		}
-		out, err := gen.Generate(ctx, jmodules.TaskTypologySliceCatalog, refineFields, attempt)
-		if err != nil {
-			return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine: %w", err)
+
+		joined := foldedTypo
+		if needsCatalogRLM {
+			assembled, assembleErr := input.CatalogAssembler.AssembleSlices(ctx, sliceCatalogAssembleRequest{
+				FoldedTypo:         foldedTypo,
+				LedgerDoc:          ledgerDoc,
+				EvidenceDir:        input.EvidenceDir,
+				RolesYAML:          input.PackageRoles,
+				ConstraintsYAML:    constraintsYAML,
+				ReadmeSnapshot:     input.ReadmeSnapshot,
+				ValidationFeedback: feedback,
+				Kept:               keptFragments,
+			})
+			if assembleErr != nil {
+				return TypologySlicePipelineOutput{}, fmt.Errorf("typology slice catalog RLM: %w", assembleErr)
+			}
+			if len(assembled.Issues) > 0 {
+				for _, frag := range assembled.Fragments {
+					if id := strings.TrimSpace(frag.ID); id != "" {
+						keptFragments[id] = frag
+					}
+				}
+				fb := strings.Join(assembled.Issues, "\n")
+				if attempt == maxTypologyRefineAttempts {
+					return TypologySlicePipelineOutput{}, fmt.Errorf("typology slice catalog RLM failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
+				}
+				feedback = fb
+				continue
+			}
+			keptFragments = map[string]catalog.Slice{}
+			for _, frag := range assembled.Fragments {
+				keptFragments[strings.TrimSpace(frag.ID)] = frag
+			}
+			var joinErr error
+			joined, joinErr = joinSliceCatalog(foldedTypo, assembled.Fragments)
+			if joinErr != nil {
+				if attempt == maxTypologyRefineAttempts {
+					return TypologySlicePipelineOutput{}, joinErr
+				}
+				feedback = joinErr.Error()
+				continue
+			}
 		}
-		refined = stripCodeFence(stringField(out, "refined_catalog_yaml"))
-		if refined == "" {
-			return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine: refined_catalog_yaml is required")
+		if needsLedger {
+			joined = stampLedgerObjectivesOntoCatalog(joined, ledgerDoc)
 		}
+		encoded, encErr := yaml.Marshal(&joined)
+		if encErr != nil {
+			return TypologySlicePipelineOutput{}, fmt.Errorf("typology slice catalog join encode: %w", encErr)
+		}
+		refined = string(encoded)
 		sanitized, err := validateRefinedCatalogYAML(refined, input.DraftCatalogYAML, input.RepoID, input.PackageRoles)
 		if err != nil {
 			if attempt == maxTypologyRefineAttempts {
 				return TypologySlicePipelineOutput{}, err
 			}
 			feedback = err.Error()
+			keptFragments = map[string]catalog.Slice{}
 			continue
 		}
 		refined = sanitized
@@ -381,6 +436,7 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, evalFeedback)
 			}
 			feedback = evalFeedback
+			keptFragments = map[string]catalog.Slice{}
 			continue
 		}
 		typo, err := loadTypologyFromYAML(refined)
@@ -389,12 +445,14 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 				return TypologySlicePipelineOutput{}, err
 			}
 			feedback = err.Error()
+			keptFragments = map[string]catalog.Slice{}
 			continue
 		}
 		if membershipIssues := assertAcceptedMembership(typo, draftTypo, mergeVerdicts); len(membershipIssues) > 0 {
 			fb := strings.Join(membershipIssues, "\n")
 			if attempt < maxTypologyRefineAttempts {
 				feedback = fb
+				keptFragments = map[string]catalog.Slice{}
 				continue
 			}
 			split, changed := splitIllegalMembershipToDraftOwners(typo, draftTypo, mergeVerdicts)
@@ -416,6 +474,7 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 					return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
 				}
 				feedback = fb
+				keptFragments = map[string]catalog.Slice{}
 				continue
 			}
 			ledgerDoc = aligned
@@ -436,13 +495,14 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 					return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, fb)
 				}
 				feedback = fb
+				keptFragments = map[string]catalog.Slice{}
 				continue
 			}
 		}
 		evalOut := map[string]interface{}{
-			"refined_catalog_yaml":        refined,
+			"refined_catalog_yaml":      refined,
 			"slice_meaning_ledger_yaml": ledgerYAML,
-			"objective_claims_yaml":       claimsYAML,
+			"objective_claims_yaml":     claimsYAML,
 		}
 		agg, err := gen.Evaluate(ctx, jmodules.TaskTypologySliceCatalog, refineFields, evalOut, attempt)
 		if err != nil {
@@ -450,6 +510,7 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine LLM evaluation: %w", err)
 			}
 			feedback = err.Error()
+			keptFragments = map[string]catalog.Slice{}
 			continue
 		}
 		if !judge.EvalPassed(agg) {
@@ -457,6 +518,7 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 				return TypologySlicePipelineOutput{}, fmt.Errorf("typology refine LLM evaluation failed after %d attempts:\n%s", maxTypologyRefineAttempts, judge.EvalFeedback(agg))
 			}
 			feedback = judge.EvalFeedback(agg)
+			keptFragments = map[string]catalog.Slice{}
 			continue
 		}
 		if input.DigestCache != nil {
@@ -1205,6 +1267,27 @@ func inferInteractionKind(path string, roles map[string]packageRoleNode) catalog
 	}
 }
 
+// normalizeCatalogSurfaceKind maps RLM aliases onto catalog InteractionKind.
+// Unknown kinds return ok=false so callers can drop the surface before ValidateStructure.
+func normalizeCatalogSurfaceKind(kind catalog.InteractionKind) (catalog.InteractionKind, bool) {
+	switch strings.ToLower(strings.TrimSpace(string(kind))) {
+	case "cli":
+		return catalog.InteractionCLI, true
+	case "api":
+		return catalog.InteractionAPI, true
+	case "ui":
+		return catalog.InteractionUI, true
+	case "service", "http", "https", "gateway", "server", "rpc", "grpc", "rest":
+		return catalog.InteractionAPI, true
+	case "command", "terminal", "cmd":
+		return catalog.InteractionCLI, true
+	case "web", "frontend", "browser":
+		return catalog.InteractionUI, true
+	default:
+		return "", false
+	}
+}
+
 func rejectMissingDraftPackages(refined catalog.Typology, allowed map[string]struct{}) error {
 	if len(allowed) == 0 {
 		return nil
@@ -1283,6 +1366,11 @@ func sanitizeRefinedCatalog(t, draft catalog.Typology, roles map[string]packageR
 		}
 		var surfaces []catalog.Surface
 		for _, surf := range s.Surfaces {
+			kind, ok := normalizeCatalogSurfaceKind(surf.Kind)
+			if !ok {
+				continue
+			}
+			surf.Kind = kind
 			if _, ok := seenKind[surf.Kind]; ok {
 				continue
 			}
@@ -1885,6 +1973,12 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 	} else {
 		clusterAuditor = g
 	}
+	var catalogAssembler sliceCatalogAssembler
+	if g, err := newCatalogAssemblerFromOpts(ctx, opts, analysisDir); err != nil {
+		logf("WARN", "typology slice catalog RLM unavailable: %v", err)
+	} else {
+		catalogAssembler = g
+	}
 
 	rrCfg := runreport.Config{
 		Enabled:           true,
@@ -1918,6 +2012,7 @@ func refineTypologyEvidence(ctx context.Context, opts Options, analysisDir, evid
 		EvidenceDir:           evidenceDir,
 		LedgerBuilder:         ledgerBuilder,
 		ClusterAuditor:        clusterAuditor,
+		CatalogAssembler:      catalogAssembler,
 		DigestCache:           opts.DigestCache,
 		DigestSkips:           opts.DigestSkips,
 		DigestModelID:         opts.DigestModelID,

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -248,6 +248,44 @@ func TestAlignLedgerToRefinedCatalogDropsClaimsForbiddenByRefinedOwns(t *testing
 	claimIssues := appendConstraintClaimIssues(typo, constraints, claims, nil)
 	if len(claimIssues) != 0 {
 		t.Fatalf("claim issues after filter: %v", claimIssues)
+	}
+}
+
+func TestAlignLedgerToRefinedCatalogFallsBackToOwnedIs(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{{
+			ID:        "judge-eval",
+			Objective: "The review slice executes processes.",
+			Owns: []catalog.Component{
+				{Path: "internal/judge/evaluation/summary"},
+			},
+		}},
+	}
+	ledger := sliceObjectiveLedgerDoc{
+		Slices: []sliceObjectiveLedgerEntry{{
+			ID:         "review",
+			OwnedPaths: []string{"internal/judge/evaluation/summary", "internal/staging"},
+			Evidence:   []string{"Summary"},
+			Claims:     []string{capExecProcess, capDataShape},
+			Objective:  "The review slice executes processes.",
+			Verdict:    "grounded",
+		}},
+	}
+	constraints := buildCapabilityConstraints(packageRolesDoc{
+		Packages: []packageRoleNode{
+			{Path: "internal/judge/evaluation/summary", Role: roleEntrypoint},
+		},
+	})
+	aligned, claims, issues := alignLedgerToRefinedCatalog(typo, ledger, constraints)
+	if len(issues) != 0 {
+		t.Fatalf("issues=%v", issues)
+	}
+	if len(aligned.Slices) != 1 {
+		t.Fatalf("aligned=%+v", aligned)
+	}
+	if len(claims.Slices[0].Claims) == 0 {
+		t.Fatalf("expected owned-is fallback claims, got empty; aligned=%+v constraints is from entrypoint", aligned)
 	}
 }
 

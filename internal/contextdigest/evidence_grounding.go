@@ -9,7 +9,7 @@ import (
 
 	"github.com/behaviorengineering/majordomo/internal/contextstore"
 	typologypack "github.com/behaviorengineering/majordomo/internal/judge/evaluation/typology"
-	"github.com/behaviorengineering/typology/catalog"
+	"github.com/behaviorengineering/typology/pkg/catalog"
 )
 
 // groundedSliceObjective is a constrained catalog slice with a non-empty objective.

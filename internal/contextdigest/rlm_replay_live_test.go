@@ -47,6 +47,7 @@ func digestRLMReplayTasks() []string {
 		jmodules.TaskBootstrapStory,
 		jmodules.TaskTypologySliceGroupingAudit,
 		jmodules.TaskTypologySliceMeaning,
+		jmodules.TaskTypologySliceCatalog,
 	}
 }
 
@@ -308,7 +309,7 @@ func liveRLMComplete(ctx context.Context, cfg config.RepoConfig, task, workStory
 	if !ok {
 		// Match production fallbacks.
 		switch task {
-		case jmodules.TaskTypologySliceGroupingAudit, jmodules.TaskTypologySliceMeaning:
+		case jmodules.TaskTypologySliceGroupingAudit, jmodules.TaskTypologySliceMeaning, jmodules.TaskTypologySliceCatalog:
 			provider, ok, err = cfg.ResolveTaskProvider(jmodules.TaskTypologyInspect)
 			if err != nil {
 				return "", 0, "", err
