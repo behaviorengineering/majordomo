@@ -196,7 +196,8 @@ A digest run is catch-up, not "on this merge, digest that SHA":
 2. Walk `last_merged_sha` → current default `HEAD` with `git log --first-parent --reverse`.
 3. Visit **every** commit on that walk, in order.
 4. For each node: maybe update the story (only if evidenced and important). **Always** advance the cursor to that SHA.
-5. The new cursor is the last node fully processed. Incomplete nodes MUST NOT be skipped.
+5. When that walk includes at least one commit, survey the current served tree before the story update. If a refined catalog is already on the context branch, keep slices whose package set is unchanged. Drop packages the tree no longer has. Place a new package on the slice that owns its sole importer, or give it a new slice when no single slice owns that neighborhood. Only slices whose package set changed are rewritten. The first map, when no refined catalog exists yet, still runs the full catalog pipeline. A caught-up cursor does not refresh.
+6. The new cursor is the last node fully processed. Incomplete nodes MUST NOT be skipped.
 
 **Concurrent merges.** Two merges (`A` cursor, then `B`, then `C` at HEAD) MUST process `B` then `C` on the cursor. Story lines are optional per node. One digest worker per repo (Actions concurrency `context-digest-<repo-id>`). One open update PR; restack. Product review reads only the **merged** context tip.
 

@@ -136,16 +136,20 @@ sliceBindings:
 	if strings.Contains(out, "from: server") {
 		t.Fatalf("hollow server bindings should remount, got %s", out)
 	}
-	if !strings.Contains(out, "gitboard-http") {
-		t.Fatalf("expected gitboard-http slice, got %s", out)
+	if strings.Contains(out, "gitboard-http") {
+		t.Fatalf("must not invent gitboard-http without sole-importer evidence, got %s", out)
 	}
-	if !strings.Contains(out, "from: gitboard-http") {
-		t.Fatalf("expected bindings remounted to gitboard-http, got %s", out)
+	if !strings.Contains(out, "from: gitboard") {
+		t.Fatalf("expected bindings remounted to gitboard, got %s", out)
 	}
-	// Mechanical HTTP split must copy the parent objective so ledger alignment
-	// can accept a contributing ledger sentence verbatim.
-	if !strings.Contains(out, "id: gitboard-http") || !strings.Contains(out, "objective: Deliver the gitboard CLI.") {
-		t.Fatalf("expected gitboard-http to copy parent objective, got %s", out)
+	if !strings.Contains(out, "path: internal/server") {
+		t.Fatalf("expected server package kept on gitboard, got %s", out)
+	}
+	if !strings.Contains(out, "kind: api") && !strings.Contains(out, "kind: ui") {
+		t.Fatalf("expected HTTP on an api/ui surface, got %s", out)
+	}
+	if !strings.Contains(out, "objective: Deliver the gitboard CLI.") {
+		t.Fatalf("expected gitboard parent objective kept, got %s", out)
 	}
 	if strings.Contains(out, "Delivery surface separated from the CLI entrypoint.") {
 		t.Fatalf("must not invent prestige delivery objective, got %s", out)

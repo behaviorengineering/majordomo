@@ -321,11 +321,11 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 		MechanicalHash:  mechIdentityHash,
 		ModelID:         input.DigestModelID,
 		PromptVersion:   cache.DigestRefinePromptV2,
-		SchemaVersion:   cache.DigestRefineSchemaV4,
+		SchemaVersion:   cache.DigestRefineSchemaV5,
 	}
 	if input.DigestSkips && input.DigestCache != nil && strings.TrimSpace(feedback) == "" {
 		if hit, ok, err := input.DigestCache.LookupRefine(refineFP); err == nil && ok && strings.TrimSpace(hit.RefinedCatalogYAML) != "" {
-			if sanitized, sanErr := validateRefinedCatalogYAML(hit.RefinedCatalogYAML, input.DraftCatalogYAML, input.RepoID, input.PackageRoles); sanErr == nil {
+			if sanitized, sanErr := validateRefinedCatalogYAMLWithGraph(hit.RefinedCatalogYAML, input.DraftCatalogYAML, input.RepoID, input.PackageRoles, input.GraphText); sanErr == nil {
 				input.DigestCache.RecordRefineHit(hit.PromptTokens, hit.CompletionTokens, hit.TotalTokens)
 				logf("INFO", "digest cache hit refine")
 				refined = sanitized
@@ -421,7 +421,7 @@ func (g JudgeTypologySlicePipeline) Assemble(ctx context.Context, input Typology
 			return TypologySlicePipelineOutput{}, fmt.Errorf("typology slice catalog join encode: %w", encErr)
 		}
 		refined = string(encoded)
-		sanitized, err := validateRefinedCatalogYAML(refined, input.DraftCatalogYAML, input.RepoID, input.PackageRoles)
+		sanitized, err := validateRefinedCatalogYAMLWithGraph(refined, input.DraftCatalogYAML, input.RepoID, input.PackageRoles, input.GraphText)
 		if err != nil {
 			if attempt == maxTypologyRefineAttempts {
 				return TypologySlicePipelineOutput{}, err
@@ -840,6 +840,10 @@ func journeyHasDebtTable(journey string) bool {
 }
 
 func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (string, error) {
+	return validateRefinedCatalogYAMLWithGraph(raw, draftYAML, repoID, rolesYAML, "")
+}
+
+func validateRefinedCatalogYAMLWithGraph(raw, draftYAML, repoID, rolesYAML, graphText string) (string, error) {
 	tmp, err := os.CreateTemp("", "majordomo-refined-*.yaml")
 	if err != nil {
 		return "", fmt.Errorf("typology refine temp file: %w", err)
@@ -862,7 +866,7 @@ func validateRefinedCatalogYAML(raw, draftYAML, repoID, rolesYAML string) (strin
 		return "", err
 	}
 	roles := roleByPath(mustParseRoles(rolesYAML))
-	typo = sanitizeRefinedCatalog(typo, draft, roles)
+	typo = sanitizeRefinedCatalog(typo, draft, roles, parseGraphImporters(graphText))
 	if id := strings.TrimSpace(repoID); id != "" {
 		cur := strings.TrimSpace(typo.ID)
 		if cur == "" || strings.HasPrefix(cur, "majordomo-typology-") || strings.Contains(cur, "/") {
@@ -1288,6 +1292,84 @@ func normalizeCatalogSurfaceKind(kind catalog.InteractionKind) (catalog.Interact
 	}
 }
 
+// pruneDraftPackagesAbsentFromRoles drops draft paths the current role harvest
+// does not list, so a package removed from the tree cannot stay on the map.
+// An empty role file is left untouched. New packages are added later by refine.
+func pruneDraftPackagesAbsentFromRoles(draftPath, rolesPath string) error {
+	if _, err := os.Stat(draftPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("typology catch-up stat draft: %w", err)
+	}
+	if _, err := os.Stat(rolesPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("typology catch-up stat package roles: %w", err)
+	}
+	doc, err := loadPackageRoles(rolesPath)
+	if err != nil {
+		return fmt.Errorf("typology catch-up load package roles: %w", err)
+	}
+	if len(doc.Packages) == 0 {
+		return nil
+	}
+	live := map[string]struct{}{}
+	for _, p := range doc.Packages {
+		if n := normalizeRolePath(p.Path); n != "" {
+			live[n] = struct{}{}
+		}
+	}
+	typo, err := catalog.LoadYAML(draftPath)
+	if err != nil {
+		return fmt.Errorf("typology catch-up load draft: %w", err)
+	}
+	keep := func(path string) bool {
+		_, ok := live[normalizeCatalogPath(path)]
+		return ok
+	}
+	for i := range typo.Slices {
+		s := &typo.Slices[i]
+		var owns []catalog.Component
+		for _, c := range s.Owns {
+			if keep(c.Path) {
+				owns = append(owns, c)
+			}
+		}
+		s.Owns = owns
+		var surfaces []catalog.Surface
+		for _, surf := range s.Surfaces {
+			var comps []catalog.Component
+			for _, c := range surf.Components {
+				if keep(c.Path) {
+					comps = append(comps, c)
+				}
+			}
+			if len(comps) == 0 {
+				continue
+			}
+			surf.Components = comps
+			surfaces = append(surfaces, surf)
+		}
+		s.Surfaces = surfaces
+	}
+	for i := range typo.Libraries {
+		lib := &typo.Libraries[i]
+		var owns []catalog.Component
+		for _, c := range lib.Owns {
+			if keep(c.Path) {
+				owns = append(owns, c)
+			}
+		}
+		lib.Owns = owns
+	}
+	if err := catalog.SaveYAML(draftPath, typo); err != nil {
+		return fmt.Errorf("typology catch-up save draft: %w", err)
+	}
+	return nil
+}
+
 func rejectMissingDraftPackages(refined catalog.Typology, allowed map[string]struct{}) error {
 	if len(allowed) == 0 {
 		return nil
@@ -1315,7 +1397,7 @@ func rejectMissingDraftPackages(refined catalog.Typology, allowed map[string]str
 // onto surfaces, demotes exec adapters into owns[] (never drops them), strips invented
 // DocPages, keeps only draft-backed libraries with a purpose, prefers slice claims over
 // library duplicates, and normalizes common LLM mistakes.
-func sanitizeRefinedCatalog(t, draft catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
+func sanitizeRefinedCatalog(t, draft catalog.Typology, roles map[string]packageRoleNode, importers map[string][]string) catalog.Typology {
 	seenComp := make(map[string]string)
 	for i := range t.Slices {
 		s := &t.Slices[i]
@@ -1553,12 +1635,107 @@ func sanitizeRefinedCatalog(t, draft catalog.Typology, roles map[string]packageR
 		compBindings = append(compBindings, b)
 	}
 	t.ComponentBindings = compBindings
-	return collapseHollowPackageSlices(separateHTTPSurfacesFromEntrypoint(t, roles))
+	return collapseHollowPackageSlices(separateHTTPSurfacesFromEntrypoint(t, roles, importers))
 }
 
-// separateHTTPSurfacesFromEntrypoint moves server packages off any slice that
-// also claims an entrypoint. Sole-importer wiring must not park delivery under the CLI drawer.
-func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]packageRoleNode) catalog.Typology {
+// parseGraphImporters reads Typology graph "sole importer" rows.
+// Paths with several importers are omitted, so callers keep those packages on the parent slice.
+func parseGraphImporters(graph string) map[string][]string {
+	out := map[string][]string{}
+	re := regexp.MustCompile(`(?i)sole importer:\s*only imported by\s+(\S+)`)
+	for _, line := range strings.Split(graph, "\n") {
+		trim := strings.TrimSpace(line)
+		if !strings.Contains(strings.ToLower(trim), "sole importer") {
+			continue
+		}
+		pkg := ""
+		if strings.HasPrefix(trim, "- ") {
+			rest := strings.TrimSpace(strings.TrimPrefix(trim, "- "))
+			if i := strings.Index(rest, "->"); i >= 0 {
+				pkg = strings.TrimSpace(rest[:i])
+			}
+		}
+		m := re.FindStringSubmatch(trim)
+		if pkg == "" || len(m) < 2 {
+			continue
+		}
+		from := normalizeRolePath(pkg)
+		to := normalizeRolePath(strings.TrimRight(m[1], ")"))
+		if from == "" || to == "" {
+			continue
+		}
+		out[from] = append(out[from], to)
+	}
+	return out
+}
+
+func httpImportedOnlyBySliceEntrypoints(httpPath string, entrypoints []string, importers map[string][]string) bool {
+	imps := importers[normalizeRolePath(httpPath)]
+	if len(imps) == 0 {
+		return false
+	}
+	ep := map[string]struct{}{}
+	for _, p := range entrypoints {
+		if n := normalizeRolePath(p); n != "" {
+			ep[n] = struct{}{}
+		}
+	}
+	if len(ep) == 0 {
+		return false
+	}
+	for _, imp := range imps {
+		if _, ok := ep[normalizeRolePath(imp)]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func collectSliceEntrypointPaths(s catalog.Slice, roles map[string]packageRoleNode) []string {
+	var out []string
+	add := func(path string) {
+		if roles[normalizeRolePath(path)].Role != roleEntrypoint {
+			return
+		}
+		out = append(out, path)
+	}
+	for _, c := range s.Owns {
+		add(c.Path)
+	}
+	for _, surf := range s.Surfaces {
+		for _, c := range surf.Components {
+			add(c.Path)
+		}
+	}
+	return out
+}
+
+func appendHTTPSurfaceComponents(s *catalog.Slice, kind catalog.InteractionKind, comps []catalog.Component) {
+	if s == nil || len(comps) == 0 {
+		return
+	}
+	for i := range s.Surfaces {
+		if s.Surfaces[i].Kind != kind {
+			continue
+		}
+		s.Surfaces[i].Components = append(s.Surfaces[i].Components, comps...)
+		return
+	}
+	sid := strings.TrimSpace(s.ID)
+	if sid == "" {
+		sid = "slice"
+	}
+	s.Surfaces = append(s.Surfaces, catalog.Surface{
+		ID:         sid + "-" + string(kind),
+		Kind:       kind,
+		Components: comps,
+	})
+}
+
+// separateHTTPSurfacesFromEntrypoint splits an HTTP server onto a sibling slice only when
+// the graph shows that slice's entrypoint is the server's sole importer. Shared gateways
+// stay on the parent as an api/ui surface beside the CLI door.
+func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]packageRoleNode, importers map[string][]string) catalog.Typology {
 	if len(roles) == 0 {
 		return t
 	}
@@ -1589,66 +1766,66 @@ func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]pac
 	var extra []catalog.Slice
 	for i := range t.Slices {
 		s := &t.Slices[i]
-		hasEntrypoint := false
+		entrypoints := collectSliceEntrypointPaths(*s, roles)
+		if len(entrypoints) == 0 {
+			continue
+		}
 		pathRole := func(path string) string {
 			return roles[normalizeRolePath(path)].Role
 		}
-		for _, c := range s.Owns {
-			if pathRole(c.Path) == roleEntrypoint {
-				hasEntrypoint = true
-			}
-		}
-		for _, surf := range s.Surfaces {
-			for _, c := range surf.Components {
-				if pathRole(c.Path) == roleEntrypoint {
-					hasEntrypoint = true
-				}
-			}
-		}
-		if !hasEntrypoint {
-			continue
-		}
 
-		var httpOwns []catalog.Component
 		var keepOwns []catalog.Component
+		var splitHTTP []catalog.Component
+		var keepHTTP []catalog.Component
+		httpKind := catalog.InteractionAPI
 		for _, c := range s.Owns {
-			if pathRole(c.Path) == roleHTTPSurface {
-				httpOwns = append(httpOwns, c)
+			if pathRole(c.Path) != roleHTTPSurface {
+				keepOwns = append(keepOwns, c)
 				continue
 			}
-			keepOwns = append(keepOwns, c)
+			httpKind = inferInteractionKind(c.Path, roles)
+			if httpImportedOnlyBySliceEntrypoints(c.Path, entrypoints, importers) {
+				splitHTTP = append(splitHTTP, c)
+				continue
+			}
+			keepHTTP = append(keepHTTP, c)
 		}
 		s.Owns = keepOwns
 
 		var keepSurfaces []catalog.Surface
-		var httpSurfaceComps []catalog.Component
-		httpKind := catalog.InteractionAPI
 		for _, surf := range s.Surfaces {
 			var keepComps []catalog.Component
+			var cliHTTP []catalog.Component
 			for _, c := range surf.Components {
-				if pathRole(c.Path) == roleHTTPSurface {
-					httpSurfaceComps = append(httpSurfaceComps, c)
-					httpKind = inferInteractionKind(c.Path, roles)
+				if pathRole(c.Path) != roleHTTPSurface {
+					keepComps = append(keepComps, c)
+					continue
+				}
+				httpKind = inferInteractionKind(c.Path, roles)
+				if httpImportedOnlyBySliceEntrypoints(c.Path, entrypoints, importers) {
+					splitHTTP = append(splitHTTP, c)
+					continue
+				}
+				if surf.Kind == catalog.InteractionCLI {
+					cliHTTP = append(cliHTTP, c)
 					continue
 				}
 				keepComps = append(keepComps, c)
 			}
 			surf.Components = keepComps
+			keepHTTP = append(keepHTTP, cliHTTP...)
 			if len(keepComps) == 0 {
 				continue
 			}
 			keepSurfaces = append(keepSurfaces, surf)
 		}
 		s.Surfaces = keepSurfaces
+		appendHTTPSurfaceComponents(s, httpKind, keepHTTP)
 
-		moved := append(httpOwns, httpSurfaceComps...)
-		if len(moved) == 0 {
+		if len(splitHTTP) == 0 {
 			continue
 		}
 		sid := uniqueSliceID(strings.TrimSpace(s.ID) + "-http")
-		// Meaning travels with the packages. alignLedgerToRefinedCatalog requires
-		// a contributing ledger objective verbatim, so copy the parent objective
-		// instead of inventing a prestige delivery sentence the ledger never wrote.
 		obj := strings.TrimSpace(s.Objective)
 		if obj == "" {
 			obj = "Delivery surface separated from the CLI entrypoint."
@@ -1659,7 +1836,7 @@ func separateHTTPSurfacesFromEntrypoint(t catalog.Typology, roles map[string]pac
 			Surfaces: []catalog.Surface{{
 				ID:         sid + "-" + string(httpKind),
 				Kind:       httpKind,
-				Components: moved,
+				Components: splitHTTP,
 			}},
 		})
 	}

@@ -51,6 +51,9 @@ const (
 	DigestRefineSchemaV3 = "refine-v3"
 	// DigestRefineSchemaV4 keys per-slice catalog RLM join (Go accept folds + fragments).
 	DigestRefineSchemaV4 = "refine-v4"
+	// DigestRefineSchemaV5 keeps HTTP on the parent slice unless the entrypoint is the sole importer.
+	// Older keys stored the post-sanitize split, so a hit cannot merge that slice back.
+	DigestRefineSchemaV5 = "refine-v5"
 	// DigestRefinePromptV1 labels the typology_slice_catalog CoT prompt contract (retired writer).
 	DigestRefinePromptV1 = "typology_slice_catalog_cot_v1"
 	// DigestRefinePromptV2 labels the per-slice typology_slice_catalog RLM prompt contract.
@@ -711,7 +714,7 @@ func (fp RefineFingerprint) key() string {
 	}
 	schema := fp.SchemaVersion
 	if schema == "" {
-		schema = DigestRefineSchemaV4
+		schema = DigestRefineSchemaV5
 	}
 	return HashDigestParts(
 		"refine", fp.DraftHash, fp.RolesHash, fp.ConstraintsHash, fp.LedgerHash, fp.VerdictsHash,

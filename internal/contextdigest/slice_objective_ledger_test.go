@@ -86,7 +86,7 @@ func TestAppendLedgerObjectiveIssuesMismatch(t *testing.T) {
 	}
 }
 
-func TestSeparateHTTPSurfacesCopiesParentObjectiveForLedgerAlign(t *testing.T) {
+func TestSeparateHTTPSurfacesKeepsSharedGatewayOnParent(t *testing.T) {
 	t.Parallel()
 	parentObj := "The operations slice manages CLI execution, HTTP serving, and configuration."
 	typo := catalog.Typology{
@@ -111,20 +111,34 @@ func TestSeparateHTTPSurfacesCopiesParentObjectiveForLedgerAlign(t *testing.T) {
 		"internal/cli":       {Path: "internal/cli", Role: roleEntrypoint},
 		"internal/aigateway": {Path: "internal/aigateway", Role: roleHTTPSurface},
 	}
-	split := separateHTTPSurfacesFromEntrypoint(typo, roles)
-	var httpSlice catalog.Slice
-	foundHTTP := false
-	for _, s := range split.Slices {
+	got := separateHTTPSurfacesFromEntrypoint(typo, roles, nil)
+	for _, s := range got.Slices {
 		if s.ID == "operations-http" {
-			httpSlice = s
-			foundHTTP = true
+			t.Fatalf("shared gateway must stay on operations, got extra slice %+v", got.Slices)
 		}
 	}
-	if !foundHTTP {
-		t.Fatalf("expected operations-http slice, got %+v", split.Slices)
+	var ops catalog.Slice
+	for _, s := range got.Slices {
+		if s.ID == "operations" {
+			ops = s
+		}
 	}
-	if httpSlice.Objective != parentObj {
-		t.Fatalf("http objective=%q want parent %q", httpSlice.Objective, parentObj)
+	if ops.ID == "" {
+		t.Fatalf("missing operations slice: %+v", got.Slices)
+	}
+	foundGW := false
+	for _, surf := range ops.Surfaces {
+		for _, c := range surf.Components {
+			if normalizeRolePath(c.Path) == "internal/aigateway" {
+				foundGW = true
+				if surf.Kind != catalog.InteractionAPI && surf.Kind != catalog.InteractionUI {
+					t.Fatalf("gateway surface kind=%s", surf.Kind)
+				}
+			}
+		}
+	}
+	if !foundGW {
+		t.Fatalf("expected aigateway on operations api surface, got %+v", ops)
 	}
 	ledger := sliceObjectiveLedgerDoc{
 		Slices: []sliceObjectiveLedgerEntry{{
@@ -143,9 +157,59 @@ func TestSeparateHTTPSurfacesCopiesParentObjectiveForLedgerAlign(t *testing.T) {
 			{Path: "internal/aigateway", Role: roleHTTPSurface, Evidence: []string{"delivery:http"}},
 		},
 	})
-	_, _, issues := alignLedgerToRefinedCatalog(split, ledger, constraints)
+	_, _, issues := alignLedgerToRefinedCatalog(got, ledger, constraints)
 	if len(issues) != 0 {
-		t.Fatalf("align issues after parent-objective copy: %v", issues)
+		t.Fatalf("align issues after keeping gateway on parent: %v", issues)
+	}
+}
+
+func TestSeparateHTTPSurfacesSplitsWhenEntrypointIsSoleImporter(t *testing.T) {
+	t.Parallel()
+	typo := catalog.Typology{
+		Slices: []catalog.Slice{{
+			ID:        "demo",
+			Objective: "Demo CLI and HTTP folded together.",
+			Owns: []catalog.Component{
+				{ID: "cmd", Path: "cmd/demo"},
+				{ID: "srv", Path: "internal/server"},
+			},
+		}},
+	}
+	roles := map[string]packageRoleNode{
+		"cmd/demo":        {Path: "cmd/demo", Role: roleEntrypoint},
+		"internal/server": {Path: "internal/server", Role: roleHTTPSurface},
+	}
+	importers := map[string][]string{
+		"internal/server": {"cmd/demo"},
+	}
+	got := separateHTTPSurfacesFromEntrypoint(typo, roles, importers)
+	var parent, httpSlice catalog.Slice
+	for _, s := range got.Slices {
+		switch s.ID {
+		case "demo":
+			parent = s
+		case "demo-http":
+			httpSlice = s
+		}
+	}
+	if parent.ID == "" || httpSlice.ID == "" {
+		t.Fatalf("expected demo and demo-http, got %+v", got.Slices)
+	}
+	for _, c := range parent.Owns {
+		if normalizeRolePath(c.Path) == "internal/server" {
+			t.Fatalf("server still on parent owns: %+v", parent)
+		}
+	}
+	found := false
+	for _, surf := range httpSlice.Surfaces {
+		for _, c := range surf.Components {
+			if normalizeRolePath(c.Path) == "internal/server" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected server on demo-http, got %+v", httpSlice)
 	}
 }
 

@@ -230,7 +230,7 @@ Claims are produced by the ledger stage in Go; do not invent a competing claims 
 
 Placement from roles:
 - entrypoint -> kind: cli surfaces
-- server -> surfaces (api, grpc, or ui when evidence includes embeds_static); NEVER fold into the CLI slice for sole importer; NEVER share a slice with an entrypoint
+- server -> surfaces (api, grpc, or ui when evidence includes embeds_static); NEVER fold into the CLI surface for sole importer; KEEP on the same slice as an api surface when other packages import the server
 - dto -> owns[] (or a thin shared data slice); NEVER the product domain from graph position; NEVER owned by an aggregator just because that aggregator imports it
 - aggregator -> owns[] of a product slice; MUST NOT kind: ui
 - exec_runner -> owns[] or libraries[]; NEVER under the entrypoint domain solely because cmd imports it
