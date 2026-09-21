@@ -148,6 +148,7 @@ func TestTypologyRefineModuleLibrariesStance(t *testing.T) {
 		"copy the ledger objective",
 		"slice_grouping_verdicts_yaml",
 		"do not emit journey markdown",
+		"keep on the same slice as an api surface",
 	} {
 		if !strings.Contains(inst, needle) {
 			t.Fatalf("refine instruction missing %q: %s", needle, jmodules.TypologyRefineModule().GetSignature().Instruction)

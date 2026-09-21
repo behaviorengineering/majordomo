@@ -748,7 +748,7 @@ slices:
 		t.Fatal(err)
 	}
 	path := tmp.Name()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(out); err != nil {
 		_ = tmp.Close()
 		t.Fatal(err)
@@ -787,7 +787,26 @@ slices:
 	}
 }
 
-func TestValidateRefinedCatalogYAMLSeparatesHTTPSurfaceFromEntrypoint(t *testing.T) {
+func TestParseGraphImportersReadsSoleImporterRows(t *testing.T) {
+	t.Parallel()
+	graph := strings.Join([]string{
+		"  - ./internal/server -> ./cmd/demo (sole importer: only imported by ./cmd/demo)",
+		"  - pkg: ./internal/aigateway  in:4  out:2",
+		"  - ./internal/cli -> ./cmd/demo (sole importer: only imported by ./cmd/demo)",
+	}, "\n")
+	got := parseGraphImporters(graph)
+	if len(got["internal/server"]) != 1 || got["internal/server"][0] != "cmd/demo" {
+		t.Fatalf("server importers=%v", got["internal/server"])
+	}
+	if _, ok := got["internal/aigateway"]; ok {
+		t.Fatalf("in-degree row must not count as sole importer: %v", got)
+	}
+	if len(got["internal/cli"]) != 1 || got["internal/cli"][0] != "cmd/demo" {
+		t.Fatalf("cli importers=%v", got["internal/cli"])
+	}
+}
+
+func TestValidateRefinedCatalogYAMLKeepsHTTPOnParentWithoutSoleImporter(t *testing.T) {
 	raw := `id: demo
 slices:
   - id: demo
@@ -836,7 +855,7 @@ slices:
 		t.Fatal(err)
 	}
 	path := tmp.Name()
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 	if _, err := tmp.WriteString(out); err != nil {
 		_ = tmp.Close()
 		t.Fatal(err)
@@ -848,6 +867,8 @@ slices:
 	if err != nil {
 		t.Fatal(err)
 	}
+	foundHTTP := false
+	sharedSlice := false
 	for _, s := range typo.Slices {
 		hasEntry, hasHTTP := false, false
 		check := func(path string) {
@@ -867,10 +888,12 @@ slices:
 			}
 		}
 		if hasEntry && hasHTTP {
-			t.Fatalf("server still shares slice %q with entrypoint:\n%s", s.ID, out)
+			sharedSlice = true
 		}
 	}
-	foundHTTP := false
+	if !sharedSlice {
+		t.Fatalf("expected CLI+HTTP to stay on one slice without sole-importer evidence:\n%s", out)
+	}
 	for _, s := range typo.Slices {
 		for _, surf := range s.Surfaces {
 			for _, c := range surf.Components {
@@ -879,12 +902,101 @@ slices:
 					if surf.Kind != catalog.InteractionUI && surf.Kind != catalog.InteractionAPI {
 						t.Fatalf("expected http surface kind api/ui, got %s", surf.Kind)
 					}
+					if surf.Kind == catalog.InteractionCLI {
+						t.Fatalf("server must not sit on kind: cli")
+					}
 				}
 			}
 		}
 	}
 	if !foundHTTP {
 		t.Fatalf("expected internal/server retained on an HTTP surface, got:\n%s", out)
+	}
+}
+
+func TestValidateRefinedCatalogYAMLSplitsHTTPWhenEntrypointIsSoleImporter(t *testing.T) {
+	raw := `id: demo
+slices:
+  - id: demo
+    objective: Demo CLI and HTTP folded together.
+    owns: []
+    surfaces:
+      - id: demo-cli
+        kind: cli
+        components:
+          - id: demo-cmd
+            path: cmd/demo
+      - id: demo-api
+        kind: api
+        components:
+          - id: demo-server
+            path: internal/server
+`
+	draft := `id: demo
+slices:
+  - id: demo
+    objective: Demo CLI and HTTP folded together.
+    owns:
+      - id: demo-cmd
+        path: cmd/demo
+      - id: demo-server
+        path: internal/server
+`
+	roles := `packages:
+  - path: cmd/demo
+    role: entrypoint
+    confidence: 0.9
+    evidence: [has_main]
+    inspected_stage: 1
+  - path: internal/server
+    role: server
+    confidence: 0.9
+    evidence: [go_embed, embeds_static]
+    inspected_stage: 1
+`
+	graph := "  - ./internal/server -> ./cmd/demo (sole importer: only imported by ./cmd/demo)\n"
+	out, err := validateRefinedCatalogYAMLWithGraph(raw, draft, "demo", roles, graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp, err := os.CreateTemp("", "majordomo-http-split-*.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := tmp.Name()
+	defer func() { _ = os.Remove(path) }()
+	if _, err := tmp.WriteString(out); err != nil {
+		_ = tmp.Close()
+		t.Fatal(err)
+	}
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+	typo, err := catalog.LoadYAML(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range typo.Slices {
+		hasEntry, hasHTTP := false, false
+		check := func(p string) {
+			switch normalizeCatalogPath(p) {
+			case "cmd/demo":
+				hasEntry = true
+			case "internal/server":
+				hasHTTP = true
+			}
+		}
+		for _, c := range s.Owns {
+			check(c.Path)
+		}
+		for _, surf := range s.Surfaces {
+			for _, c := range surf.Components {
+				check(c.Path)
+			}
+		}
+		if hasEntry && hasHTTP {
+			t.Fatalf("sole-importer server still shares slice %q with entrypoint:\n%s", s.ID, out)
+		}
 	}
 }
 

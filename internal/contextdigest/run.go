@@ -62,7 +62,7 @@ type Options struct {
 	ModuleScope                string
 	BootstrapSurveyRunner      BootstrapSurveyRunner
 	BootstrapStoryGenerator    BootstrapStoryGenerator
-	TypologySlicePipeline    TypologySlicePipeline
+	TypologySlicePipeline      TypologySlicePipeline
 	HumanInterventionGenerator HumanInterventionGenerator
 	BootstrapSurveyPolicy      string
 	Judge                      judge.Generator // optional; built from config when nil
@@ -408,14 +408,8 @@ func Run(opts Options) (res Result, err error) {
 			action = "gate_regen"
 		}
 
-		if !opts.SkipStory && (len(commits) > 0 || gateSidecar.RegenRequested()) {
-			for _, sha := range commits {
-				cc, err := LoadCommitContext(servedGit, sha)
-				if err != nil {
-					return Result{}, err
-				}
-				commitCtxs = append(commitCtxs, cc)
-			}
+		needsDigestWork := len(commits) > 0 || (!opts.SkipStory && gateSidecar.RegenRequested())
+		if needsDigestWork {
 			closeTrace, err := prepareWorkStory(&opts, now)
 			if err != nil {
 				return Result{}, err
@@ -424,6 +418,22 @@ func Run(opts Options) (res Result, err error) {
 			res.WorkStoryDir = opts.WorkStoryDir
 			if err := ensureDigestJudge(&opts, cfg); err != nil {
 				return Result{}, err
+			}
+		}
+
+		if len(commits) > 0 {
+			if err := refreshTypologyOnCatchUp(ctx, ctxDir, opts, cfg.Repository.ID, cursorAfter, now); err != nil {
+				return Result{}, err
+			}
+		}
+
+		if !opts.SkipStory && (len(commits) > 0 || gateSidecar.RegenRequested()) {
+			for _, sha := range commits {
+				cc, err := LoadCommitContext(servedGit, sha)
+				if err != nil {
+					return Result{}, err
+				}
+				commitCtxs = append(commitCtxs, cc)
 			}
 			if err := walkCommitContexts(ctx, ctxDir, commitCtxs, now, regenFeedback, opts.Judge); err != nil {
 				return Result{}, err
