@@ -1,0 +1,68 @@
+=== Typology Import Graph (36 packages) ===
+
+Hubs (high coupling):
+  - ./cmd/majordomo (in: 0, out: 4)
+  - ./internal/agenting (in: 3, out: 0)
+  - ./internal/aigateway (in: 4, out: 0)
+  - ./internal/cache (in: 4, out: 1)
+  - ./internal/cli (in: 1, out: 18)
+  - ./internal/config (in: 8, out: 0)
+  - ./internal/contextdigest (in: 1, out: 13)
+  - ./internal/githttps (in: 3, out: 0)
+  - ./internal/judge (in: 3, out: 11)
+  - ./internal/llmusage (in: 4, out: 0)
+  - ./internal/observability (in: 6, out: 0)
+  - ./internal/orchestrate (in: 2, out: 7)
+  - ./internal/outbound (in: 3, out: 1)
+  - ./internal/publish (in: 3, out: 2)
+  - ./internal/reviewrun (in: 1, out: 8)
+  - ./internal/staging (in: 4, out: 2)
+
+Leaves (out-degree 0):
+  - ./internal/agenting (in: 3)
+  - ./internal/aigateway (in: 4)
+  - ./internal/cluster (in: 1)
+  - ./internal/config (in: 8)
+  - ./internal/contextgate (in: 2)
+  - ./internal/diff (in: 1)
+  - ./internal/filereview (in: 2)
+  - ./internal/githttps (in: 3)
+  - ./internal/judge/evaluation/bootstrap (in: 1)
+  - ./internal/judge/evaluation/digest (in: 1)
+  - ./internal/judge/evaluation/summary (in: 1)
+  - ./internal/judge/evaluation/tech (in: 1)
+  - ./internal/judge/evaluation/typology (in: 2)
+  - ./internal/judge/modules (in: 2)
+  - ./internal/llmusage (in: 4)
+  - ./internal/observability (in: 6)
+  - ./internal/report (in: 2)
+  - ./internal/satools (in: 1)
+  - ./internal/status (in: 1)
+  - ./internal/submodule (in: 1)
+  - ./internal/workspace (in: 1)
+
+Merge suggestions (heuristics):
+  - ./internal/cli -> ./cmd/majordomo (sole importer: only imported by ./cmd/majordomo)
+  - ./internal/cluster -> ./internal/staging (sole importer: only imported by ./internal/staging)
+  - ./internal/contextdigest -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/diff -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/judge/evaluation/bootstrap -> ./internal/judge (sole importer: only imported by ./internal/judge)
+  - ./internal/judge/evaluation/digest -> ./internal/judge (sole importer: only imported by ./internal/judge)
+  - ./internal/judge/evaluation/summary -> ./internal/judge (sole importer: only imported by ./internal/judge)
+  - ./internal/judge/evaluation/tech -> ./internal/judge (sole importer: only imported by ./internal/judge)
+  - ./internal/poll -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/reviewrun -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/satools -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/status -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/submodule -> ./internal/cli (sole importer: only imported by ./internal/cli)
+  - ./internal/workspace -> ./internal/workspace/opencode (sole importer: only imported by ./internal/workspace/opencode)
+
+Stem collision warnings:
+  - ./internal/agent, ./internal/agenting: packages share stem "agen" but have different importers; verify if distinct bounded contexts before merging
+
+Platform utility leaves (keep small):
+  - ./internal/config
+
+Source evidence (AST):
+  - packages: 36
+  - anchored packages: 36

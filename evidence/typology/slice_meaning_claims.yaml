@@ -1,0 +1,22 @@
+slices:
+    - id: context
+      claims:
+        - adapt_external
+        - fill_dto
+        - observability
+    - id: operations
+      claims:
+        - run_cli
+        - orchestrate
+        - serve_http
+        - wire_handlers
+        - config
+        - adapt_external
+        - fill_dto
+        - observability
+        - exec_process
+    - id: review
+      claims:
+        - exec_process
+        - data_shape
+        - aggregate_views

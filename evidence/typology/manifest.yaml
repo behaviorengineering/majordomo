@@ -1,0 +1,22 @@
+repo_id: majordomo
+source_sha: 5448151b2a4841037624e434f5e4e8bb5c35ef06
+generated_at: "2026-09-22T06:14:46Z"
+typology_version: typology v0.1.2
+mode: reuse
+module_scope: .
+snapshot_path: snapshot.yaml
+architecture_path: architecture_brief.md
+refine_status: complete
+graph_path: graph.txt
+package_contracts_path: package_contracts.md
+package_roles_path: package_roles.yaml
+package_rlm_context_path: package_rlm_context.md
+package_capability_constraints_path: package_capability_constraints.yaml
+slice_objective_claims_path: slice_meaning_claims.yaml
+slice_objective_ledger_path: slice_meaning_ledger.yaml
+cluster_proposal_path: slice_grouping_proposal.yaml
+cluster_merge_verdicts_path: slice_grouping_verdicts.yaml
+mechanical_grouping_path: mechanical_grouping.yaml
+refined_snapshot_path: refined_snapshot.yaml
+journey_path: journey.md
+human_intervention_path: human_intervention.md

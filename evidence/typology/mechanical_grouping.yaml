@@ -1,0 +1,105 @@
+delivery_paths:
+    - internal/aigateway
+entrypoint_paths:
+    - cmd/majordomo
+door_walks:
+    - door_path: cmd/majordomo
+      door_role: entrypoint
+      private_paths:
+        - internal/agent
+        - internal/agenting
+        - internal/cache
+        - internal/cli
+        - internal/cluster
+        - internal/config
+        - internal/contextdigest
+        - internal/contextgate
+        - internal/contextstore
+        - internal/diff
+        - internal/filereview
+        - internal/githttps
+        - internal/judge
+        - internal/judge/evaluation/bootstrap
+        - internal/judge/evaluation/digest
+        - internal/judge/evaluation/summary
+        - internal/judge/evaluation/tech
+        - internal/judge/evaluation/typology
+        - internal/judge/modules
+        - internal/llmusage
+        - internal/observability
+        - internal/orchestrate
+        - internal/outbound
+        - internal/poll
+        - internal/publish
+        - internal/report
+        - internal/reviewrun
+        - internal/sa
+        - internal/satools
+        - internal/staging
+        - internal/status
+        - internal/submodule
+      cross_door_wiring:
+        - '`cmd/majordomo` -[serves_server]-> `internal/aigateway`'
+        - '`internal/agent` -[imports]-> `internal/aigateway`'
+        - '`internal/judge` -[imports]-> `internal/aigateway`'
+    - door_path: internal/aigateway
+      door_role: server
+unreached_paths:
+    - internal/workspace
+    - internal/workspace/opencode
+library_by_role:
+    config:
+        - internal/config
+    dto:
+        - internal/diff
+    exec_runner:
+        - internal/agent
+        - internal/publish
+        - internal/reviewrun
+        - internal/sa
+        - internal/satools
+        - internal/staging
+        - internal/submodule
+        - internal/workspace
+    observability:
+        - internal/contextdigest
+        - internal/observability
+product_seeds:
+    - paths:
+        - internal/cache
+        - internal/githttps
+    - paths:
+        - internal/agenting
+    - paths:
+        - internal/cluster
+    - paths:
+        - internal/contextgate
+    - paths:
+        - internal/judge/evaluation/bootstrap
+    - paths:
+        - internal/judge/evaluation/tech
+    - paths:
+        - internal/llmusage
+    - paths:
+        - internal/outbound
+    - paths:
+        - internal/report
+    - paths:
+        - internal/status
+notes:
+    - '`entrypoint` and `server` are distinct delivery doors; do not merge them.'
+    - '`dto` packages are technical libraries, not product slices.'
+    - '`config` packages are technical libraries, not product slices.'
+    - '`exec_runner` packages are technical libraries, not product slices.'
+    - '`observability` packages are technical libraries, not product slices.'
+    - '`internal/workspace` (`exec_runner`) was not reached from any door; do not auto-own it.'
+    - '`internal/workspace/opencode` (`adapter`) was not reached from any door; do not auto-own it.'
+    - '`internal/agenting` is a singleton adapter component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/cluster` is a singleton aggregator component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/contextgate` is a singleton adapter component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/judge/evaluation/bootstrap` is a singleton aggregator component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/judge/evaluation/tech` is a singleton aggregator component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/llmusage` is a singleton aggregator component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/outbound` is a singleton adapter component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/report` is a singleton adapter component; let the LLM argue whether it belongs with a neighbour or stays separate.'
+    - '`internal/status` is a singleton adapter component; let the LLM argue whether it belongs with a neighbour or stays separate.'
