@@ -1,0 +1,729 @@
+packages:
+    - path: cmd/majordomo
+      role: entrypoint
+      confidence: 0.95
+      evidence:
+        - has_main
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - 'rlm:"Command majordomo is the control-plane CLI", "hasMain: true"'
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: entrypoint
+      llm_role: entrypoint
+      agreement: match
+      rlm_iterations: 7
+    - path: internal/agent
+      role: exec_runner
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"RunOpenCode", "RunSummaryLoop"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/agenting
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Stage", "Select"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 5
+    - path: internal/aigateway
+      role: server
+      confidence: 0.95
+      evidence:
+        - delivery:http
+        - imports_net_http
+        - http_route_register
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - 'rlm:"server *http.Server", "ln net.Listener", "deliveryHint: server-http"'
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: server
+      llm_role: server
+      agreement: match
+      rlm_iterations: 11
+    - path: internal/cache
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:reads and writes review-cache, poll-cursor, and digest-inference data
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/cli
+      role: cli
+      confidence: 0.8
+      evidence:
+        - cli_flag_parse
+        - cli_subcommand
+        - imports_cli_framework
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"wires majordomo subcommands", "newRunCmd" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: cli
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 12
+    - path: internal/cluster
+      role: aggregator
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"BuildCorpusIndex", "ClusterDocs", "DocClusterAwareBatches"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: aggregator
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/config
+      role: config
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Package config loads and merges majordomo-central-config YAML", "LoadAll", "LoadDefaults", "LoadMerged"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: config
+      agreement: match
+      rlm_iterations: 3
+    - path: internal/contextdigest
+      role: observability
+      confidence: 0.9
+      evidence:
+        - imports_otel
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"runs the served-repo context catch-up job", "BootstrapSurveyRunner", "Forge"
+        - rlm_disagree_kept_stage1
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: observability
+      llm_role: exec_runner
+      agreement: disagree
+      rlm_iterations: 12
+    - path: internal/contextgate
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"ParseComment", "SyncFromComments", "LoadSidecar"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/contextstore
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:ValidateContextBranch, ParseMeta, ParseChronology
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 11
+    - path: internal/diff
+      role: dto
+      confidence: 0.9
+      evidence:
+        - json_tags
+        - decl_heavy_export_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"BuildAll", "BuildAllOptions" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: dto
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 12
+    - path: internal/filereview
+      role: validation
+      confidence: 0.9
+      evidence:
+        - validate_export
+        - validation_report
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Prepare → Judge → Validate → Assemble state machine", "Run", "JudgeFunc" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: validation
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 5
+    - path: internal/githttps
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:ExtraHeaderArgs, InferSCM
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 3
+    - path: internal/judge
+      role: pipeline
+      confidence: 0.8
+      evidence:
+        - pipeline_registry_param
+        - pipeline_runner_type
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Dispatch", "Evaluate", "Runtime" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: pipeline
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 12
+    - path: internal/judge/evaluation/bootstrap
+      role: aggregator
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:Register
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: aggregator
+      agreement: match
+      rlm_iterations: 7
+    - path: internal/judge/evaluation/digest
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Register", "CriterionIDEvidencedOnly" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 4
+    - path: internal/judge/evaluation/summary
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Register", "CriterionIDCallerFacingH3s"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 12
+    - path: internal/judge/evaluation/tech
+      role: aggregator
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Register", "CriterionIDChecklistSkip"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: aggregator
+      agreement: match
+      rlm_iterations: 7
+    - path: internal/judge/evaluation/typology
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Register", "CriterionIDObjectives" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 9
+    - path: internal/judge/modules
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:BootstrapStoryModule, DigestStoryModule, FileReviewModule contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 12
+    - path: internal/llmusage
+      role: aggregator
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:aggregates provider-reported LLM token usage
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: aggregator
+      agreement: match
+      rlm_iterations: 3
+    - path: internal/observability
+      role: observability
+      confidence: 0.95
+      evidence:
+        - imports_otel
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Package observability provides OpenTelemetry tracing and inference failure dumps", "EndSpanWithStatus", "InstrumentHTTPClient"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: observability
+      llm_role: observability
+      agreement: match
+      rlm_iterations: 2
+    - path: internal/orchestrate
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"runs review waves, checkpoints, finalize, and synthesis loops", "Run", "LoadBatchPlan" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 7
+    - path: internal/outbound
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Package outbound provides a shared retrying HTTP client for forge/SCM APIs", "DoWithRetry"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 2
+    - path: internal/poll
+      role: unknown
+      confidence: 0
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"func Run", "Package poll discovers open PRs/MRs via SCM APIs and compares head_sha against a local poll cursor" contradiction_rejected
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: unknown
+      agreement: abstain
+      rlm_iterations: 8
+    - path: internal/publish
+      role: exec_runner
+      confidence: 0.95
+      evidence:
+        - imports_os_exec
+        - exports_run_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Run", "publishGitHub", "publishGitLab", "publishBitbucket"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: exec_runner
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/report
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:BuildTestsuite, ConvertMarkdownToHTML, ConvertToJUnit
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 3
+    - path: internal/reviewrun
+      role: exec_runner
+      confidence: 0.95
+      evidence:
+        - imports_os_exec
+        - exports_run_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Run", "StageClone", "StageSA", "StagePublish"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: exec_runner
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 7
+    - path: internal/sa
+      role: exec_runner
+      confidence: 0.95
+      evidence:
+        - imports_os_exec
+        - exports_run_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Run", "ToolRunner"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: exec_runner
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 3
+    - path: internal/satools
+      role: exec_runner
+      confidence: 0.95
+      evidence:
+        - imports_os_exec
+        - exports_run_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Run", "importsOsExec"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: exec_runner
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 4
+    - path: internal/staging
+      role: exec_runner
+      confidence: 0.95
+      evidence:
+        - imports_os_exec
+        - exports_run_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:'GitRunner.run', 'exec.CommandContext'
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: exec_runner
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 4
+    - path: internal/status
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"postGitHub", "postBitbucket", "Run"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/submodule
+      role: exec_runner
+      confidence: 0.95
+      evidence:
+        - imports_os_exec
+        - exports_run_surface
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:"Run", "imports_os_exec"
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: exec_runner
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 12
+    - path: internal/workspace
+      role: exec_runner
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - 'rlm:"Local.Shell", "Local.Edit", "importsOsExec: true"'
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: exec_runner
+      agreement: match
+      rlm_iterations: 5
+    - path: internal/workspace/opencode
+      role: adapter
+      confidence: 0.75
+      evidence:
+        - 'rlm_error:iteration 0: module process failed: failed to generate prediction: llm Generate failed after 3 attempts: openai: generat'
+        - rlm:Package opencode is the OpenCode CLI adapter for workspace.Port.
+      inspected_stage: 3
+      language: go
+      candidate_role: ""
+      mechanical_role: unknown
+      llm_role: adapter
+      agreement: match
+      rlm_iterations: 5
+edges:
+    - from: cmd/majordomo
+      to: internal/aigateway
+      kind: serves_server
+    - from: cmd/majordomo
+      to: internal/cli
+      kind: imports
+    - from: cmd/majordomo
+      to: internal/observability
+      kind: imports
+    - from: cmd/majordomo
+      to: internal/staging
+      kind: uses_runner
+    - from: internal/agent
+      to: internal/aigateway
+      kind: imports
+    - from: internal/agent
+      to: internal/judge
+      kind: imports
+    - from: internal/cache
+      to: internal/githttps
+      kind: imports
+    - from: internal/cli
+      to: internal/agent
+      kind: imports
+    - from: internal/cli
+      to: internal/cache
+      kind: imports
+    - from: internal/cli
+      to: internal/config
+      kind: imports
+    - from: internal/cli
+      to: internal/contextdigest
+      kind: imports
+    - from: internal/cli
+      to: internal/contextgate
+      kind: imports
+    - from: internal/cli
+      to: internal/contextstore
+      kind: imports
+    - from: internal/cli
+      to: internal/diff
+      kind: fills_dto
+    - from: internal/cli
+      to: internal/observability
+      kind: imports
+    - from: internal/cli
+      to: internal/orchestrate
+      kind: imports
+    - from: internal/cli
+      to: internal/poll
+      kind: imports
+    - from: internal/cli
+      to: internal/publish
+      kind: uses_runner
+    - from: internal/cli
+      to: internal/report
+      kind: imports
+    - from: internal/cli
+      to: internal/reviewrun
+      kind: uses_runner
+    - from: internal/cli
+      to: internal/sa
+      kind: uses_runner
+    - from: internal/cli
+      to: internal/satools
+      kind: uses_runner
+    - from: internal/cli
+      to: internal/staging
+      kind: uses_runner
+    - from: internal/cli
+      to: internal/status
+      kind: imports
+    - from: internal/cli
+      to: internal/submodule
+      kind: uses_runner
+    - from: internal/contextdigest
+      to: internal/agenting
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/cache
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/config
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/contextgate
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/contextstore
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/githttps
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/judge
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/judge/evaluation/typology
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/judge/modules
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/llmusage
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/observability
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/outbound
+      kind: imports
+    - from: internal/contextdigest
+      to: internal/publish
+      kind: uses_runner
+    - from: internal/contextstore
+      to: internal/agenting
+      kind: imports
+    - from: internal/judge
+      to: internal/aigateway
+      kind: imports
+    - from: internal/judge
+      to: internal/config
+      kind: imports
+    - from: internal/judge
+      to: internal/filereview
+      kind: imports
+    - from: internal/judge
+      to: internal/judge/evaluation/bootstrap
+      kind: imports
+    - from: internal/judge
+      to: internal/judge/evaluation/digest
+      kind: imports
+    - from: internal/judge
+      to: internal/judge/evaluation/summary
+      kind: imports
+    - from: internal/judge
+      to: internal/judge/evaluation/tech
+      kind: imports
+    - from: internal/judge
+      to: internal/judge/evaluation/typology
+      kind: imports
+    - from: internal/judge
+      to: internal/judge/modules
+      kind: imports
+    - from: internal/judge
+      to: internal/llmusage
+      kind: imports
+    - from: internal/judge
+      to: internal/observability
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/agent
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/config
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/filereview
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/judge
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/llmusage
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/report
+      kind: imports
+    - from: internal/orchestrate
+      to: internal/staging
+      kind: uses_runner
+    - from: internal/outbound
+      to: internal/observability
+      kind: imports
+    - from: internal/poll
+      to: internal/cache
+      kind: imports
+    - from: internal/poll
+      to: internal/config
+      kind: imports
+    - from: internal/poll
+      to: internal/outbound
+      kind: imports
+    - from: internal/publish
+      to: internal/config
+      kind: imports
+    - from: internal/publish
+      to: internal/outbound
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/cache
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/config
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/githttps
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/llmusage
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/observability
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/orchestrate
+      kind: imports
+    - from: internal/reviewrun
+      to: internal/publish
+      kind: uses_runner
+    - from: internal/reviewrun
+      to: internal/sa
+      kind: uses_runner
+    - from: internal/sa
+      to: internal/config
+      kind: imports
+    - from: internal/sa
+      to: internal/staging
+      kind: uses_runner
+    - from: internal/staging
+      to: internal/agenting
+      kind: imports
+    - from: internal/staging
+      to: internal/cluster
+      kind: imports
+    - from: internal/workspace/opencode
+      to: internal/aigateway
+      kind: imports
+    - from: internal/workspace/opencode
+      to: internal/workspace
+      kind: imports

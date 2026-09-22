@@ -1,0 +1,672 @@
+packages:
+    - path: cmd/majordomo
+      is:
+        - run_cli
+        - orchestrate
+      must_not:
+        - own_domain_rules
+        - serve_http
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: entrypoint
+    - path: internal/agent
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/agenting
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/aigateway
+      is:
+        - serve_http
+        - wire_handlers
+      must_not:
+        - own_domain_rules
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: server
+    - path: internal/cache
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/cli
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: cli
+    - path: internal/cluster
+      is:
+        - aggregate_views
+      must_not:
+        - serve_http
+        - run_cli
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - data_shape
+        - observability
+        - config
+        - synchronize_state
+        - merge_adapters
+        - wire_handlers
+      source: role_rlm
+      role: aggregator
+    - path: internal/config
+      is:
+        - config
+      must_not:
+        - own_domain_rules
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: config
+    - path: internal/contextdigest
+      is:
+        - observability
+      must_not:
+        - config
+        - own_domain_rules
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: observability
+    - path: internal/contextgate
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/contextstore
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/diff
+      is:
+        - data_shape
+      must_not:
+        - synchronize_state
+        - merge_adapters
+        - serve_http
+        - orchestrate
+        - own_domain_rules
+        - run_cli
+        - wire_handlers
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - observability
+        - config
+      filled_by:
+        - internal/cli
+      source: role_table
+      role: dto
+    - path: internal/filereview
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: validation
+    - path: internal/githttps
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/judge
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: pipeline
+    - path: internal/judge/evaluation/bootstrap
+      is:
+        - aggregate_views
+      must_not:
+        - serve_http
+        - run_cli
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - data_shape
+        - observability
+        - config
+        - synchronize_state
+        - merge_adapters
+        - wire_handlers
+      source: role_rlm
+      role: aggregator
+    - path: internal/judge/evaluation/digest
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/judge/evaluation/summary
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/judge/evaluation/tech
+      is:
+        - aggregate_views
+      must_not:
+        - serve_http
+        - run_cli
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - data_shape
+        - observability
+        - config
+        - synchronize_state
+        - merge_adapters
+        - wire_handlers
+      source: role_rlm
+      role: aggregator
+    - path: internal/judge/evaluation/typology
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/judge/modules
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/llmusage
+      is:
+        - aggregate_views
+      must_not:
+        - serve_http
+        - run_cli
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - data_shape
+        - observability
+        - config
+        - synchronize_state
+        - merge_adapters
+        - wire_handlers
+      source: role_rlm
+      role: aggregator
+    - path: internal/observability
+      is:
+        - observability
+      must_not:
+        - config
+        - own_domain_rules
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: observability
+    - path: internal/orchestrate
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/outbound
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/poll
+      must_not:
+        - orchestrate
+        - exec_process
+        - fill_dto
+        - own_domain_rules
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_table
+      role: unknown
+    - path: internal/publish
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/report
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/reviewrun
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/sa
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/satools
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/staging
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/status
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter
+    - path: internal/submodule
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/workspace
+      is:
+        - exec_process
+      must_not:
+        - run_cli
+        - own_domain_rules
+        - orchestrate
+        - fill_dto
+        - adapt_external
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: exec_runner
+    - path: internal/workspace/opencode
+      is:
+        - adapt_external
+        - fill_dto
+      must_not:
+        - orchestrate
+        - exec_process
+        - own_domain_rules
+        - aggregate_views
+        - data_shape
+        - observability
+        - config
+        - serve_http
+        - wire_handlers
+        - run_cli
+        - synchronize_state
+        - merge_adapters
+      source: role_rlm
+      role: adapter

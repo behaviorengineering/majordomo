@@ -1,0 +1,99 @@
+slices:
+    - id: context
+      owned_paths:
+        - internal/agenting
+        - internal/contextdigest
+        - internal/contextgate
+        - internal/contextstore
+      evidence:
+        - 'internal/agenting notes: Package agenting loads and selects context-branch grounding packs for review prep.'
+        - 'internal/contextdigest notes: Package contextdigest runs the served-repo context catch-up job.'
+        - 'internal/contextdigest evidence: imports_otel'
+        - 'internal/contextgate evidence: Action, ActionDone, ActionIgnore, ActionReject, ActionWhy, Comment, DefaultPrefix, ErrNotImplemented, ApplyComments, LoadSidecar, NewGate'
+        - 'internal/contextstore notes: Package contextstore validates the served-repo context branch tree (meta.yaml, chronology.md, and required dossier files).'
+      claims:
+        - adapt_external
+        - fill_dto
+        - observability
+      objective: Manage context loading, validation, and observability through specialized agenting, digest, gate, and store packages.
+      verdict: grounded
+      source: slice_objective_rlm_aligned
+    - id: operations
+      owned_paths:
+        - internal/cli
+        - internal/config
+        - internal/githttps
+        - internal/observability
+        - internal/outbound
+        - internal/poll
+        - internal/submodule
+        - cmd/majordomo
+        - internal/aigateway
+      evidence:
+        - 'cmd/majordomo: hasMain:true, mechanicalRole:entrypoint'
+        - 'internal/aigateway: delivery:http, imports_net_http'
+        - 'internal/cli: mechanicalRole:cli'
+        - 'internal/config: role is config'
+        - 'internal/githttps: role is adapter'
+        - 'internal/observability: role is observability, imports_otel'
+        - 'internal/outbound: role is adapter'
+        - 'internal/submodule: role is exec_runner, imports_os_exec'
+      claims:
+        - run_cli
+        - orchestrate
+        - serve_http
+        - wire_handlers
+        - config
+        - adapt_external
+        - fill_dto
+        - observability
+        - exec_process
+      objective: The operations slice manages CLI entrypoints, configuration, HTTP serving, external adapter interactions, observability, and process execution.
+      verdict: grounded
+      source: slice_objective_rlm_aligned
+    - id: review
+      owned_paths:
+        - internal/staging
+        - internal/diff
+        - internal/filereview
+        - internal/cluster
+        - internal/sa
+        - internal/orchestrate
+        - internal/judge
+        - internal/report
+        - internal/satools
+        - internal/reviewrun
+        - internal/judge/evaluation/digest
+        - internal/judge/evaluation/summary
+        - internal/judge/evaluation/tech
+        - internal/judge/evaluation/bootstrap
+        - internal/judge/evaluation/typology
+        - internal/judge/modules
+        - internal/agent
+        - internal/workspace
+        - internal/workspace/opencode
+        - internal/cache
+        - internal/publish
+        - internal/status
+        - internal/llmusage
+      evidence:
+        - 'internal/staging notes: Package staging ports git-diff-prep: classify, cluster, batch, write manifest.'
+        - 'internal/cluster evidence: UnionFind, BuildCorpusIndex, ClusterDocs'
+        - 'internal/diff notes: Package diff builds combined diffs from staging manifests.'
+        - 'internal/sa notes: Package sa runs staticAnalysis tools from central config against changed files.'
+        - 'internal/sa evidence: importsOsExec:true'
+        - 'internal/orchestrate evidence: BatchEntry, BatchPlan, StageFinalize, StagePrep'
+        - 'internal/filereview notes: Package filereview is the Prepare → Judge → Validate → Assemble state machine'
+        - 'internal/judge notes: Package judge is the Majordomo boundary onto strop JobRunner and evaluation packs.'
+        - 'internal/judge/evaluation/typology evidence: ClusterCriterionIDs'
+        - 'internal/reviewrun notes: Package reviewrun is the local/CI review job: clone, SA, orchestrate, optional publish.'
+        - 'internal/reviewrun evidence: importsOsExec:true'
+        - 'internal/publish notes: Package publish posts PR/MR summaries via forge CLIs (gh, glab) or Bitbucket HTTP.'
+        - 'internal/publish evidence: importsOsExec:true'
+      claims:
+        - exec_process
+        - data_shape
+        - aggregate_views
+      objective: The review slice manages the lifecycle of code changes through staging, clustering, static analysis, orchestration of evaluation modules, and final reporting.
+      verdict: grounded
+      source: slice_objective_rlm_aligned

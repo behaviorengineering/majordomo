@@ -1,0 +1,143 @@
+id: majordomo
+slices:
+    - id: review
+      objective: The review slice manages the lifecycle of code changes through staging, clustering, static analysis, orchestration of evaluation modules, and final reporting.
+      owns:
+        - id: staging
+          path: internal/staging
+          layer: domain
+        - id: diff
+          path: internal/diff
+          layer: domain
+        - id: filereview
+          path: internal/filereview
+          layer: domain
+        - id: cluster
+          path: internal/cluster
+          layer: domain
+        - id: sa
+          path: internal/sa
+          layer: domain
+        - id: orchestrate
+          path: internal/orchestrate
+          layer: domain
+        - id: judge
+          path: internal/judge
+          layer: domain
+        - id: report
+          path: internal/report
+          layer: domain
+        - id: internal-satools
+          path: ./internal/satools
+          layer: domain
+        - id: internal-reviewrun
+          path: ./internal/reviewrun
+          layer: domain
+        - id: internal-judge-evaluation-digest
+          path: ./internal/judge/evaluation/digest
+          layer: domain
+        - id: internal-judge-evaluation-summary
+          path: ./internal/judge/evaluation/summary
+          layer: domain
+        - id: internal-judge-evaluation-tech
+          path: ./internal/judge/evaluation/tech
+          layer: domain
+        - id: internal-judge-evaluation-bootstrap
+          path: ./internal/judge/evaluation/bootstrap
+          layer: domain
+        - id: internal-judge-evaluation-typology
+          path: ./internal/judge/evaluation/typology
+          layer: domain
+        - id: internal-judge-modules
+          path: ./internal/judge/modules
+          layer: domain
+        - id: internal-agent
+          path: ./internal/agent
+          layer: domain
+        - id: internal-workspace
+          path: ./internal/workspace
+          layer: domain
+        - id: internal-workspace-opencode
+          path: ./internal/workspace/opencode
+          layer: domain
+        - id: internal-cache
+          path: ./internal/cache
+          layer: domain
+        - id: internal-publish
+          path: ./internal/publish
+          layer: domain
+        - id: internal-status
+          path: ./internal/status
+          layer: domain
+        - id: internal-llmusage
+          path: ./internal/llmusage
+          layer: domain
+    - id: context
+      objective: Manage context loading, validation, and observability through specialized agenting, digest, gate, and store packages.
+      owns:
+        - id: agenting
+          path: internal/agenting
+          layer: domain
+        - id: contextdigest
+          path: internal/contextdigest
+          layer: domain
+        - id: contextgate
+          path: internal/contextgate
+          layer: domain
+        - id: contextstore
+          path: internal/contextstore
+          layer: domain
+    - id: operations
+      objective: The operations slice manages CLI entrypoints, configuration, HTTP serving, external adapter interactions, observability, and process execution.
+      owns:
+        - id: cli-pkg
+          path: internal/cli
+          layer: domain
+        - id: config-pkg
+          path: internal/config
+          layer: domain
+        - id: githttps-pkg
+          path: internal/githttps
+          layer: domain
+        - id: observability-pkg
+          path: internal/observability
+          layer: domain
+        - id: outbound-pkg
+          path: internal/outbound
+          layer: domain
+        - id: poll-pkg
+          path: internal/poll
+          layer: domain
+        - id: submodule-pkg
+          path: internal/submodule
+          layer: domain
+      surfaces:
+        - id: operations-cli
+          kind: cli
+          components:
+            - id: majordomo-cmd
+              path: cmd/majordomo
+        - id: operations-api
+          kind: api
+          components:
+            - id: aigateway
+              path: internal/aigateway
+sliceBindings:
+    - from: context
+      to: operations
+      kind: reads
+    - from: context
+      to: review
+      kind: reads
+    - from: operations
+      to: context
+      kind: reads
+    - from: operations
+      to: review
+      kind: reads
+    - from: review
+      to: context
+      kind: reads
+    - from: review
+      to: operations
+      kind: reads
