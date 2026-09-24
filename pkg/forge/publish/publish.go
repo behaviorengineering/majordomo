@@ -306,7 +306,7 @@ func httpJSON(ctx context.Context, client *http.Client, method, url, token strin
 	if err != nil {
 		return nil, 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("read publish response: %w", err)
