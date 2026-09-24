@@ -4,9 +4,9 @@
 
 The context branch is durable project understanding on the **served repo**. It is not the default branch. Product PRs still target default. Context updates are a **separate PR whose base is the context branch**. Default stays free of Majordomo files.
 
-Product boundary (open review runner vs closed intelligence that *builds* this context): [PROPOSAL-oss-runner-vs-intelligence-factory.md](../PROPOSAL-oss-runner-vs-intelligence-factory.md).
+Product boundary (open review runner vs closed intelligence that *builds* this context): [PROPOSAL-oss-runner-vs-intelligence-factory.md](../PROPOSAL-oss-runner-vs-intelligence-factory.md). The open half validates the tree, selects agenting packs, and reads gate state. Digest generation lives in private `majordomo-context`.
 
-This slice ships **schema and validation only**. Digest, skill selection, conversation-before-merge, and review injection are later work.
+Schema validation ships in this module (`majordomo context validate`). Digest, story generation, and pack materialization are factory work.
 
 ## Why
 

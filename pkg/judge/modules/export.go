@@ -51,4 +51,23 @@ func SummaryModule() core.Module { return summaryModule() }
 // TechnicalModule builds the technical review generator.
 func TechnicalModule() core.Module { return technicalModule() }
 
+// DigestGenerators returns constructors for context-digest / typology tasks.
+// Private factories (majordomo-context) should pass this map as
+// judge.RuntimeOptions.Generators until they own the prompt packages themselves.
+func DigestGenerators() map[string]func() core.Module {
+	return map[string]func() core.Module{
+		TaskTypologyInspect:                TypologyInspectModule,
+		TaskTypologySliceGrouping:          TypologyClusterModule,
+		TaskTypologySliceCatalog:           TypologyRefineModule,
+		TaskTypologyHumanIntervention:      TypologyHumanInterventionModule,
+		TaskTypologyInterventionJourney:    TypologyInterventionJourneyModule,
+		TaskTypologyInterventionBrief:      TypologyInterventionBriefModule,
+		TaskTypologyInterventionWeaknesses: TypologyInterventionWeaknessesModule,
+		TaskTypologyInterventionPRPriority: TypologyInterventionPRPriorityModule,
+		TaskTypologyFindingComment:         TypologyFindingCommentModule,
+		TaskBootstrapStory:                 BootstrapStoryModule,
+		TaskDigestStory:                    DigestStoryModule,
+	}
+}
+
 var _ core.Module = (*dspymodules.DirectivesCoT)(nil)

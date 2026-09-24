@@ -43,7 +43,8 @@ func TestNewRuntimeRegistersPerTaskModels(t *testing.T) {
 	}
 
 	rt, err := judge.NewRuntime(context.Background(), cfg, judge.RuntimeOptions{
-		Tasks: judge.DigestTasks(),
+		Tasks:      judge.DigestTasks(),
+		Generators: digestCtors(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +79,33 @@ func TestNewRuntimeFallsBackToGatewayModel(t *testing.T) {
 	}
 }
 
-func TestNewRuntimePolypusOnlySkipsUnusedGatewayTasks(t *testing.T) {
+func TestNewRuntimeEmptyTasksIsReviewOnly(t *testing.T) {
+	judge.ResetRegistryForTests()
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("GEMINI_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+	t.Setenv("GOOGLE_GENERATIVE_AI_API_KEY", "")
+
+	rt, err := judge.NewRuntime(context.Background(), config.RepoConfig{
+		Pipelines: map[string]config.Pipeline{
+			"pr-review": {Model: "claude-review"},
+		},
+	}, judge.RuntimeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range judge.ReviewTasks() {
+		if rt.TaskModel(task) == "" {
+			t.Fatalf("expected review task %s registered", task)
+		}
+	}
+	if got := rt.TaskModel(jmodules.TaskDigestStory); got != "" {
+		t.Fatalf("digest task must not register on empty Tasks, got %q", got)
+	}
+}
+
+func TestNewRuntimeFactoryRegistersDigestViaGenerators(t *testing.T) {
 	judge.ResetRegistryForTests()
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
@@ -105,8 +132,10 @@ func TestNewRuntimePolypusOnlySkipsUnusedGatewayTasks(t *testing.T) {
 		},
 	}
 
-	// Empty Tasks list previously failed on filereview gateway fallback.
-	rt, err := judge.NewRuntime(context.Background(), cfg, judge.RuntimeOptions{})
+	rt, err := judge.NewRuntime(context.Background(), cfg, judge.RuntimeOptions{
+		Tasks:      []string{jmodules.TaskBootstrapStory, jmodules.TaskDigestStory},
+		Generators: digestCtors(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +147,17 @@ func TestNewRuntimePolypusOnlySkipsUnusedGatewayTasks(t *testing.T) {
 	}
 	if got := rt.TaskModel(jmodules.TaskFileReview); got != "" {
 		t.Fatalf("expected filereview skipped, got model %q", got)
+	}
+}
+
+func TestNewRuntimeUnknownTaskFailsClosed(t *testing.T) {
+	judge.ResetRegistryForTests()
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+	_, err := judge.NewRuntime(context.Background(), config.RepoConfig{}, judge.RuntimeOptions{
+		Tasks: []string{"not_a_real_task"},
+	})
+	if err == nil {
+		t.Fatal("expected unknown task error")
 	}
 }
 
@@ -158,7 +198,8 @@ func TestNewRuntimeRegistersDigestEvaluationWorkflows(t *testing.T) {
 
 	// NewRuntime fails closed if chained evaluators / workflows cannot register.
 	rt, err := judge.NewRuntime(context.Background(), cfg, judge.RuntimeOptions{
-		Tasks: judge.DigestTasks(),
+		Tasks:      judge.DigestTasks(),
+		Generators: digestCtors(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -185,9 +226,19 @@ func TestNewRuntimeDigestTasksFailClosedWithoutProvider(t *testing.T) {
 	t.Setenv("GOOGLE_GENERATIVE_AI_API_KEY", "")
 
 	_, err := judge.NewRuntime(context.Background(), config.RepoConfig{}, judge.RuntimeOptions{
-		Tasks: judge.DigestTasks(),
+		Tasks:      judge.DigestTasks(),
+		Generators: digestCtors(),
 	})
 	if err == nil {
 		t.Fatal("expected error when digest tasks lack provider and gateway keys")
 	}
+}
+
+func digestCtors() map[string]judge.GeneratorCtor {
+	raw := jmodules.DigestGenerators()
+	out := make(map[string]judge.GeneratorCtor, len(raw))
+	for k, v := range raw {
+		out[k] = v
+	}
+	return out
 }

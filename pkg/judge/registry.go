@@ -61,7 +61,7 @@ func Evaluate(
 	return rt.Evaluate(ctx, task, inputFields, outputFields, version)
 }
 
-// StoryLLMAvailable is true when digest story generation can call strop.
+// StoryLLMAvailable is true when a Judge runtime can call strop (review or factory).
 func StoryLLMAvailable() bool {
 	return StropReady()
 }
