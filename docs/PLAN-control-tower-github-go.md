@@ -865,7 +865,7 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | [advanced/05-file-orchestration.md](advanced/05-file-orchestration.md) | Staging and waves |
 | [advanced/09-customising-the-review.md](advanced/09-customising-the-review.md) | YAML config mapping |
 | [advanced/10-repo-context-branch.md](advanced/10-repo-context-branch.md) | Context branch, catch-up, agenting vs mechanical, strop driver, workspace port |
-| [PROPOSAL-oss-runner-vs-intelligence-factory.md](PROPOSAL-oss-runner-vs-intelligence-factory.md) | Open review runner vs closed context factory (domain kit paths) |
+| [PROPOSAL-oss-runner-vs-intelligence-factory.md](PROPOSAL-oss-runner-vs-intelligence-factory.md) | Open review runner vs closed context factory (staged packaging; review-only default runtime) |
 
 ---
 
@@ -873,8 +873,8 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 
 | Date | Change |
 |------|--------|
+| 2026-09-25 | Public runner boundary: review-only default Judge runtime + Generators seam; drop public `cache digest-*` CLI; document staged factory handshake |
 | 2026-09-23 | Domain-oriented product kit: nest `pkg/<domain>/…`, ops under `internal/ops/`; slim majordomo-context onto majordomo pkg domains |
-| 2026-09-23 | Product boundary proposal: open runner vs closed intelligence factory (link only; no packaging change) |
 | 2026-09-23 | Extract context factory to private majordomo-context binary; promote agenting/contextstore/contextgate to pkg/ |
 | 2026-08-22 | Initial draft from architecture discussion |
 | 2026-08-23 | Control-tower is a separate repo; pins `majordomo` as `.majordomo/` submodule |

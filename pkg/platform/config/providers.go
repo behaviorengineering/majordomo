@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	stropdspy "github.com/behaviorengineering/strop/pkg/dspy"
@@ -15,6 +16,32 @@ const (
 	JobContextDigest = "context-digest"
 	JobPRReview      = "pr-review"
 )
+
+var (
+	extraJobForTaskMu sync.RWMutex
+	extraJobForTask   = map[string]string{}
+)
+
+// RegisterJobForTask maps a generator task name to a job_configs key.
+// Private factories use this for tasks that are not part of the open review runner.
+// Built-in review and context-digest mappings still win when RegisterJobForTask is unused.
+func RegisterJobForTask(task, job string) {
+	task = strings.TrimSpace(task)
+	job = strings.TrimSpace(job)
+	if task == "" || job == "" {
+		return
+	}
+	extraJobForTaskMu.Lock()
+	defer extraJobForTaskMu.Unlock()
+	extraJobForTask[task] = job
+}
+
+// ResetJobForTaskRegistryForTests clears RegisterJobForTask state (tests only).
+func ResetJobForTaskRegistryForTests() {
+	extraJobForTaskMu.Lock()
+	defer extraJobForTaskMu.Unlock()
+	extraJobForTask = map[string]string{}
+}
 
 // AIProviderConfig is one named LLM backend under ai_providers.
 type AIProviderConfig struct {
@@ -47,8 +74,19 @@ type ModuleTaskConfig struct {
 var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // JobForTask maps a generator task name to its job_configs key.
+// Review tasks resolve to JobPRReview. Context-digest task names remain as a
+// compatibility contract for majordomo-context until it owns routing entirely.
+// Additional mappings may be registered with RegisterJobForTask.
 func JobForTask(task string) string {
-	switch strings.TrimSpace(task) {
+	task = strings.TrimSpace(task)
+	extraJobForTaskMu.RLock()
+	if job, ok := extraJobForTask[task]; ok {
+		extraJobForTaskMu.RUnlock()
+		return job
+	}
+	extraJobForTaskMu.RUnlock()
+
+	switch task {
 	case "bootstrap_story", "digest_story", "typology_inspect",
 		"typology_slice_meaning", "typology_slice_grouping_audit", "typology_slice_grouping", "typology_slice_catalog",
 		"typology_human_intervention",

@@ -1,12 +1,12 @@
 # Open runner vs closed intelligence factory
 
-*Majordomo — product boundary note (proposal). No code move yet.*
+*Majordomo — product boundary note. Packaging is staged; this documents the live contract.*
 
 ## Why this note exists
 
 Majordomo’s lasting value is not “another PR bot.” It is **reviews that remember the repository**, with evidence and a teaching story that evolves as default moves. Competitors can copy a forge poller. Copying the factory that builds that memory is what we want to make hard.
 
-This note draws a clear line: what may live in open source, what stays proprietary, and how the two talk. It does not change packaging today.
+This note draws a clear line: what may live in open source, what stays proprietary, and how the two talk.
 
 ## Two tools, one handshake
 
@@ -48,11 +48,12 @@ This is the paid differentiator: evidence-first understanding that compounds.
 
 | In plain English | Rough home today |
 |------------------|------------------|
-| Catch up when the context cursor is behind default | `majordomo-context` / `internal/digest` (catch-up / cron path) |
+| Catch up when the context cursor is behind default | private `majordomo-context` (`digest` / `repos`) |
 | Survey code; roles, grouping, meaning with evidence first | typology path inside digest |
 | Write mission, architecture, conventions, weaknesses, chronology | story generation / compaction in digest |
 | **Create** agenting packs from the story | digest materialize (not mere select) |
 | Prompts, model routing, eval fixtures, contradiction handling | digest internals |
+| Digest inference cache under `digest/` on the inference-cache branch | factory binary (imports transitional `pkg/platform/cache` DigestStore) |
 
 Treat license keys and binary obfuscation as friction if a factory ever runs on customer hardware. They are not the moat. The moat is continuously better inference, provenance, incremental catch-up, and a private evaluation corpus.
 
@@ -65,6 +66,7 @@ Treat license keys and binary obfuscation as friction if a factory ever runs on 
 | Decide what packs say / regenerate from code | Closed | That is the factory |
 | Pack schema + signed manifest format | Open | Others can write packs; we can verify |
 | Branch layout (`majordomo-context/…`) | Open convention | Storage contract, not the brain |
+| Digest inference fingerprints / stage traces | Closed | How the factory gets copied if leaked |
 
 **Rule of thumb:** if a stranger can reimplement it from forge APIs and “attach these markdown files,” it can be open. If the value is “infer what this repo means and keep that true over time,” it stays closed.
 
@@ -74,12 +76,20 @@ The factory publishes **finished packs** (preferably signed) onto the orphan con
 
 Do not expose rejected candidates, internal scores, or digest stage traces through the runner API. That leak is how the factory gets copied without cloning the source.
 
+### Compatibility contract (staged)
+
+1. **Judge runtime:** empty `RuntimeOptions.Tasks` registers **review** generators only. Factory callers pass `Tasks: DigestTasks()` and should supply `Generators` (see `modules.DigestGenerators()` until prompts move).
+2. **Provider routing:** `config.JobForTask` keeps review + context-digest task names; factories may `RegisterJobForTask` for extra names.
+3. **CLI:** public `majordomo` exposes `context validate` / gate read and review/poll cache; it does **not** expose `cache digest-*`. Digest CLI lives on `majordomo-context`.
+4. **Cache:** `DigestCachePrefix` (`digest/`) remains the open branch path convention. `DigestStore` stays importable as a transitional API for the private binary until that module owns the store.
+
 ## Packaging (in progress)
 
 1. **Open runner:** majordomo product kit under `pkg/<domain>/…` (`context`, `platform`, `forge`, `review`, `judge`); ops only under `internal/ops/`.
 2. **Closed factory:** private GitLab module [`majordomo-context`](https://gitlab.com/behaviorengineering/majordomo-context) ships a licensed, optionally garbled binary (`digest` / `repos` / `gate`). Pattern: kairos Ed25519 Gate + GoReleaser `-tags release`. Imports majordomo `pkg/` domains; keeps `internal/digest`, `internal/license`, `internal/ops/cli`.
 3. **Not required:** SaaS digest API. Hosted factory remains a later option.
 4. **Avoid:** open-core build tags as the only IP boundary.
+5. **Next slice:** move bundled digest prompts and `DigestStore` into the private module; leave only schema, selection, and registration seams public.
 
 ## One-line pitch
 

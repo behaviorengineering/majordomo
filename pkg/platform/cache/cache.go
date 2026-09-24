@@ -17,6 +17,9 @@ var pollBranchRE = regexp.MustCompile(`(?i)^majordomo-poll-cache/[a-z0-9][a-z0-9
 // Path prefixes under majordomo-inference-cache/<repo-id>.
 const (
 	ReviewCachePrefix = "review"
+	// DigestCachePrefix is the open storage convention for factory inference
+	// artifacts under the shared inference-cache branch. The open runner does
+	// not write this prefix; majordomo-context does.
 	DigestCachePrefix = "digest"
 )
 

@@ -172,3 +172,16 @@ func TestJobForTask(t *testing.T) {
 		t.Fatal("unknown")
 	}
 }
+
+func TestRegisterJobForTask(t *testing.T) {
+	ResetJobForTaskRegistryForTests()
+	t.Cleanup(ResetJobForTaskRegistryForTests)
+
+	if JobForTask("factory_custom_task") != "" {
+		t.Fatal("expected unregistered")
+	}
+	RegisterJobForTask("factory_custom_task", JobContextDigest)
+	if JobForTask("factory_custom_task") != JobContextDigest {
+		t.Fatal("registered mapping missing")
+	}
+}

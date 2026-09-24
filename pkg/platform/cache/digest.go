@@ -1,8 +1,6 @@
 package cache
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +12,11 @@ import (
 
 	"github.com/behaviorengineering/majordomo/pkg/forge/githttps"
 )
+
+// Digest inference-cache types and DigestStore are owned by the closed
+// intelligence factory (majordomo-context). The open review runner keeps this
+// package API so the private binary can import and pin it until the factory
+// hosts its own store. Public CLI must not expose digest-lookup/store/push.
 
 const (
 	// DigestInspectSchemaV1 is the legacy inspect schema (hashed RLM markdown).
@@ -644,27 +647,6 @@ type digestRecord struct {
 	Fingerprint string          `json:"fingerprint"`
 	CreatedAt   string          `json:"created_at"`
 	Payload     json.RawMessage `json:"payload"`
-}
-
-// HashDigestParts returns SHA-256 hex of null-separated parts.
-func HashDigestParts(parts ...string) string {
-	h := sha256.New()
-	for _, p := range parts {
-		h.Write([]byte(p))
-		h.Write([]byte{0})
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-
-// ContentSHA returns SHA-256 hex of raw bytes.
-func ContentSHA(raw string) string {
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
-}
-
-// OwnedPathsHash hashes a stable owned-path list.
-func OwnedPathsHash(paths []string) string {
-	return ClusterFilesHash(paths)
 }
 
 func (fp InspectFingerprint) key() string {
