@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/behaviorengineering/majordomo/internal/aigateway"
-	"github.com/behaviorengineering/majordomo/internal/cli"
-	"github.com/behaviorengineering/majordomo/internal/observability"
-	"github.com/behaviorengineering/majordomo/internal/staging"
+	"github.com/behaviorengineering/majordomo/internal/ops/cli"
+	"github.com/behaviorengineering/majordomo/pkg/platform/aigateway"
+	"github.com/behaviorengineering/majordomo/pkg/platform/observability"
+	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
 
 func main() {

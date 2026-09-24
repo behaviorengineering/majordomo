@@ -4,6 +4,8 @@
 
 The context branch is durable project understanding on the **served repo**. It is not the default branch. Product PRs still target default. Context updates are a **separate PR whose base is the context branch**. Default stays free of Majordomo files.
 
+Product boundary (open review runner vs closed intelligence that *builds* this context): [PROPOSAL-oss-runner-vs-intelligence-factory.md](../PROPOSAL-oss-runner-vs-intelligence-factory.md).
+
 This slice ships **schema and validation only**. Digest, skill selection, conversation-before-merge, and review injection are later work.
 
 ## Why
@@ -304,14 +306,14 @@ Enhance behind the same port (timeouts, allowlists, tracing). Do not leak adapte
 
 Map today's loops onto strop instead of new `for` loops:
 
-- Summary / tech write→score → `internal/judge` + strop `JobRunner` + evaluator packs under `internal/judge/evaluation/{summary,tech}` (rubric IDs stay in Majordomo). Homemade loops in `internal/agent` remain the v1 path until cutover.
+- Summary / tech write→score → `pkg/judge` + strop `JobRunner` + evaluator packs under `pkg/judge/evaluation/{summary,tech}` (rubric IDs stay in Majordomo). Review loops live in `pkg/review/dispatch`.
 - File-review completeness → Go validate after generate (strop validators for required fields; Majordomo checks every reviewable has an artifact).
 - Context conversation-before-merge → `humanreview.Gate` + reviewflow ports (comment = reject/regen message). `agentsession` for the short-lived transcript.
 - Context story / compaction → **section-walk** over mission, architecture, conventions, weaknesses, chronology (lock passed sections). Not a separate phase-walk over the same files.
 
 Strop boundary rules still apply: no product prompts inside strop; Majordomo owns signatures, rubric copy, and the workspace-tool adapter.
 
-Judge always runs in-process via strop (`internal/judge`). OpenCode is not a protocol driver. The `majordomo-agent` image may still put OpenCode on PATH later for workspace tools only. Majordomo `go.mod` pins tagged `github.com/behaviorengineering/strop`.
+Judge always runs in-process via strop (`pkg/judge`). OpenCode is not a protocol driver. The `majordomo-agent` image may still put OpenCode on PATH later for workspace tools only. Majordomo `go.mod` pins tagged `github.com/behaviorengineering/strop`.
 
 ## Grounding: selected agenting packs (v1 prep)
 
@@ -343,7 +345,7 @@ Examples:
 
 Selection MUST stay small. If an area pack does not match the task, it MUST NOT be attached.
 
-**Shipped (v1):** `internal/agenting` loads `index.yaml`; prep (`AttachGrounding`) selects packs by glob + mode, copies `GROUNDING.md` into each batch `/.grounding/<id>.md`, and records `grounding_packs` on `manifest.json`. Pass `--context-dir` or `MAJORDOMO_CONTEXT_DIR` (merged context tip). Tower review workflow shallow-clones `majordomo-context/<repo-id>` when it exists. **`majordomo dispatch`** resolves paths and sets `MAJORDOMO_GROUNDING`; `agent-dispatch.sh` appends `grounding:` to the OpenCode prompt; `pr-review.agent.md` Step 1.5 reads only those files.
+**Shipped (v1):** `pkg/agenting` loads `index.yaml`; prep (`AttachGrounding`) selects packs by glob + mode, copies `GROUNDING.md` into each batch `/.grounding/<id>.md`, and records `grounding_packs` on `manifest.json`. Pass `--context-dir` or `MAJORDOMO_CONTEXT_DIR` (merged context tip). Tower review workflow shallow-clones `majordomo-context/<repo-id>` when it exists. **`majordomo dispatch`** resolves paths and sets `MAJORDOMO_GROUNDING`; `agent-dispatch.sh` appends `grounding:` to the OpenCode prompt; `pr-review.agent.md` Step 1.5 reads only those files.
 
 `pipelines.*.agentContext` in central YAML is **legacy** (still materialized today). It is not a substitute for packs. Phase 6 grounding is `agenting/`.
 
@@ -359,7 +361,7 @@ Aborted seed resume means cache hits on the next **full** run, not a partial tea
 Operators can re-run later seed stages from an existing context PR without pushing:
 
 ```bash
-majordomo context digest --repo-id <id> --workdir <clone> \
+majordomo-context digest --repo-id <id> --workdir <clone> \
   --resume-pr <N> --from-stage catalog|intervention|story \
   --work-story-dir <durable-dir>
 ```
@@ -381,10 +383,10 @@ inside a full chain; `--resume-pr` skips earlier stages entirely and keeps teach
 For testing and interrupted seed iteration without branches or PRs:
 
 ```bash
-majordomo context digest --repo-id <id> --workdir <clone> \
+majordomo-context digest --repo-id <id> --workdir <clone> \
   --local-seed-dir /path/to/seeds/<id>
 
-majordomo context digest --repo-id <id> --workdir <clone> \
+majordomo-context digest --repo-id <id> --workdir <clone> \
   --local-seed-dir /path/to/seeds/<id> --from-stage intervention
 ```
 
@@ -424,7 +426,7 @@ RLM JSONL and Judge runreports used to live only there, so a finished local rese
 
 Durable dump (not the teaching branch):
 
-- Flag: `majordomo context digest --work-story-dir <dir>`
+- Flag: `majordomo-context digest --work-story-dir <dir>`
 - Or env parent: `MAJORDOMO_DIGEST_WORK_STORY_DIR` → `<parent>/<repo-id>-<timestamp>`
 - Default: `tmp/digest-runs/<repo-id>-<timestamp>` under the process cwd
 - Contents: `rlm-traces/<task>/`, `module-traces/` (CoT/Predict TraceSession JSONL), `logs/runs/`, and a short `README.md`
@@ -454,7 +456,7 @@ Checkout the **merged** context tip only. Open context update PRs are not ground
 
 - [Typology cluster: mechanical walk vs RLM](10.1-slice-grouping-decision.md)
 - [PLAN: Control Tower](../PLAN-control-tower-github-go.md) (Decision 5)
-- `internal/contextstore` (schema)
+- `pkg/contextstore` (schema)
 - `internal/contextdigest` (catch-up job)
 - `majordomo context validate`
-- `majordomo context digest`
+- `majordomo-context digest`

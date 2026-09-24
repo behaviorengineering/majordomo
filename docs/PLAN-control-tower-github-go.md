@@ -56,7 +56,9 @@ majordomo (this repo)
   ├── pipelines/scripts/             (agent-dispatch + image build)
   ├── dockerfiles/                   (public/corp images)
   ├── .github/workflows/             (image CI on GHA)
-  ├── cmd/majordomo + internal/      (Go control plane)
+  ├── cmd/majordomo                  (wiring)
+  ├── pkg/<domain>/…                 (product kit: context, platform, forge, review, judge)
+  ├── internal/ops/                  (cli, sa, satools, submodule)
   └── docs/                          (setup + architecture plan)
 ```
 
@@ -214,9 +216,9 @@ Do not dual-run OpenCode-as-driver and strop-as-driver. Until Phase 6 ships, `ag
 
 #### Phase 6 contract (locks the former open holes)
 
-**Judge.** One execution path: in-process strop (`internal/judge`). OpenCode is not a Judge driver. `agent.Dispatch` / `majordomo dispatch` call strop generators. Workspace explore/edit remains a port (`internal/workspace`); an OpenCode adapter may exist later for tools only.
+**Judge.** One execution path: in-process strop (`pkg/judge`). OpenCode is not a Judge driver. `dispatch.Dispatch` / `majordomo dispatch` call strop generators. Workspace explore/edit remains a port (`pkg/platform/workspace`); an OpenCode adapter may exist later for tools only.
 
-**strop pin.** Majordomo `go.mod` requires `github.com/behaviorengineering/strop` **v0.2.0**. Judge boundary: `internal/judge` (`NewJobRunner`, packs under `internal/judge/evaluation/`). Judge runs in-process. The `majordomo-agent` image is optional (workspace tools), not the protocol owner.
+**strop pin.** Majordomo `go.mod` requires `github.com/behaviorengineering/strop`. Judge boundary: `pkg/judge` (`NewJobRunner`, packs under `pkg/judge/evaluation/`). Judge runs in-process. The `majordomo-agent` image is optional (workspace tools), not the protocol owner.
 
 **Workspace port.** Go interface, cwd-bounded. Methods: `Read`, `Grep`, `Edit`, `Shell`. Per-job allowlist:
 
@@ -228,7 +230,7 @@ Do not dual-run OpenCode-as-driver and strop-as-driver. Until Phase 6 ships, `ag
 | Digest / context amend | `Read`, `Grep`, `Edit` (no `Shell` unless a later job opts in) |
 | Tests | stub adapter (no process) |
 
-Majordomo and strop import the port only. OpenCode CLI lives in `internal/workspace/opencode` (skeleton today; review still uses `agent-dispatch.sh`).
+Majordomo and strop import the port only. OpenCode CLI lives in `pkg/platform/workspace/opencode` (skeleton today; review still uses `agent-dispatch.sh`).
 
 **Agenting packs.** Not `SKILL.md`. On the context branch:
 
@@ -311,7 +313,7 @@ All SCM adapters must produce this shape (JSON) before triggering the control-to
 
 Per-repo config lives in YAML: `majordomo-central-config/<repo_id>.yaml`. Org defaults in `_defaults.yaml` are deep-merged; per-repo keys win.
 
-### Loaded by Go today (`internal/config`)
+### Loaded by Go today (`pkg/platform/config`)
 
 Includes SCM, trigger, review, cache, **pipelines**, and **staticAnalysis**.
 
@@ -586,8 +588,8 @@ Built from this repo (new top-level `cmd/` and `internal/`). Distributed as `ghc
 | `majordomo prep` | Classify, cluster, batch, write manifest |
 | `majordomo dispatch` | Exec OpenCode via `agent-dispatch.sh` (v1 review path) |
 | `majordomo context validate` | Validate a context-branch worktree |
-| `majordomo context digest` | Catch up context cursor when default HEAD is ahead (orphan seed, push update branch, open/restack PR) |
-| `majordomo context repos` | List digest targets as JSON (tower cron matrix) |
+| `majordomo-context digest` | Catch up context cursor when default HEAD is ahead (orphan seed, push update branch, open/restack PR) |
+| `majordomo-context repos` | List digest targets as JSON (tower cron matrix) |
 | `majordomo orchestrate` | Waves, checkpoints, finalize, prose, summary/tech loops, tech-deep |
 | `majordomo publish` | Post summary (`--scm github\|gitlab\|bitbucket`) |
 | `majordomo status` | Commit/check status per SCM |
@@ -615,26 +617,20 @@ Mechanical **protocol** (`pr-review.agent.md`, step-by-step SKILL scripts) **doe
 
 ```text
 majordomo/
-├── cmd/majordomo/
-├── internal/
-│   ├── config/                     # YAML central + per-repo merge
-│   ├── poll/
-│   ├── staging/
-│   ├── cluster/
-│   ├── cache/
-│   ├── contextstore/               # context branch schema
-│   ├── contextdigest/              # context catch-up job
-│   ├── workspace/                  # port + adapters (Phase 6)
-│   ├── diff/
-│   ├── orchestrate/
-│   ├── agent/                      # v1 OpenCode dispatch; shrinks in Phase 6
-│   ├── publish/
-│   ├── status/
-│   └── report/
-├── agents/                         # rubric data; protocol MD offboarded in Phase 6
-├── dockerfiles/                    # majordomo, agent (OpenCode adapter), gh, glab
-└── pipelines/scripts/              # v1 dispatch + image build
+├── cmd/majordomo/                    # wiring only
+├── pkg/
+│   ├── context/                      # agenting, store, gate
+│   ├── platform/                     # config, cache, observability, llmusage, workspace, aigateway
+│   ├── forge/                        # githttps, outbound, publish, status
+│   ├── review/                       # poll, staging, cluster, diff, filereview, orchestrate, reviewrun, report, dispatch
+│   └── judge/                        # review Judge (summary + tech packs)
+├── internal/ops/                     # cli, sa, satools, submodule
+├── agents/                           # rubric data; protocol MD offboarded in Phase 6
+├── dockerfiles/                      # majordomo, agent (OpenCode adapter), gh, glab
+└── pipelines/scripts/                # v1 dispatch + image build
 ```
+
+Closed factory (separate repo): `majordomo-context` keeps `internal/digest`, `internal/license`, `internal/ops/cli` and imports majordomo `pkg/` domains.
 
 ### Container images
 
@@ -805,7 +801,7 @@ Requires enough Go from Phase 1 to run prep → orchestrate → publish.
 - [ ] Checks API annotations from JUnit
 - [x] Docs refreshed for Go + OpenCode
 - [x] Load `pipelines` / `staticAnalysis` from central YAML into Go (`majordomo sa` + prep materialize)
-- [x] Context branch schema: `internal/contextstore`, `majordomo context validate`, `context:` in `_defaults.yaml`
+- [x] Context branch schema: `pkg/contextstore`, `majordomo context validate`, `context:` in `_defaults.yaml`
 
 ### Phase 6 — Judge driver, context, and workspace port
 
@@ -815,9 +811,9 @@ Not in the current pilot. Detail: [Repo context branch](advanced/10-repo-context
 - [x] `go.mod` pin tagged `github.com/behaviorengineering/strop` v0.2.0; `internal/judge` JobRunner helper + summary/tech evaluator packs (loops still OpenCode until cutover)
 - [x] File-review Prepare → Judge → Validate → Assemble (`internal/filereview`); structured findings + MD formatter; OpenCode Judge via dispatch; `pr-review.agent.md` still drives Judge prompt until cutover
 - [x] strop Judge only (`internal/judge`; no OpenCode protocol driver / no `MAJORDOMO_JUDGE` cutover)
-- [x] Digest catch-up (`internal/contextdigest`, `majordomo context digest`, tower cron `.github/workflows/majordomo-context-digest.yml`: cursor behind check, orphan seed, first-parent walk + cursor advance, one update PR via gh/glab/Bitbucket; generic SCM skips)
-- [x] `agenting/index.yaml` + `GROUNDING.md` packs; prep selects by glob/mode (`internal/agenting`, `AttachGrounding` in prep/orchestrate; `--context-dir` / `MAJORDOMO_CONTEXT_DIR`; validate when index present)
-- [x] Conversation-before-merge via strop Gate (`@majordomo reject` / `@majordomo done`); human merge click; `context.autoMerge` default false (`internal/contextgate`, `gate.json`, digest comment poll)
+- [x] Digest catch-up (`internal/contextdigest`, `majordomo-context digest`, tower cron `.github/workflows/majordomo-context-digest.yml`: cursor behind check, orphan seed, first-parent walk + cursor advance, one update PR via gh/glab/Bitbucket; generic SCM skips)
+- [x] `agenting/index.yaml` + `GROUNDING.md` packs; prep selects by glob/mode (`pkg/agenting`, `AttachGrounding` in prep/orchestrate; `--context-dir` / `MAJORDOMO_CONTEXT_DIR`; validate when index present)
+- [x] Conversation-before-merge via strop Gate (`@majordomo reject` / `@majordomo done`); human merge click; `context.autoMerge` default false (`pkg/contextgate`, `gate.json`, digest comment poll)
 - [x] History-rewrite workflow; block cursor reset until why is known (`internal/contextdigest/rewrite.go`, meta rewrite fields)
 - [x] Poll skips context and cache-branch PRs
 - [x] Compaction pass for the teaching story (`internal/contextdigest/compact.go`, chronology threshold)
@@ -869,6 +865,7 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | [advanced/05-file-orchestration.md](advanced/05-file-orchestration.md) | Staging and waves |
 | [advanced/09-customising-the-review.md](advanced/09-customising-the-review.md) | YAML config mapping |
 | [advanced/10-repo-context-branch.md](advanced/10-repo-context-branch.md) | Context branch, catch-up, agenting vs mechanical, strop driver, workspace port |
+| [PROPOSAL-oss-runner-vs-intelligence-factory.md](PROPOSAL-oss-runner-vs-intelligence-factory.md) | Open review runner vs closed context factory (domain kit paths) |
 
 ---
 
@@ -876,6 +873,9 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 
 | Date | Change |
 |------|--------|
+| 2026-09-23 | Domain-oriented product kit: nest `pkg/<domain>/…`, ops under `internal/ops/`; slim majordomo-context onto majordomo pkg domains |
+| 2026-09-23 | Product boundary proposal: open runner vs closed intelligence factory (link only; no packaging change) |
+| 2026-09-23 | Extract context factory to private majordomo-context binary; promote agenting/contextstore/contextgate to pkg/ |
 | 2026-08-22 | Initial draft from architecture discussion |
 | 2026-08-23 | Control-tower is a separate repo; pins `majordomo` as `.majordomo/` submodule |
 | 2026-08-23 | Review cache stays on served repo (`cache.repo: served`) |
@@ -909,10 +909,10 @@ Deferred work (not open product questions): Phase 4/5 checkboxes (Bitbucket poll
 | 2026-08-28 | Pin strop v0.2.0; `internal/judge` JobRunner boundary + summary/tech criteriapacks; review loops still OpenCode |
 | 2026-08-28 | File-review FSM: `internal/filereview` Prepare→Judge→Validate→Assemble; findings.json; orchestrate waves call it |
 | 2026-08-28 | `MAJORDOMO_JUDGE` cutover wiring: default opencode; strop fail-closed until modules; dispatch refuses dual-run |
-| 2026-08-28 | Context digest v1: `internal/contextdigest` + `majordomo context digest` (cursor check, orphan bootstrap, first-parent walk, forge PR); story/agenting later |
-| 2026-08-28 | Tower cron: `majordomo-context-digest.yml` + `majordomo context repos` (matrix job, concurrency `context-digest-<repo-id>`) |
+| 2026-08-28 | Context digest v1: `internal/contextdigest` + `majordomo-context digest` (cursor check, orphan bootstrap, first-parent walk, forge PR); story/agenting later |
+| 2026-08-28 | Tower cron: `majordomo-context-digest.yml` + `majordomo-context repos` (matrix job, concurrency `context-digest-<repo-id>`) |
 | 2026-08-28 | Context digest hardening: cursor read from update branch, shallow deepen, SCM git auth, PR body refresh, example config filter, `-update` branch suffix (git ref fix) |
-| 2026-08-28 | Agenting v1: `internal/agenting`, bootstrap `index.yaml` + overview pack, prep `AttachGrounding` + `grounding_packs` on manifest; `--context-dir` / review workflow context clone |
+| 2026-08-28 | Agenting v1: `pkg/agenting`, bootstrap `index.yaml` + overview pack, prep `AttachGrounding` + `grounding_packs` on manifest; `--context-dir` / review workflow context clone |
 | 2026-08-28 | Grounding dispatch: `internal/agent/grounding.go`, `MAJORDOMO_GROUNDING` env, `agent-dispatch.sh` prompt suffix, `pr-review.agent.md` Step 1.5 |
 | 2026-08-28 | Context Phase 6 remainder: rewrite workflow, gate comments + `gate.json`, story digest per commit, agenting materialize, compaction, `context.autoMerge` opt-in |
 | 2026-08-28 | Phase 6 hardening: strop generator modules + `MAJORDOMO_JUDGE=strop` cutover, LLM story section-walk, Bitbucket gate comments, digest commit cap + gate workflow |
