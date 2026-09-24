@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/behaviorengineering/majordomo/pkg/review/dispatch"
-	"github.com/behaviorengineering/majordomo/pkg/platform/config"
-	"github.com/behaviorengineering/majordomo/pkg/review/filereview"
 	"github.com/behaviorengineering/majordomo/pkg/judge"
+	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/platform/llmusage"
+	"github.com/behaviorengineering/majordomo/pkg/review/dispatch"
+	"github.com/behaviorengineering/majordomo/pkg/review/filereview"
 	"github.com/behaviorengineering/majordomo/pkg/review/report"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
@@ -511,7 +511,7 @@ func runTechDeep(opts Options) error {
 }
 
 func isTimeout(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "timed out")
+	return errors.Is(err, context.DeadlineExceeded)
 }
 
 func envOr(key, def string) string {

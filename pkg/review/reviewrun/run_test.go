@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/behaviorengineering/majordomo/pkg/review/orchestrate"
-	"github.com/behaviorengineering/majordomo/pkg/forge/publish"
 	"github.com/behaviorengineering/majordomo/internal/ops/sa"
+	"github.com/behaviorengineering/majordomo/pkg/forge/publish"
+	"github.com/behaviorengineering/majordomo/pkg/review/orchestrate"
 )
 
 func writeConfig(t *testing.T, dir string) string {

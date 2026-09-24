@@ -110,7 +110,7 @@ func newVersionCmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print majordomo version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintln(cmd.OutOrStdout(), Version)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
 		},
 	}
 }
@@ -493,7 +493,7 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
 			return nil
 		},
 	})

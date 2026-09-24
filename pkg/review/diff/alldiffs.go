@@ -51,7 +51,7 @@ func BuildAll(opts BuildAllOptions) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for _, entry := range m.Reviewable {
 		if err := writeEntry(f, entry, opts.Cap); err != nil {

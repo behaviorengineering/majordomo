@@ -148,7 +148,7 @@ func listGitLabMRs(ctx context.Context, cfg config.RepoConfig, token string) ([]
 }
 
 func readResponseBody(resp *http.Response) ([]byte, error) {
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return io.ReadAll(resp.Body)
 }
 

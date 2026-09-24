@@ -59,11 +59,11 @@ func TestResolveProviderOpenAISchema(t *testing.T) {
 
 func TestEnsureStropReadyRequiresKeys(t *testing.T) {
 	judge.ResetRegistryForTests()
-	os.Unsetenv("ANTHROPIC_API_KEY")
-	os.Unsetenv("OPENAI_API_KEY")
-	os.Unsetenv("GEMINI_API_KEY")
-	os.Unsetenv("GOOGLE_API_KEY")
-	os.Unsetenv("GOOGLE_GENERATIVE_AI_API_KEY")
+	_ = os.Unsetenv("ANTHROPIC_API_KEY")
+	_ = os.Unsetenv("OPENAI_API_KEY")
+	_ = os.Unsetenv("GEMINI_API_KEY")
+	_ = os.Unsetenv("GOOGLE_API_KEY")
+	_ = os.Unsetenv("GOOGLE_GENERATIVE_AI_API_KEY")
 	if err := judge.EnsureStropReady(); err == nil {
 		t.Fatal("expected error")
 	}

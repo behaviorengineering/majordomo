@@ -41,7 +41,7 @@ type DispatchOptions struct {
 	ScriptsDir string
 	// Env is the parent environ for RunOpenCode (nil → os.Environ). Unused by Dispatch.
 	Env []string
-	// Timeout kills the OpenCode script process when > 0. Unused by in-process Judge.
+	// Timeout bounds this Judge hop when > 0 (child of Context deadline).
 	Timeout time.Duration
 	// Runner overrides script exec for RunOpenCode tests. Unused by Dispatch.
 	Runner func(name string, args []string, env []string, dir string) error
@@ -101,8 +101,17 @@ func Dispatch(opts DispatchOptions) error {
 	if opts.PRNumber == "" || opts.StagingDir == "" || opts.OutputDir == "" {
 		return fmt.Errorf("dispatch requires pr, staging-dir, and output-dir")
 	}
+	ctx := opts.Context
+	if ctx == nil {
+		return fmt.Errorf("dispatch: context is required")
+	}
+	if opts.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+		defer cancel()
+	}
 	return judge.Dispatch(judge.DispatchOptions{
-		Context:    opts.Context,
+		Context:    ctx,
 		PRNumber:   opts.PRNumber,
 		StagingDir: opts.StagingDir,
 		OutputDir:  opts.OutputDir,
