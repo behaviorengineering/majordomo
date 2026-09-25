@@ -139,7 +139,7 @@ func newPollCmd() *cobra.Command {
 }
 
 func newPrepCmd() *cobra.Command {
-	var routing, agentContext, summaryConfig, configDir, repoID, pipeline, contextDir string
+	var routing, agentContext, summaryConfig, configDir, repoID, pipeline, contextDir, contextSHA string
 	cmd := &cobra.Command{
 		Use:   "prep <base-branch> <staging-dir>",
 		Short: "Classify diffs, cluster files, write staging manifest",
@@ -153,12 +153,14 @@ func newPrepCmd() *cobra.Command {
 				return err
 			}
 			opts := staging.Options{
+				Context:           cmd.Context(),
 				BaseBranch:        args[0],
 				StagingDir:        args[1],
 				RoutingPath:       routingPath,
 				AgentContextPath:  agentContextPath,
 				SummaryConfigPath: summaryConfig,
 				ContextDir:        staging.ResolveContextDir(contextDir),
+				ContextSHA:        staging.ResolveContextSHA(contextSHA),
 				RepoID:            repoID,
 			}
 			return staging.Run(opts)
@@ -171,6 +173,7 @@ func newPrepCmd() *cobra.Command {
 	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id under config-dir")
 	cmd.Flags().StringVar(&pipeline, "pipeline", "pr-review", "pipelines.<name> key when using --config-dir")
 	cmd.Flags().StringVar(&contextDir, "context-dir", "", "merged context-branch checkout (agenting packs; or MAJORDOMO_CONTEXT_DIR)")
+	cmd.Flags().StringVar(&contextSHA, "context-sha", "", "pin remote context branch to this commit (or MAJORDOMO_CONTEXT_SHA)")
 	return cmd
 }
 
@@ -324,10 +327,10 @@ func newRunCmd() *cobra.Command {
 
 func newRunReviewCmd() *cobra.Command {
 	var (
-		configDir, repoID, pr, headSHA, baseBranch, cloneURL                     string
-		workdir, stagingDir, outputDir, scriptsDir, contextDir, cursorDir, until string
-		doPublish, skipDeep, skipReport                                          bool
-		concurrency                                                              int
+		configDir, repoID, pr, headSHA, baseBranch, cloneURL                                 string
+		workdir, stagingDir, outputDir, scriptsDir, contextDir, contextSHA, cursorDir, until string
+		doPublish, skipDeep, skipReport                                                      bool
+		concurrency                                                                          int
 	)
 	cmd := &cobra.Command{
 		Use:   "review",
@@ -349,6 +352,7 @@ clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 				OutputDir:   outputDir,
 				ScriptsDir:  scriptsDir,
 				ContextDir:  staging.ResolveContextDir(contextDir),
+				ContextSHA:  staging.ResolveContextSHA(contextSHA),
 				CursorDir:   cursorDir,
 				Until:       until,
 				Publish:     doPublish,
@@ -369,6 +373,7 @@ clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "pipeline output directory")
 	cmd.Flags().StringVar(&scriptsDir, "scripts-dir", "", "pipelines/scripts directory")
 	cmd.Flags().StringVar(&contextDir, "context-dir", "", "merged context-branch checkout (or MAJORDOMO_CONTEXT_DIR)")
+	cmd.Flags().StringVar(&contextSHA, "context-sha", "", "pin remote context branch to this commit (or MAJORDOMO_CONTEXT_SHA)")
 	cmd.Flags().StringVar(&cursorDir, "cursor-dir", ".poll-cache", "poll cursor directory")
 	cmd.Flags().StringVar(&until, "until", "", "stop after stage: clone|sa|prep|waves|finalize|prose|synth|report|publish")
 	cmd.Flags().BoolVar(&doPublish, "publish", false, "publish summary to the PR/MR (default: off)")

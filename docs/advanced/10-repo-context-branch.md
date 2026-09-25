@@ -13,7 +13,7 @@ Schema validation ships in this module (`majordomo context validate`). Digest, s
 Review prep does **not** call the private factory at runtime. It resolves a `ContextSnapshot` through `pkg/context/provider`:
 
 1. **Explicit checkout:** `--context-dir` or `MAJORDOMO_CONTEXT_DIR` (fail closed when the tree is invalid).
-2. **Optional remote branch:** shallow clone of `majordomo-context/<repo-id>` beside the served repo when no explicit dir is set and the branch exists (skip grounding when absent or corrupt).
+2. **Optional remote branch:** shallow clone of `majordomo-context/<repo-id>` beside the served repo when no explicit dir is set and the branch exists (skip grounding when absent or corrupt). At prep start the runner resolves one branch tip (or `--context-sha` / `MAJORDOMO_CONTEXT_SHA`), checks out that commit, and records it under `context_pin` in `batch-plan.json` for the rest of the pipeline.
 
 The snapshot exposes finished `agenting/` packs and `meta.yaml` provenance only. Selection rules stay in open `pkg/context/agenting`. Do not leak digest prompts, evaluator scores, or inference traces through the provider API.
 

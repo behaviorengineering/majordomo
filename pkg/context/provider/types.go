@@ -9,12 +9,14 @@ import (
 
 // Request describes context needed for one review prep pass.
 type Request struct {
-	RepoID string
+	RepoID     string
+	ContextSHA string // optional; when set pins remote checkout to this commit
 }
 
 // Provenance records where a snapshot came from (finished packs only).
 type Provenance struct {
 	SourceCommit     string
+	ResolvedCommit   string // git commit pinned for this run (context branch checkout)
 	GeneratorVersion string
 	GeneratedAt      time.Time
 	ClaimAge         time.Duration

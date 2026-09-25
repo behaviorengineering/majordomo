@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 	"github.com/behaviorengineering/majordomo/pkg/judge"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/platform/llmusage"
@@ -18,7 +19,6 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/review/filereview"
 	"github.com/behaviorengineering/majordomo/pkg/review/report"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
-	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 // Options configures an orchestrate run.
@@ -41,6 +41,7 @@ type Options struct {
 	AgentContextPath  string
 	SummaryConfigPath string
 	ContextDir        string // merged context-branch checkout (agenting); optional
+	ContextSHA        string // optional remote context branch commit pin
 	ContextProvider   contextprovider.ContextProvider
 
 	// ConfigDir + RepoID load majordomo-central-config and materialize routing/agentContext
@@ -132,6 +133,7 @@ func Run(opts Options) error {
 		}
 		logf("INFO", "Running prep against %s → %s", opts.BaseBranch, opts.StagingDir)
 		err = staging.Run(staging.Options{
+			Context:           opts.Context,
 			BaseBranch:        opts.BaseBranch,
 			StagingDir:        opts.StagingDir,
 			RoutingPath:       routingPath,
@@ -139,6 +141,7 @@ func Run(opts Options) error {
 			SummaryConfigPath: opts.SummaryConfigPath,
 			RepoRoot:          opts.RepoRoot,
 			ContextDir:        staging.ResolveContextDir(opts.ContextDir),
+			ContextSHA:        staging.ResolveContextSHA(opts.ContextSHA),
 			RepoID:            opts.RepoID,
 			ContextProvider:   opts.ContextProvider,
 		})
