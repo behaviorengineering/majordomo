@@ -1,7 +1,7 @@
 // Package githttps builds git -c http.extraHeader args for forge HTTPS remotes.
 package githttps
 
-import forgeauth "github.com/behaviorengineering/majordomo-forge-clients/pkg/auth"
+import forgeauth "github.com/behaviorengineering/gitvalet/pkg/auth"
 
 // ExtraHeaderArgs returns git -c http.extraHeader=... args for forge HTTPS auth.
 func ExtraHeaderArgs(token, scm string) []string {
