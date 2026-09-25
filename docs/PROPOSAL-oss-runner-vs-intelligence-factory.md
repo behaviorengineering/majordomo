@@ -53,7 +53,7 @@ This is the paid differentiator: evidence-first understanding that compounds.
 | Write mission, architecture, conventions, weaknesses, chronology | story generation / compaction in digest |
 | **Create** agenting packs from the story | digest materialize (not mere select) |
 | Prompts, model routing, eval fixtures, contradiction handling | digest internals |
-| Digest inference cache under `digest/` on the inference-cache branch | factory binary (imports transitional `pkg/platform/cache` DigestStore) |
+| Digest inference cache under `digest/` on the inference-cache branch | factory binary (`internal/digest` DigestStore; open module keeps path prefix only) |
 
 Treat license keys and binary obfuscation as friction if a factory ever runs on customer hardware. They are not the moat. The moat is continuously better inference, provenance, incremental catch-up, and a private evaluation corpus.
 
@@ -78,10 +78,10 @@ Do not expose rejected candidates, internal scores, or digest stage traces throu
 
 ### Compatibility contract (staged)
 
-1. **Judge runtime:** empty `RuntimeOptions.Tasks` registers **review** generators only. Factory callers pass `Tasks: DigestTasks()` and should supply `Generators` (see `modules.DigestGenerators()` until prompts move).
+1. **Judge runtime:** empty `RuntimeOptions.Tasks` registers **review** generators only. Factory callers pass their own task names plus `RuntimeOptions.Generators` (and usually `AfterGenerators` for digest eval packs). Digest prompts live in private `majordomo-context`, not in open `pkg/judge/modules`.
 2. **Provider routing:** `config.JobForTask` keeps review + context-digest task names; factories may `RegisterJobForTask` for extra names.
 3. **CLI:** public `majordomo` exposes `context validate` / gate read and review/poll cache; it does **not** expose `cache digest-*`. Digest CLI lives on `majordomo-context`.
-4. **Cache:** `DigestCachePrefix` (`digest/`) remains the open branch path convention. `DigestStore` stays importable as a transitional API for the private binary until that module owns the store.
+4. **Cache:** `DigestCachePrefix` (`digest`) remains the open branch path convention. `DigestStore` and digest fingerprints live in private `majordomo-context`; the open module keeps review/poll cache plus shared hash helpers (`PackageSourceHash`, `HashDigestParts`).
 
 ## Packaging (in progress)
 
@@ -89,7 +89,7 @@ Do not expose rejected candidates, internal scores, or digest stage traces throu
 2. **Closed factory:** private GitLab module [`majordomo-context`](https://gitlab.com/behaviorengineering/majordomo-context) ships a licensed, optionally garbled binary (`digest` / `repos` / `gate`). Pattern: kairos Ed25519 Gate + GoReleaser `-tags release`. Imports majordomo `pkg/` domains; keeps `internal/digest`, `internal/license`, `internal/ops/cli`.
 3. **Not required:** SaaS digest API. Hosted factory remains a later option.
 4. **Avoid:** open-core build tags as the only IP boundary.
-5. **Next slice:** move bundled digest prompts and `DigestStore` into the private module; leave only schema, selection, and registration seams public.
+5. **Landed (this strip):** open majordomo no longer ships digest generator prompts or `DigestStore`. Factory owns prompts + store and registers via `Generators`; open module keeps schema, selection, gate, review generators, path prefix, and the registration seam.
 
 ## One-line pitch
 

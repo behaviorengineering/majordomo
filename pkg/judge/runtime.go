@@ -32,38 +32,15 @@ import (
 // gateway but no Anthropic/OpenAI/Gemini key is configured.
 var errGatewayUnavailable = errors.New("embedded gateway unavailable")
 
-// DigestTasks are the generator modules used by context digest / bootstrap.
-// The open review runner does not register these by default. majordomo-context
-// (or another factory) should pass Tasks: DigestTasks() and prefer Generators
-// from its own module package; bundled constructors remain a compatibility path.
-func DigestTasks() []string {
-	return []string{
-		jmodules.TaskTypologyInspect,
-		jmodules.TaskTypologySliceGrouping,
-		jmodules.TaskTypologySliceCatalog,
-		jmodules.TaskTypologyInterventionJourney,
-		jmodules.TaskTypologyInterventionBrief,
-		jmodules.TaskTypologyInterventionWeaknesses,
-		jmodules.TaskTypologyInterventionPRPriority,
-		jmodules.TaskTypologyFindingComment,
-		jmodules.TaskBootstrapStory,
-		jmodules.TaskDigestStory,
-	}
-}
-
 // ReviewTasks are the generator modules used by PR review orchestration.
 func ReviewTasks() []string {
 	return []string{jmodules.TaskFileReview, jmodules.TaskSummary, jmodules.TaskTechnical}
 }
 
-// AllGeneratorTasks is review plus digest task names (tests and factory inventories).
-// Empty RuntimeOptions.Tasks uses ReviewTasks only; callers that need digest must
-// pass DigestTasks (and ideally Generators) explicitly.
+// AllGeneratorTasks is the open-runner generator inventory (review only).
+// Factory workers pass their own Tasks and Generators explicitly.
 func AllGeneratorTasks() []string {
-	out := append([]string{}, ReviewTasks()...)
-	out = append(out, DigestTasks()...)
-	out = append(out, jmodules.TaskTypologyHumanIntervention)
-	return out
+	return append([]string{}, ReviewTasks()...)
 }
 
 // GeneratorCtor builds one strop generator module for a task name.
@@ -96,8 +73,8 @@ type RuntimeOptions struct {
 	// Tasks limits registration; empty means ReviewTasks only (open runner default).
 	Tasks []string
 	// Generators registers or overrides task constructors. Private factories
-	// (majordomo-context) should supply digest/typology constructors here so the
-	// open runner binary does not need to own those prompts forever.
+	// (majordomo-context) MUST supply digest/typology constructors here; the open
+	// runner no longer ships those prompts.
 	Generators map[string]GeneratorCtor
 	// FallbackModel overrides MAJORDOMO_MODEL for embedded-gateway fallback.
 	FallbackModel string
@@ -146,15 +123,14 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 		nil,
 		opts.RunReport,
 	)
-	// Evidence keys that must be non-empty when the CoT path runs (mirror mandatory outputs).
-	// RLM bootstrap story validates a named map before Complete; this covers legacy CoT injection.
-	interceptorSetup.RegisterRequiredInputs(jmodules.TaskBootstrapStory, []string{
+	// Required inputs for factory-registered digest tasks (string ids; prompts live privately).
+	interceptorSetup.RegisterRequiredInputs("bootstrap_story", []string{
 		"repo_id", "readme_snapshot",
 	})
-	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologySliceGrouping, []string{
+	interceptorSetup.RegisterRequiredInputs("typology_slice_grouping", []string{
 		"repo_id", "package_roles", "mechanical_grouping_yaml", "readme_snapshot",
 	})
-	interceptorSetup.RegisterRequiredInputs(jmodules.TaskTypologySliceCatalog, []string{
+	interceptorSetup.RegisterRequiredInputs("typology_slice_catalog", []string{
 		"repo_id", "slice_meaning_ledger_yaml", "package_roles", "readme_snapshot",
 	})
 	configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
@@ -174,13 +150,6 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 			continue
 		}
 		ctors[name] = ctor
-	}
-	// Compatibility: digest task names still resolve via bundled constructors until
-	// majordomo-context registers its own Generators map. Prefer opts.Generators.
-	for name, ctor := range legacyDigestGeneratorCtors() {
-		if _, ok := ctors[name]; !ok {
-			ctors[name] = ctor
-		}
 	}
 
 	providers := make(map[string]stropdspy.ProviderConfig, len(tasks))
@@ -226,25 +195,6 @@ func reviewGeneratorCtors() map[string]GeneratorCtor {
 		jmodules.TaskFileReview: jmodules.FileReviewModule,
 		jmodules.TaskSummary:    jmodules.SummaryModule,
 		jmodules.TaskTechnical:  jmodules.TechnicalModule,
-	}
-}
-
-// legacyDigestGeneratorCtors keeps bundled factory prompts available while the
-// private majordomo-context binary still imports this module. New factory code
-// should register its own constructors via RuntimeOptions.Generators instead.
-func legacyDigestGeneratorCtors() map[string]GeneratorCtor {
-	return map[string]GeneratorCtor{
-		jmodules.TaskTypologyInspect:                jmodules.TypologyInspectModule,
-		jmodules.TaskTypologySliceGrouping:          jmodules.TypologyClusterModule,
-		jmodules.TaskTypologySliceCatalog:           jmodules.TypologyRefineModule,
-		jmodules.TaskTypologyHumanIntervention:      jmodules.TypologyHumanInterventionModule,
-		jmodules.TaskTypologyInterventionJourney:    jmodules.TypologyInterventionJourneyModule,
-		jmodules.TaskTypologyInterventionBrief:      jmodules.TypologyInterventionBriefModule,
-		jmodules.TaskTypologyInterventionWeaknesses: jmodules.TypologyInterventionWeaknessesModule,
-		jmodules.TaskTypologyInterventionPRPriority: jmodules.TypologyInterventionPRPriorityModule,
-		jmodules.TaskTypologyFindingComment:         jmodules.TypologyFindingCommentModule,
-		jmodules.TaskBootstrapStory:                 jmodules.BootstrapStoryModule,
-		jmodules.TaskDigestStory:                    jmodules.DigestStoryModule,
 	}
 }
 

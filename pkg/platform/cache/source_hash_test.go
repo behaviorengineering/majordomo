@@ -3,7 +3,6 @@ package cache
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -36,17 +35,5 @@ func TestPackageSourceHashStableAcrossMarkdownNoise(t *testing.T) {
 	}
 	if c == a {
 		t.Fatal("source change must invalidate hash")
-	}
-}
-
-func TestFormatStatsLine(t *testing.T) {
-	line := FormatStatsLine(DigestRunStats{
-		InspectHits: 2, InspectMisses: 1, LedgerHits: 3, LedgerMisses: 0,
-		TokensSavedTotal: 900, TokensSavedPrompt: 700, TokensSavedCompletion: 200,
-	})
-	for _, want := range []string{"inspect_hits=2", "ledger_hits=3", "estimated_tokens_saved=900"} {
-		if !strings.Contains(line, want) {
-			t.Fatalf("line %q missing %q", line, want)
-		}
 	}
 }

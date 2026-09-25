@@ -2,8 +2,7 @@
 // repo (branches majordomo-inference-cache/<id> with path prefix review/, plus
 // majordomo-poll-cache/<id>).
 //
-// DigestStore and related fingerprint types under the digest/ prefix are a
-// transitional import surface for the private majordomo-context factory. The
-// open runner CLI does not operate that store; prefer factory-owned tools once
-// the private module hosts it.
+// Digest inference artifacts use the open path convention DigestCachePrefix
+// ("digest") on the inference-cache branch. The store implementation lives in
+// the private majordomo-context factory, not in this open runner package.
 package cache
