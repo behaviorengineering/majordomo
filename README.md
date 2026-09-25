@@ -24,11 +24,28 @@ Majordomo separates:
 | Layer | Role |
 |-------|------|
 | **Control tower** | Org YAML, secrets, GHA workflows; pins this repo as `.majordomo/` |
-| **Go control plane** | Deterministic jobs: poll, prep, orchestrate, publish, status, cache, report, tooling |
+| **Go control plane** | Domain product kit under `pkg/`; ops only under `internal/ops/` |
 | **Agent / SA images** | OpenCode skills and linters when a job needs them |
 | **Served repos** | Stay clean in default pull mode |
 
 PR review uses that plane today (classify → agent waves → publish). The same plane is how future repo operations should land.
+
+## Domain product kit
+
+Reusable library code lives under nested domains (not a flat `pkg/` or `internal/` forest):
+
+```text
+pkg/
+  context/     agenting, store, gate
+  platform/    config, cache, observability, llmusage, workspace, aigateway
+  forge/       githttps, outbound, publish, status
+  review/      poll, staging, cluster, diff, filereview, orchestrate, reviewrun, report, dispatch
+  judge/       review Judge runtime + summary/tech packs
+internal/ops/  cli, sa, satools, submodule
+cmd/majordomo/ wiring only
+```
+
+Context digest (intelligence factory) is a separate private binary, [`majordomo-context`](https://gitlab.com/behaviorengineering/majordomo-context), which imports these `pkg/` domains. Tower review jobs use `majordomo`; digest/gate jobs use `majordomo-context` (`vars.MAJORDOMO_CONTEXT_IMAGE` + `secrets.MAJORDOMO_CONTEXT_LICENSE`).
 
 ## 🧭 What ships today
 
@@ -43,7 +60,7 @@ PR review uses that plane today (classify → agent waves → publish). The same
 
 | Layer | Status |
 |-------|--------|
-| **Go CLI** (`cmd/majordomo`, `internal/`) | Active |
+| **Go CLI** (`cmd/majordomo`, `pkg/<domain>/…`, `internal/ops/`) | Active |
 | **Agents / skills** (`agents/`) | Active — rubrics for review (and future agent jobs) |
 | **Agent dispatch** (`majordomo dispatch`) | Active — in-process strop Judge |
 | **Docker images** (`dockerfiles/`) | Active — agent, SA tools, forge CLI (`gh` / `glab`) |
@@ -172,3 +189,4 @@ Set `MAJORDOMO_SCRIPTS` if `pipelines/scripts` is not discoverable from cwd; set
 - [06 — PR Summary Flow](docs/advanced/06-pr-summary-flow.md)
 - [07 — Example Summary](docs/advanced/07-example-summary.md)
 - [10 — Repo Context Branch](docs/advanced/10-repo-context-branch.md)
+- [Proposal — Open runner vs closed intelligence factory](docs/PROPOSAL-oss-runner-vs-intelligence-factory.md)

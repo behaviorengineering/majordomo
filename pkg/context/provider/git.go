@@ -23,6 +23,5 @@ func gitAllowFailWithContext(ctx context.Context, dir, token, scm string, args .
 }
 
 func isGitRepo(dir string) bool {
-	run := forgerun.Runner{}
-	return run.IsRepo(dir)
+	return forgerun.Runner{}.IsRepo(dir)
 }
