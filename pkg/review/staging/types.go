@@ -1,6 +1,7 @@
 package staging
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -40,6 +41,7 @@ func fatalf(format string, args ...any) error {
 
 // Options configures a prep run.
 type Options struct {
+	Context           context.Context
 	BaseBranch        string
 	StagingDir        string
 	RoutingPath       string
@@ -48,6 +50,7 @@ type Options struct {
 	RepoRoot          string // empty = cwd
 	BatchSize         int
 	ContextDir        string // merged context-branch checkout (agenting packs); optional
+	ContextSHA        string // optional pin for remote context branch checkout
 	RepoID            string // for context provider provenance checks
 	ContextProvider   contextprovider.ContextProvider
 }

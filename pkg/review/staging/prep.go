@@ -98,7 +98,15 @@ func Run(opts Options) error {
 		}
 	}
 	if provider != nil {
-		snap, err := provider.Resolve(context.Background(), contextprovider.Request{RepoID: opts.RepoID})
+		ctx := opts.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		req := contextprovider.Request{
+			RepoID:     opts.RepoID,
+			ContextSHA: ResolveContextSHA(opts.ContextSHA),
+		}
+		snap, err := provider.Resolve(ctx, req)
 		if err != nil {
 			if errors.Is(err, contextprovider.ErrNoContext) {
 				logf("INFO", "no context snapshot; proceeding without grounding")
@@ -107,6 +115,9 @@ func Run(opts Options) error {
 			}
 		} else if snap != nil {
 			if err := AttachGrounding(snap, batchEntries); err != nil {
+				return err
+			}
+			if err := WriteContextPin(opts.StagingDir, snap); err != nil {
 				return err
 			}
 		}

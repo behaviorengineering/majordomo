@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/ops/sa"
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 	"github.com/behaviorengineering/majordomo/pkg/forge/publish"
 	"github.com/behaviorengineering/majordomo/pkg/platform/cache"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
@@ -17,7 +18,6 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/platform/observability"
 	"github.com/behaviorengineering/majordomo/pkg/review/orchestrate"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
-	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 // Options configures majordomo run review.
@@ -33,6 +33,7 @@ type Options struct {
 	OutputDir   string
 	ScriptsDir  string
 	ContextDir  string
+	ContextSHA  string
 	CursorDir   string
 	Until       string
 	Publish     bool
@@ -276,21 +277,22 @@ func runOrchestrate(opts Options, ctx context.Context, token, scm, cloneURL stri
 		},
 	})
 	return fn(orchestrate.Options{
-		Context:     ctx,
-		PRNumber:    opts.PRNumber,
-		BaseBranch:  opts.BaseBranch,
-		StagingDir:  opts.StagingDir,
-		OutputDir:   opts.OutputDir,
-		Pipeline:    "pr-review",
-		Concurrency: opts.Concurrency,
-		ScriptsDir:  opts.ScriptsDir,
-		SkipDeep:    opts.SkipDeep,
-		SkipReport:  opts.SkipReport,
-		Until:       oUntil,
-		RepoRoot:    opts.WorkDir,
-		ConfigDir:   opts.ConfigDir,
-		RepoID:      opts.RepoID,
-		ContextDir:  staging.ResolveContextDir(opts.ContextDir),
+		Context:         ctx,
+		PRNumber:        opts.PRNumber,
+		BaseBranch:      opts.BaseBranch,
+		StagingDir:      opts.StagingDir,
+		OutputDir:       opts.OutputDir,
+		Pipeline:        "pr-review",
+		Concurrency:     opts.Concurrency,
+		ScriptsDir:      opts.ScriptsDir,
+		SkipDeep:        opts.SkipDeep,
+		SkipReport:      opts.SkipReport,
+		Until:           oUntil,
+		RepoRoot:        opts.WorkDir,
+		ConfigDir:       opts.ConfigDir,
+		RepoID:          opts.RepoID,
+		ContextDir:      staging.ResolveContextDir(opts.ContextDir),
+		ContextSHA:      staging.ResolveContextSHA(opts.ContextSHA),
 		ContextProvider: provider,
 	})
 }

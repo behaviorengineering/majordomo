@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -19,50 +18,7 @@ type GitRemoteConfig struct {
 	Branch      string // empty → ContextBranchName(RepoID)
 	CacheParent string // parent dir for majordomo-context-<repoID>
 	Warn        WarnFunc
-}
-
-// ResolveRemoteContextDir clones or reuses a shallow checkout of the context branch.
-func ResolveRemoteContextDir(cfg GitRemoteConfig) (string, error) {
-	if strings.TrimSpace(cfg.CloneURL) == "" || strings.TrimSpace(cfg.WorkDir) == "" {
-		return "", ErrNoContext
-	}
-	repoID := strings.TrimSpace(cfg.RepoID)
-	if repoID == "" {
-		return "", ErrNoContext
-	}
-	branch := strings.TrimSpace(cfg.Branch)
-	if branch == "" {
-		branch = ContextBranchName(repoID)
-	}
-	scm := strings.TrimSpace(cfg.SCM)
-	out, err := gitTrim(cfg.WorkDir, cfg.Token, scm, "ls-remote", "--heads", "origin", branch)
-	if err != nil || out == "" {
-		return "", ErrNoContext
-	}
-	parent := strings.TrimSpace(cfg.CacheParent)
-	if parent == "" {
-		parent = filepath.Dir(cfg.WorkDir)
-	}
-	dest := filepath.Join(parent, "majordomo-context-"+repoID)
-	if isGitRepo(dest) {
-		return dest, nil
-	}
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		if cfg.Warn != nil {
-			cfg.Warn("context dir mkdir: %v", err)
-		}
-		return "", ErrNoContext
-	}
-	if cfg.Warn != nil {
-		cfg.Warn("cloning context branch %s → %s", branch, dest)
-	}
-	if _, err := git("", cfg.Token, scm, "clone", "--depth", "1", "--branch", branch, "--single-branch", cfg.CloneURL, dest); err != nil {
-		if cfg.Warn != nil {
-			cfg.Warn("context branch clone skipped: %v", err)
-		}
-		return "", ErrNoContext
-	}
-	return dest, nil
+	Git         GitRunner // nil → DefaultGitRunner()
 }
 
 // RemoteProvider resolves context from a remote orphan branch (graceful degradation).
@@ -77,11 +33,13 @@ func NewRemoteProvider(cfg GitRemoteConfig) *RemoteProvider {
 
 // Resolve implements ContextProvider.
 func (p *RemoteProvider) Resolve(ctx context.Context, req Request) (*Snapshot, error) {
-	_ = ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if p == nil {
 		return nil, ErrNoContext
 	}
-	dir, err := ResolveRemoteContextDir(p.cfg)
+	dir, pinnedSHA, err := ResolveRemoteContextDir(ctx, p.cfg, req)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +49,9 @@ func (p *RemoteProvider) Resolve(ctx context.Context, req Request) (*Snapshot, e
 			p.cfg.Warn("context tree invalid at %s: %v; proceeding without grounding", dir, err)
 		}
 		return nil, ErrNoContext
+	}
+	if pinnedSHA != "" {
+		snap.Provenance.ResolvedCommit = pinnedSHA
 	}
 	return snap, nil
 }
@@ -151,6 +112,14 @@ func (s staticProvider) Resolve(context.Context, Request) (*Snapshot, error) {
 		return nil, ErrNoContext
 	}
 	return s.snap, nil
+}
+
+// ResolveContextSHA returns explicit flag/env context commit pin.
+func ResolveContextSHA(flag string) string {
+	if s := strings.TrimSpace(flag); s != "" {
+		return s
+	}
+	return strings.TrimSpace(os.Getenv("MAJORDOMO_CONTEXT_SHA"))
 }
 
 // ResolveContextDir returns explicit flag/env context directory (same as staging helper).

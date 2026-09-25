@@ -2,6 +2,7 @@ package contextprovider
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -13,14 +14,21 @@ func authConfigArgs(token, scm string) []string {
 	return githttps.ExtraHeaderArgs(token, scm)
 }
 
-func git(dir, token, scm string, args ...string) (string, error) {
+func trimGitOut(s string) string {
+	return strings.TrimSpace(s)
+}
+
+func gitWithContext(ctx context.Context, dir, token, scm string, args ...string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, authConfigArgs(token, scm)...)
 	if strings.TrimSpace(dir) != "" {
 		cmdArgs = append(cmdArgs, "-C", dir)
 	}
 	cmdArgs = append(cmdArgs, args...)
-	cmd := exec.Command("git", cmdArgs...)
+	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -34,25 +42,23 @@ func git(dir, token, scm string, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
-func gitTrim(dir, token, scm string, args ...string) (string, error) {
-	out, err := git(dir, token, scm, args...)
-	return strings.TrimSpace(out), err
-}
-
-func gitAllowFail(dir, token, scm string, args ...string) (string, int) {
+func gitAllowFailWithContext(ctx context.Context, dir, token, scm string, args ...string) (string, int) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var cmdArgs []string
 	cmdArgs = append(cmdArgs, authConfigArgs(token, scm)...)
 	if strings.TrimSpace(dir) != "" {
 		cmdArgs = append(cmdArgs, "-C", dir)
 	}
 	cmdArgs = append(cmdArgs, args...)
-	cmd := exec.Command("git", cmdArgs...)
+	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err == nil {
-		return strings.TrimSpace(stdout.String()), 0
+		return trimGitOut(stdout.String()), 0
 	}
 	if ee, ok := err.(*exec.ExitError); ok {
 		return stdout.String(), ee.ExitCode()
@@ -61,6 +67,6 @@ func gitAllowFail(dir, token, scm string, args ...string) (string, int) {
 }
 
 func isGitRepo(dir string) bool {
-	_, code := gitAllowFail(dir, "", "", "rev-parse", "--is-inside-work-tree")
+	_, code := gitAllowFailWithContext(context.Background(), dir, "", "", "rev-parse", "--is-inside-work-tree")
 	return code == 0
 }
