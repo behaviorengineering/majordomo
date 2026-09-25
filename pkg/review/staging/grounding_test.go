@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/behaviorengineering/majordomo/pkg/context/agenting"
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 func TestAttachGroundingStagesSelectedPacks(t *testing.T) {
@@ -22,7 +25,12 @@ func TestAttachGroundingStagesSelectedPacks(t *testing.T) {
 		BatchNum:   "001",
 		StagingDir: batchDir,
 	}}
-	if err := AttachGrounding(contextDir, batches); err != nil {
+	idx, err := agenting.LoadIndex(contextDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := &contextprovider.Snapshot{RootDir: contextDir, Index: idx}
+	if err := AttachGrounding(snap, batches); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(batchDir, "manifest.json"))

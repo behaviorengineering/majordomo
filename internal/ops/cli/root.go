@@ -159,6 +159,7 @@ func newPrepCmd() *cobra.Command {
 				AgentContextPath:  agentContextPath,
 				SummaryConfigPath: summaryConfig,
 				ContextDir:        staging.ResolveContextDir(contextDir),
+				RepoID:            repoID,
 			}
 			return staging.Run(opts)
 		},

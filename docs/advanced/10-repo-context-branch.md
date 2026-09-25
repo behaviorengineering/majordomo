@@ -8,6 +8,15 @@ Product boundary (open review runner vs closed intelligence that *builds* this c
 
 Schema validation ships in this module (`majordomo context validate`). Digest, story generation, and pack materialization are factory work.
 
+## Context provider (open consumer seam)
+
+Review prep does **not** call the private factory at runtime. It resolves a `ContextSnapshot` through `pkg/context/provider`:
+
+1. **Explicit checkout:** `--context-dir` or `MAJORDOMO_CONTEXT_DIR` (fail closed when the tree is invalid).
+2. **Optional remote branch:** shallow clone of `majordomo-context/<repo-id>` beside the served repo when no explicit dir is set and the branch exists (skip grounding when absent or corrupt).
+
+The snapshot exposes finished `agenting/` packs and `meta.yaml` provenance only. Selection rules stay in open `pkg/context/agenting`. Do not leak digest prompts, evaluator scores, or inference traces through the provider API.
+
 ## Why
 
 PR review is a sensor: each run sees one diff and forgets. The context branch is a **teaching story** of background and important decisions that shape how the code looks today. It is not an audit log of every merge. Newcomers should be able to read it. Later digest passes MAY compact older story for readability.

@@ -16,6 +16,8 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/platform/llmusage"
 	"github.com/behaviorengineering/majordomo/pkg/platform/observability"
 	"github.com/behaviorengineering/majordomo/pkg/review/orchestrate"
+	"github.com/behaviorengineering/majordomo/pkg/review/staging"
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 // Options configures majordomo run review.
@@ -196,8 +198,7 @@ func Run(opts Options) (err error) {
 		return nil
 	}
 
-	contextDir := maybeContextDir(opts, token, scm, cloneURL, opts.RepoID)
-	if err := runOrchestrate(opts, contextDir, ctx); err != nil {
+	if err := runOrchestrate(opts, ctx, token, scm, cloneURL); err != nil {
 		return err
 	}
 	if !shouldRun(opts.Until, StagePublish) {
@@ -255,12 +256,25 @@ func runSA(opts Options) error {
 	})
 }
 
-func runOrchestrate(opts Options, contextDir string, ctx context.Context) error {
+func runOrchestrate(opts Options, ctx context.Context, token, scm, cloneURL string) error {
 	oUntil := orchestrateUntil(opts.Until)
 	fn := opts.Orchestrate
 	if fn == nil {
 		fn = orchestrate.Run
 	}
+	provider := contextprovider.NewChain(contextprovider.ChainConfig{
+		ExplicitDir: contextprovider.ResolveContextDir(opts.ContextDir),
+		Remote: contextprovider.GitRemoteConfig{
+			WorkDir:  opts.WorkDir,
+			CloneURL: cloneURL,
+			Token:    token,
+			SCM:      scm,
+			RepoID:   opts.RepoID,
+			Warn: func(format string, args ...any) {
+				logf("WARN", format, args...)
+			},
+		},
+	})
 	return fn(orchestrate.Options{
 		Context:     ctx,
 		PRNumber:    opts.PRNumber,
@@ -276,7 +290,8 @@ func runOrchestrate(opts Options, contextDir string, ctx context.Context) error 
 		RepoRoot:    opts.WorkDir,
 		ConfigDir:   opts.ConfigDir,
 		RepoID:      opts.RepoID,
-		ContextDir:  contextDir,
+		ContextDir:  staging.ResolveContextDir(opts.ContextDir),
+		ContextProvider: provider,
 	})
 }
 

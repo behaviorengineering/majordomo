@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 const (
@@ -46,6 +48,8 @@ type Options struct {
 	RepoRoot          string // empty = cwd
 	BatchSize         int
 	ContextDir        string // merged context-branch checkout (agenting packs); optional
+	RepoID            string // for context provider provenance checks
+	ContextProvider   contextprovider.ContextProvider
 }
 
 func batchSizeFromEnv() int {
