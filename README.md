@@ -1,0 +1,192 @@
+<p align="center">
+  <img src="media/banner.webp" alt="Majordomo — Simple. Dapper. Code Steward." width="100%" />
+</p>
+
+# Majordomo — repository operations for evolving software.
+
+Majordomo is a **control plane for software repositories that keep changing**. It holds durable org config and cache, polls or reacts to change across git hosts, and runs jobs against a served repo. **Structured PR review is one shipped workflow**, not the whole product.
+
+Runtime today: **Go CLI** (`majordomo`) on a **GitHub Actions control tower**, with OpenCode for agent jobs and focused Docker images for SA and forge CLIs.
+
+---
+
+**[Architecture plan](docs/PLAN-control-tower-github-go.md)** — control tower, GitHub Actions, Go CLI, SCM-agnostic ops.  
+**[Portable pipeline pattern](docs/01-portable-pipeline-pattern.md)** — shared engine, clean served repos.
+
+---
+
+## 💡 Why This Exists
+
+**Repos evolve; one-off scripts do not.** Teams need a durable place to onboard repos, keep credentials and policy in one tower, remember what already ran (poll cursors, review cache), and grow new jobs without polluting every application default branch.
+
+Majordomo separates:
+
+| Layer | Role |
+|-------|------|
+| **Control tower** | Org YAML, secrets, GHA workflows; pins this repo as `.majordomo/` |
+| **Go control plane** | Domain product kit under `pkg/`; ops only under `internal/ops/` |
+| **Agent / SA images** | OpenCode skills and linters when a job needs them |
+| **Served repos** | Stay clean in default pull mode |
+
+PR review uses that plane today (classify → agent waves → publish). The same plane is how future repo operations should land.
+
+## Domain product kit
+
+Reusable library code lives under nested domains (not a flat `pkg/` or `internal/` forest):
+
+```text
+pkg/
+  context/     agenting, store, gate
+  platform/    config, cache, observability, llmusage, workspace, aigateway
+  forge/       githttps, outbound, publish, status
+  review/      poll, staging, cluster, diff, filereview, orchestrate, reviewrun, report, dispatch
+  judge/       review Judge runtime + summary/tech packs
+internal/ops/  cli, sa, satools, submodule
+cmd/majordomo/ wiring only
+```
+
+Context digest (intelligence factory) is a separate private binary, [`majordomo-context`](https://gitlab.com/behaviorengineering/majordomo-context), which imports these `pkg/` domains. Tower review jobs use `majordomo`; digest/gate jobs use `majordomo-context` (`vars.MAJORDOMO_CONTEXT_IMAGE` + `secrets.MAJORDOMO_CONTEXT_LICENSE`).
+
+## 🧭 What ships today
+
+| Capability | How |
+|------------|-----|
+| **Poll** | Discover PRs/MRs that need work (`majordomo poll`) |
+| **Prep / orchestrate** | Stage diffs, run agent waves, checkpoints (`prep`, `orchestrate`, `dispatch`) |
+| **Publish / status** | Comment, description, or check via `gh` / `glab` / Bitbucket HTTP |
+| **Cache** | Review-cache + poll-cursor on the served repo |
+| **Report** | JUnit, HTML, all-diffs |
+| **Tooling** | `build-sa-tools`, `submodule` |
+
+| Layer | Status |
+|-------|--------|
+| **Go CLI** (`cmd/majordomo`, `pkg/<domain>/…`, `internal/ops/`) | Active |
+| **Agents / skills** (`agents/`) | Active — rubrics for review (and future agent jobs) |
+| **Agent dispatch** (`majordomo dispatch`) | Active — in-process strop Judge |
+| **Docker images** (`dockerfiles/`) | Active — agent, SA tools, forge CLI (`gh` / `glab`) |
+| **GitHub Actions** (`.github/workflows/`) | Image CI; tower poll/review in the control-tower repo |
+
+## 🐳 Images (GitHub Actions)
+
+Public builds (no proxy, no corporate package registry) run on push/PR when Dockerfiles change:
+
+- [`.github/workflows/sa-tools.yml`](.github/workflows/sa-tools.yml) — eslint, hadolint, ruff, shellcheck, bandit, mypy
+- [`.github/workflows/majordomo-agent.yml`](.github/workflows/majordomo-agent.yml) — OpenCode agent runtime image
+- [`.github/workflows/majordomo-forge-cli.yml`](.github/workflows/majordomo-forge-cli.yml) — `majordomo-gh` / `majordomo-glab` images
+
+Corp builds use the same Dockerfiles with `--target corp` and `PACKAGE_REGISTRY_*` build-args (see Dockerfile headers).
+
+Local smoke:
+
+```bash
+DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
+  bash pipelines/scripts/build-copilot-image.sh local sa-ruff local-test \
+  dockerfiles/sa-tools/ruff.Dockerfile
+
+majordomo build-sa-tools          # public (default)
+majordomo build-sa-tools --corp   # needs PACKAGE_REGISTRY_* + credentials
+```
+
+## 🏷️ One workflow: PR review
+
+Review is the first end-to-end job on the plane. Changed files route to skills automatically for most projects.
+
+**File-review skills** (routed by file type, produce per-file reports):
+
+| Skill | Default routing | Blast radius |
+|---|---|---|
+| `pr-review-code` | Source code (Python, JS, Java, Go, and 20+ more extensions) | Yes (mandatory) |
+| `pr-review-docs` | `**/*.md`, `**/*.rst` | No |
+| `pr-review-conf` | `**/*.yml`, `**/*.yaml`, `**/*.toml`, `**/*.json`, `**/*.ini`, and more | No |
+| `pr-review-tests` | Not routed by default — add explicit routing to include test files | No |
+
+**Synthesis skills** (run after file-review):
+
+| Skill | What it produces |
+|---|---|
+| `pr-review-summary` | `summary.md` — high-level PR summary |
+| `pr-review-technical` | `tech-review.md` — deep-dive |
+| `pr-review-blast-radius` | `blast-radius.md` — impact map |
+
+`majordomo prep` classifies each changed file using glob patterns. Exclusion filters live in `internal/staging`.
+
+See [09 — Customising the review](docs/advanced/09-customising-the-review.md) for agent context, routing overrides, and skill paths (control-tower YAML).
+
+## 📦 Install (binary)
+
+Use the released CLI to bootstrap a control tower or manage a `.majordomo/` pin before you have the submodule checked out.
+
+1. Download the `majordomo` archive for your OS from the [latest release](https://github.com/behaviorengineering/majordomo/releases/latest), unpack it, and put `majordomo` on your `PATH`.
+2. Confirm the build:
+
+```bash
+majordomo version
+```
+
+3. In a tower or legacy app repo, manage the submodule pin:
+
+```bash
+majordomo submodule
+```
+
+### Releases (for agents)
+
+Default bump on each releasable merge to `main` is **patch** (`vX.Y.(Z+1)`), via `.github/workflows/auto-patch-release.yml`. That job creates an annotated tag and runs GoReleaser in the same workflow (CI job-token tag pushes do not reliably trigger a second pipeline).
+
+- Skip when every commit subject since the last `v*` tag is only `docs:`, `chore:`, or `ci:` (conventional prefixes), or the subject contains `[skip release]`.
+- Use `workflow_dispatch` with bump `minor` or `major` for additive or breaking public API (or an explicit human ask).
+- Human-pushed `v*` tags still publish through `.github/workflows/release.yml`.
+- Each release includes archives for linux/darwin/windows (`amd64`/`arm64`) and notes since the previous tag (`.goreleaser.yaml`).
+
+Control towers should pin `.majordomo/` to a resolvable `v*` tag after each release, not a floating SHA.
+
+**From source** (developers working in this repo):
+
+```bash
+go build -o majordomo ./cmd/majordomo
+./majordomo version
+```
+
+## 📚 Docs
+
+**Architecture:**
+- [PLAN — Control Tower, GitHub Actions, and Go](docs/PLAN-control-tower-github-go.md)
+
+**Go CLI (common commands):**
+
+```bash
+majordomo poll --config-dir majordomo-central-config --out pending-reviews.json
+majordomo run review --config-dir majordomo-central-config --repo-id <id> --pr <n> [--until prep] [--publish]
+majordomo prep <base-branch> <staging-dir> \
+  [--routing path] [--agent-context path] [--summary-config path]
+majordomo orchestrate \
+  --pr <n> --staging-dir <dir> --output-dir <dir> \
+  [--base-branch <b> | --skip-prep] [--until waves] [--concurrency 6]
+majordomo dispatch <pr> <staging-dir> <output-dir> [--summary|--finalize|--prose|...]
+majordomo publish --scm github|gitlab|bitbucket <pr> <summary.md> auto|comment|description
+majordomo status --scm github|gitlab|bitbucket <commit-sha> INPROGRESS|SUCCESSFUL|FAILED
+majordomo cache validate-branch majordomo-inference-cache/<id>
+majordomo cache push --remote <url> --branch <name> --worktree <dir>
+majordomo cache precheck|lookup|store|restore ...
+majordomo context validate --dir <worktree>
+majordomo report junit <review-output-dir> <junit-output-dir>
+majordomo report html <input.md> <output.html>
+majordomo report all-diffs <manifest.json> <output.txt> [--cap N]
+majordomo build-sa-tools [--dry-run] [--corp]
+majordomo submodule
+```
+
+Set `MAJORDOMO_SCRIPTS` if `pipelines/scripts` is not discoverable from cwd; set `MAJORDOMO_BIN` when dispatch must find the CLI off PATH.
+
+**Start here:**
+- [01 — Portable Pipeline Pattern](docs/01-portable-pipeline-pattern.md)
+- [02 — Setup](docs/02-setup.md) — install, local dev, and image CI
+- [03 — Manage Submodule](docs/03-manage-submodule.md)
+
+**Review workflow (deep dive):**
+- [04 — How the Review Works](docs/04-how-the-review-works.md)
+- [05 — File Orchestration](docs/advanced/05-file-orchestration.md)
+- [06 — PR Summary Flow](docs/advanced/06-pr-summary-flow.md)
+- [07 — Example Summary](docs/advanced/07-example-summary.md)
+- [10 — Repo Context Branch](docs/advanced/10-repo-context-branch.md)
+- [Proposal — Open runner vs closed intelligence factory](docs/PROPOSAL-oss-runner-vs-intelligence-factory.md)

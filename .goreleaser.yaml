@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: majordomo
+
+builds:
+  - id: majordomo
+    main: ./cmd/majordomo
+    binary: majordomo
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/behaviorengineering/majordomo/internal/cli.Version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+  sort: asc
+  abbrev: 8
+  # Prefer GitHub @login only; never fall back to Name <email>.
+  format: "{{.SHA}}: {{.Message}}{{ if .Logins }} ({{ .Logins | englishJoin }}){{ end }}"
+  groups:
+    - title: Features
+      regexp: '(?i)^.*?feat(\(.+\))?!?:.+$'
+      order: 0
+    - title: Bug fixes
+      regexp: '(?i)^.*?(fix|bug)(\(.+\))?!?:.+$'
+      order: 1
+    - title: Docs
+      regexp: '(?i)^.*?docs?.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '(?i)^.*?chore(\(.+\))?!?:.+$'
+      - '(?i)^.*?ci(\(.+\))?!?:.+$'
+
+release:
+  name_template: "v{{.Version}}"

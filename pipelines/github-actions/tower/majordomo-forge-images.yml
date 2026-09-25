@@ -1,0 +1,83 @@
+# Reference: control-tower forge image publish.
+# Canonical source — copy to YOUR_TOWER/.github/workflows/majordomo-forge-images.yml
+# Replace YOUR_GHCR_REGISTRY (e.g. ghcr.io/xynova/majordomo-tower).
+name: majordomo-forge-images
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - ".majordomo/dockerfiles/Dockerfile.gh"
+      - ".majordomo/dockerfiles/Dockerfile.glab"
+      - ".majordomo/pipelines/scripts/**"
+      - ".github/workflows/majordomo-forge-images.yml"
+  pull_request:
+    paths:
+      - ".majordomo/dockerfiles/Dockerfile.gh"
+      - ".majordomo/dockerfiles/Dockerfile.glab"
+      - ".majordomo/pipelines/scripts/**"
+      - ".github/workflows/majordomo-forge-images.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/YOUR_ORG/YOUR_TOWER
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image_name: majordomo-gh
+            dockerfile: Dockerfile.gh
+            smoke_cmd: gh --version
+          - image_name: majordomo-glab
+            dockerfile: Dockerfile.glab
+            smoke_cmd: glab --version
+    steps:
+      - name: Checkout tower (with submodule)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build forge image
+        env:
+          DOCKER_BUILD_TARGET: public
+          SKIP_PUSH: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          REGISTRY_USR: ${{ github.actor }}
+          REGISTRY_PSW: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash .majordomo/pipelines/scripts/tower/build-forge-image.sh \
+            "${REGISTRY}" \
+            "${{ matrix.image_name }}" \
+            "${{ github.sha }}" \
+            "${{ matrix.dockerfile }}"
+
+      - name: Smoke forge CLI
+        run: |
+          set -euo pipefail
+          docker run --rm "${REGISTRY}/${{ matrix.image_name }}:${{ github.sha }}" \
+            sh -c '${{ matrix.smoke_cmd }} && echo OK'
+
+      - name: Tag and push latest (default branch)
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          set -euo pipefail
+          src="${REGISTRY}/${{ matrix.image_name }}:${{ github.sha }}"
+          latest="${REGISTRY}/${{ matrix.image_name }}:latest"
+          docker tag "${src}" "${latest}"
+          docker push "${latest}"
+          echo "Pushed ${latest}"

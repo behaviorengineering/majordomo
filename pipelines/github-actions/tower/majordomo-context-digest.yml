@@ -1,0 +1,205 @@
+# Reference: context digest cron (matrix per served repo).
+# Canonical source — copy to YOUR_TOWER/.github/workflows/majordomo-context-digest.yml
+# Majordomo context digest — tower cron (same 5m floor as poll).
+# Canonical workflow shape: .majordomo/pipelines/github-actions/tower/majordomo-context-digest.yml
+name: majordomo-context-digest
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_compact:
+        description: "Run chronology compaction even when under threshold"
+        required: false
+        default: "false"
+        type: boolean
+      repo_id:
+        description: "Optional single repo id (default: all digest targets)"
+        required: false
+        type: string
+      majordomo_context_image:
+        description: "Optional majordomo-context factory image override (default: vars.MAJORDOMO_CONTEXT_IMAGE)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    env:
+      MAJORDOMO_GH_IMAGE: ${{ vars.MAJORDOMO_GH_IMAGE }}
+      MAJORDOMO_GLAB_IMAGE: ${{ vars.MAJORDOMO_GLAB_IMAGE }}
+      MAJORDOMO_CONTEXT_IMAGE: ${{ github.event.inputs.majordomo_context_image || vars.MAJORDOMO_CONTEXT_IMAGE }}
+      TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
+    steps:
+      - name: Checkout tower (with submodule)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Extract majordomo-context factory CLI from image
+        run: bash "${TOWER_SCRIPTS}/extract-majordomo-context-cli.sh" "${MAJORDOMO_CONTEXT_IMAGE}" "${{ github.workspace }}/majordomo-context"
+
+      - name: Write factory license
+        env:
+          MAJORDOMO_CONTEXT_LICENSE_B64: ${{ secrets.MAJORDOMO_CONTEXT_LICENSE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MAJORDOMO_CONTEXT_LICENSE_B64}" ]; then
+            echo "secrets.MAJORDOMO_CONTEXT_LICENSE is required (license.lic contents or base64)" >&2
+            exit 1
+          fi
+          # Accept raw JSON license or base64-encoded file bytes.
+          if printf '%s' "${MAJORDOMO_CONTEXT_LICENSE_B64}" | head -c 1 | grep -q '{'; then
+            printf '%s\n' "${MAJORDOMO_CONTEXT_LICENSE_B64}" > "${{ github.workspace }}/majordomo-context.lic"
+          else
+            printf '%s' "${MAJORDOMO_CONTEXT_LICENSE_B64}" | base64 -d > "${{ github.workspace }}/majordomo-context.lic"
+          fi
+
+      - name: Build Typology CLI
+        run: |
+          set -euo pipefail
+          GOBIN="${{ github.workspace }}" go install github.com/behaviorengineering/typology/cmd/typology@v0.1.2
+          chmod +x "${{ github.workspace }}/typology"
+
+      - name: Plan digest targets
+        id: plan
+        run: |
+          set -euo pipefail
+          ./majordomo-context repos --license ./majordomo-context.lic \
+            --config-dir majordomo-central-config \
+            --out context-repos.json
+          count=$(jq '.repos | length' context-repos.json)
+          echo "Digest targets: ${count}"
+          if [ "${count}" = "0" ]; then
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          matrix=$(bash "${TOWER_SCRIPTS}/enrich-context-repos-matrix.sh" context-repos.json)
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload majordomo-context CLI
+        uses: actions/upload-artifact@v7
+        with:
+          name: majordomo-context-cli
+          path: majordomo-context
+          if-no-files-found: error
+
+      - name: Upload factory license
+        uses: actions/upload-artifact@v7
+        with:
+          name: majordomo-context-license
+          path: majordomo-context.lic
+          if-no-files-found: error
+
+      - name: Upload Typology CLI
+        uses: actions/upload-artifact@v7
+        with:
+          name: typology-cli
+          path: typology
+          if-no-files-found: error
+
+  digest:
+    needs: plan
+    if: needs.plan.outputs.matrix != '{"include":[]}'
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.forge_image }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
+    concurrency:
+      group: context-digest-${{ matrix.repo_id }}
+      cancel-in-progress: false
+    env:
+      REPO_ID: ${{ matrix.repo_id }}
+      SCM: ${{ matrix.scm }}
+      OWNER: ${{ matrix.owner }}
+      NAME: ${{ matrix.name }}
+      MODULE_SCOPE: ${{ matrix.module_scope || '' }}
+      CLONE_URL: ${{ matrix.clone_url }}
+      GH_TOKEN_XYNOVA: ${{ secrets.GH_TOKEN_XYNOVA }}
+      GH_TOKEN_BEHAVIORENGINEERING: ${{ secrets.GH_TOKEN_BEHAVIORENGINEERING }}
+      GITLAB_TOKEN_BEHAVIORENGINEERING: ${{ secrets.GITLAB_TOKEN_BEHAVIORENGINEERING }}
+      BITBUCKET_TOKEN: ${{ secrets.BITBUCKET_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      MAJORDOMO_MODEL: ${{ vars.MAJORDOMO_MODEL }}
+      TOWER_SCRIPTS: .majordomo/pipelines/scripts/tower
+    steps:
+      - name: Checkout tower (with submodule)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Download majordomo-context CLI
+        uses: actions/download-artifact@v8
+        with:
+          name: majordomo-context-cli
+          path: .
+
+      - name: Download factory license
+        uses: actions/download-artifact@v8
+        with:
+          name: majordomo-context-license
+          path: .
+
+      - name: Download Typology CLI
+        uses: actions/download-artifact@v8
+        with:
+          name: typology-cli
+          path: .
+
+      - name: Make majordomo-context executable
+        run: |
+          set -euo pipefail
+          ls -la
+          chmod +x ./majordomo-context
+          chmod +x ./typology
+          test -x ./majordomo-context
+          test -x ./typology
+          test -s ./majordomo-context.lic
+
+      - name: Verify forge CLI on PATH
+        run: bash "${TOWER_SCRIPTS}/verify-forge-cli.sh"
+
+      - name: Clone served repo and run context digest
+        env:
+          MAJORDOMO_REPO_ID: ${{ matrix.repo_id }}
+        run: |
+          set -euo pipefail
+          bash "${TOWER_SCRIPTS}/clone-served-repo.sh" served/repo
+          ./majordomo-context digest --license ./majordomo-context.lic \
+            --config-dir majordomo-central-config \
+            --repo-id "${REPO_ID}" \
+            --workdir "${PWD}/served/repo" \
+            --typology-binary "${PWD}/typology" \
+            --module-scope "${MODULE_SCOPE:-}" \
+            --bootstrap-survey-policy auto \
+            --out digest-result.json \
+            $( [ "${{ github.event.inputs.force_compact }}" = "true" ] && echo "--force-compact" )
+          action=$(jq -r '.action' digest-result.json)
+          echo "Digest action: ${action}"
+
+      - name: Upload digest result
+        uses: actions/upload-artifact@v7
+        with:
+          name: context-digest-${{ matrix.repo_id }}
+          path: digest-result.json
+          if-no-files-found: ignore

@@ -1,0 +1,471 @@
+# Repo Context Branch
+
+*Majordomo: repository operations for evolving software.*
+
+The context branch is durable project understanding on the **served repo**. It is not the default branch. Product PRs still target default. Context updates are a **separate PR whose base is the context branch**. Default stays free of Majordomo files.
+
+Product boundary (open review runner vs closed intelligence that *builds* this context): [PROPOSAL-oss-runner-vs-intelligence-factory.md](../PROPOSAL-oss-runner-vs-intelligence-factory.md). The open half validates the tree, selects agenting packs, and reads gate state. Digest generation lives in private `majordomo-context`.
+
+Schema validation ships in this module (`majordomo context validate`). Digest, story generation, and pack materialization are factory work.
+
+## Context provider (open consumer seam)
+
+Review prep does **not** call the private factory at runtime. It resolves a `ContextSnapshot` through `pkg/context/provider`:
+
+1. **Explicit checkout:** `--context-dir` or `MAJORDOMO_CONTEXT_DIR` (fail closed when the tree is invalid).
+2. **Optional remote branch:** shallow clone of `majordomo-context/<repo-id>` beside the served repo when no explicit dir is set and the branch exists (skip grounding when absent or corrupt). At prep start the runner resolves one branch tip (or `--context-sha` / `MAJORDOMO_CONTEXT_SHA`), checks out that commit, and records it under `context_pin` in `batch-plan.json` for the rest of the pipeline.
+
+The snapshot exposes finished `agenting/` packs and `meta.yaml` provenance only. Selection rules stay in open `pkg/context/agenting`. Do not leak digest prompts, evaluator scores, or inference traces through the provider API.
+
+## Why
+
+PR review is a sensor: each run sees one diff and forgets. The context branch is a **teaching story** of background and important decisions that shape how the code looks today. It is not an audit log of every merge. Newcomers should be able to read it. Later digest passes MAY compact older story for readability.
+
+## Two layers
+
+| Layer | Role | Mutability |
+|-------|------|------------|
+| **Cursor** (`meta.yaml` `last_merged_sha`) | Honest tape on default first-parent. Visit every node. | Only moves forward along that tape (or a documented rewrite workflow). |
+| **Story** (mission, architecture, conventions, weaknesses, chronology, generated agenting packs) | Tutoring document. Only important, evidenced decisions. | Digest may add, reshape, and compact. |
+
+Visiting a node is not the same as writing a chronology line. A no-op advances the cursor and writes **nothing** to the story.
+
+## Location
+
+- **Served repo**, same home as review cache (`repo: served`).
+- Canonical branch: `majordomo-context/<repo-id>` (`config.ContextBranch`).
+- Optional override: `context.branch` in central config.
+- **Orphan history.** Context files only. Do not branch from default.
+- **Never merge context into default.**
+
+Update PRs (later digest job):
+
+- Head: `majordomo-context/<repo-id>-update` (one catch-up branch per repo; hyphen avoids a git ref conflict with the base branch name).
+- Base: always `majordomo-context/<repo-id>`.
+- At most one open context update PR per repo. Restack on that head when default moves.
+- **Humans MUST NOT push file edits** to the context or update branches. They steer with `@majordomo` comments on the open PR. The agent revises the same head. Merge happens after that conversation, without a human patch.
+
+## Tree layout
+
+On `majordomo-context/<repo-id>`:
+
+```text
+README.md           how to read (Reading order TOC + Prev/Next entry); never-merge-to-default; humans talk on the PR, do not edit
+meta.yaml           schema_version, repo_id, last_merged_sha, last_digest_at
+mission.md          why the project exists
+architecture.md     teaching story (layers, entrypoints, ownership)
+conventions.md      how this repo is built and reviewed
+weaknesses.md       known risks; cite chronology headings when claiming history
+chronology.md       important evidenced decisions, newest first; compactable
+evidence/typology/  Typology seed proposal for this digest (not confirmed catalog)
+  README.md              reading index for the briefing path (required when evidence exists)
+  architecture_brief.md  Typology architecture brief (not the teaching story)
+  mechanical_grouping.yaml       deterministic door-walk seed
+  slice_grouping_proposal.yaml    optional grouping overlay (composed from slice-grouping CoT lists)
+  slice_grouping_verdicts.yaml    grouping-audit accept/overlay/reject rows
+  slice_meaning_ledger.yaml       evidence-first slice objectives
+  slice_meaning_claims.yaml       claims copied from the meaning ledger in Go
+  journey.md             human-intervention decisions and debt (after architecture)
+  human_intervention.md  operator priorities
+  pr_priority.md         optional cold-reader PR counsel
+  finding_comment_bodies.json  counsel for per-finding PR comments
+  finding_comments.json  forge comment id map for upsert
+agenting/           grounding packs for review (not review SKILL.md)
+  index.yaml        pack id → globs + modes
+  <area>/GROUNDING.md
+```
+
+Guided markdown under the root and `evidence/typology/` carries a **Reading path** Prev/Next banner. Machine appendix files (`package_roles.yaml`, `package_capability_constraints.yaml`, `slice_meaning_ledger.yaml`, `slice_meaning_claims.yaml`, `package_contracts.md`, `graph.txt`, snapshots, `manifest.yaml`) are listed in the typology README only.
+Do not put application source on this branch. When `agenting/index.yaml` is present, `majordomo context validate` checks the index and each pack's `GROUNDING.md`. Bootstrap seeds `agenting/overview`.
+
+Validate a worktree with:
+
+```bash
+majordomo context validate --dir <worktree>
+```
+
+## Bootstrap typology path
+
+Imagine you open a context PR on a repo you have never touched. You need a short teaching story: which packages matter together, what each group is for, and what debt to care about. You should not have to trust a model that sounds confident.
+
+That is what this path is for. It builds that story in four steps. Machines settle facts and meaning first; a human-facing writer only packages the argument afterward. If meaning is wrong, every later teaching page repeats the lie.
+
+A real failure this design targets: roles correctly said a package was only data shapes, adapters fill it, and it must not claim synchronization. The human-facing writer still wrote “central synchronization layer.” Cold readers believed the story. The fix is to make meaning show its homework before the writer is allowed to speak.
+
+```mermaid
+flowchart TB
+  subgraph facts ["1. Facts — look at the code, label each package"]
+    survey["Walk the tree and collect symbols, exports, delivery flags"]
+    roleRLM["Ask an evidence explorer: what kind of package is this?"]
+    constraints["Write durable rules: this package may do X, must not claim Y"]
+    survey --> roleRLM --> constraints
+  end
+
+  subgraph grouping ["2. Grouping — propose who belongs together, then audit"]
+    cluster["CoT proposes merges and a machine merge list"]
+    clusterAudit["One RLM pass challenges every proposed group"]
+    cluster --> clusterAudit
+  end
+
+  subgraph meaning ["3. Meaning — prove what each group is for"]
+    ledgerRLM["For each proposed group, open the owned packages"]
+    evidenceFirst["Quote real evidence first types, flags, fillers"]
+    claimsNext["Only then name portable claim codes"]
+    objectiveLast["Only then write one plain-language objective"]
+    ledger["Save that as the meaning ledger"]
+    ledgerRLM --> evidenceFirst --> claimsNext --> objectiveLast --> ledger
+  end
+
+  subgraph writer ["4. Human writer — teach without inventing prestige"]
+    refine["Write the catalog and journey for a cold reader"]
+    gates["Check: teaching sentence still matches the ledger"]
+    publish["Publish brief, story, PR counsel, later catch-up"]
+    refine --> gates --> publish
+  end
+
+  constraints --> cluster
+  clusterAudit --> ledgerRLM
+  constraints --> ledgerRLM
+  survey --> ledgerRLM
+  clusterAudit --> refine
+  ledger --> refine
+  ledger --> gates
+  gates -.->|"if teaching drifted, retry meaning"| ledgerRLM
+```
+
+**1. Facts.** Before anyone groups or teaches, we look at each package. An explorer that can read symbols decides whether it is data, HTTP surface, CLI entry, adapter, and so on. Folder names do not count. From that label we write durable rules in portable codes (`package_capability_constraints.yaml`): what this package *is*, and what story it *must not* tell. If adapters fill a dto package, that package also records who fills it.
+
+*Cold-reader takeaway:* “We already know what each folder actually is, in machine terms.”
+
+**2. Slice grouping.** Next we infer teaching units: which packages belong in the same slice so a newcomer is not drowned in one-package-per-page noise. Go writes `mechanical_grouping.yaml` from the door-walk seed. Slice-grouping CoT (`typology_slice_grouping`) emits parallel `merge_ids` / `merge_packages` / `merge_intents` lists; Go composes `slice_grouping_proposal.yaml`. One grouping-audit RLM (`typology_slice_grouping_audit`) then audits the **full** list: lifecycle-same vs theme-only, with evidence quotes. Rejects revise; overlays become teaching nicknames; only `accept` may fold the catalog. This step is allowed to be wrong about membership and get corrected by that audit. It is not allowed to invent a glamorous purpose for the group.
+
+*Cold-reader takeaway:* “Here is a proposed map of neighborhoods that survived evidence pushback, not the speech about what each neighborhood means.”
+
+**3. Meaning.** For each proposed group, a second explorer must open the owned packages and quote evidence before it is allowed to speak. Only after quotes may it emit claim codes and one plain objective. That ledger (`slice_meaning_ledger.yaml`) is the source of truth for “what this group is for.” Claims (`slice_meaning_claims.yaml`) are copied from the ledger by code, not graded by the writer that benefits from sounding important. After the explorer answers, Go also fail-closes **claim entailment**: each claim must be justified by owned package `is` rows, `fills_dto` edges, or mechanical role evidence flags (for example `delivery:http`, `has_main`, `exported_funcs`). English evidence quotes are not proof. Unknown stretch codes such as `synchronize_state` / `merge_adapters` never pass without an `is` prior; `fill_dto` needs adapter `is` or an outbound `fills_dto` edge.
+
+*Cold-reader takeaway:* “If the objective cannot point at symbols or constraint rows, it does not ship.” Example: dto + fillers → “shared payload shapes,” never “central synchronization.” A dto slice that quotes a real type but claims `fill_dto` still fails.
+
+**4. Slice catalog assemble + publish.** Go applies only `accept` grouping folds to the draft, then a per-slice catalog RLM (`typology_slice_catalog`) emits one fragment per owned teaching slice (parallel workers). Go joins fragments and keeps draft libraries/bindings. Fragments must copy ledger objectives verbatim. Gates fail the attempt if the joined catalog drifts from the meaning ledger or verdicts. After post-catalog architecture, human-intervention generators write journey debt, operator briefings, and PR counsel. Bootstrap story generation uses per-section RLM passes over the grounded evidence pack.
+
+*Cold-reader takeaway:* “The nice prose is a packaging of settled meaning, not a second chance to redefine it.”
+
+## Bootstrap
+
+Empty `last_merged_sha` means **start from last**: set the cursor to current default `HEAD` and do not walk earlier history. The first story is whatever digest can evidence from HEAD as it stands (tree + Typology survey/refine proposal when available), not a reconstruction of the whole tape.
+
+For Go or Python served repos (Go: `go.mod` / `go.work`; Python: `pyproject.toml` / `setup.cfg` / `setup.py`), seed survey runs Typology under the analysis worktree. Typology harvest is language-specific but emits one language-neutral evidence contract (`package_roles.yaml`, contracts, RLM context; see typology `docs/evidence-contract.md`). Go roots still run `discover` / `show graph` / draft `architecture`; Python-only roots run `contracts` harvest and a roles-backed architecture stub. Then the typology path above: role RLM and `package_capability_constraints.yaml`, cluster CoT for membership proposals, full-list cluster RLM audit into `slice_grouping_verdicts.yaml`, per-slice evidence-first RLM into `slice_meaning_ledger.yaml` with Go claim∩`must_not` plus mechanical claim-entailment gates, Go `accept` folds plus per-slice catalog RLM fragments joined into the refined catalog (objectives copied from the ledger), and Go-derived `slice_meaning_claims.yaml` gated against owned `must_not` plus catalog-equals-ledger checks. After HTTP/entrypoint sanitize, hollow package-less slices that only hold bindings are collapsed onto the slice that owns the matching package base. After post-refine architecture, Majordomo adds evidenced **slice-to-library** `SliceBinding` entries that complete library classifications in the proposal catalog, re-runs architecture, then focused **human-intervention** generators rewrite journey debt, write `human_intervention.md`, seed `weaknesses.md`, and produce `pr_priority.md` for the context PR body. Each open architecture finding also gets a dedicated tutor CoT comment body; after the context update PR opens, Majordomo upserts one ordinary PR/MR comment per finding (stable `<!-- majordomo-finding:<fingerprint> -->` marker) so operators can discuss in-thread. Free-form replies are conversation only; `@majordomo done` / `reject` / `why` still drive the gate. When a finding disappears on a later digest, the same comment is updated to a cleared note (not deleted), keeping the trace. It must not ask humans to rubber-stamp mechanical library edges Majordomo should have written, and must not invent catalog YAML in the flagger markdown. Durable context evidence is refined catalog, journey/cluster notes, cluster merge verdicts, post-refine `architecture_brief.md`, human-intervention notes, finding comment sidecars, graph, capability constraints, objective ledger/claims, and manifest under `evidence/typology/` on the update branch. Root `architecture.md` remains the teaching story. Discover drafts are not committed. When survey mode is **discover** (no confirmed `.typology/` on default), the refined proposal on the context branch is the living map until a human first confirms a catalog on default. When survey mode is **reuse** (confirmed `.typology/typology.yaml` already on default) and the refined proposal differs from that catalog after normalize, digest opens or restacks one **product** PR: base = default branch, head = `majordomo-typology/<repo-id>-update`, payload = promote refined YAML into `.typology/typology.yaml`, body explains findings and links the context update PR. Digest never auto-merges that product PR. Context teaching files still never merge into default. Human-intervention journey notes and the context update PR priority section must **argue**, not inventory: recommend in prose, name real alternatives with a cost, and state a lean. They must not defer the argument to another file or stop at hollow "approve binding or refactor" mitigations. Speaker attribution on the context branch remains Majordomo/Typology digest proposing architecture grounding; the typology promote PR is the mechanical sync of that proposal into the confirmed catalog. When priorities exist, the context PR body leads with that counsel in a tutor voice for a cold reader.
+
+## Digest trigger (v1)
+
+Tower cron (same interval family as poll, e.g. every 5m). The digest job runs for a repo only when the context cursor is **behind** default `HEAD`. If caught up, exit no-op unless an open update PR has a pending `@majordomo reject` (gate regen). Story updates, agenting materialization, and compaction run during catch-up. LLM provider keys (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) are required on the digest cron job when story generation is enabled.
+
+At the end of every digest (and review / standalone orchestrate) run, Majordomo logs an **itemized LLM usage summary** plus a grand total (prompt / completion / total tokens and call counts per task such as `typology_slice_catalog` and `typology_slice_meaning`). Counts come from provider-reported usage on the dspy-go call path, not from local tiktoken estimates. Digest `--out` JSON also includes `llm_usage`.
+
+## First orphan (v1)
+
+If `majordomo-context/<repo-id>` does not exist, the digest bot creates it (orphan history, schema tree, bootstrap `meta.yaml`) and opens the first PR from `majordomo-context/<repo-id>-update`. No human seed step.
+
+## Credentials (v1)
+
+Same forge token as review MUST allow: read default, push to `majordomo-context/**`, open/restack PRs with base `majordomo-context/<repo-id>` and head `majordomo-context/<repo-id>-update`, and (when a confirmed catalog exists and drifts) push `majordomo-typology/**` plus open/restack a product PR with base = default and head `majordomo-typology/<repo-id>-update`.
+
+## Generic SCM (v1)
+
+Open/restack requires GitHub, GitLab, or Bitbucket. For `scm: generic` (clone-only): skip opening a context PR; log and exit. Review grounding stays unavailable until a supported SCM is configured.
+
+## Chronology contract
+
+Chronology is **high-level architectural commentary** on what landed on default. It MAY only claim:
+
+- what the digest can thoroughly check in that node's tree/diff, or
+- what the product PR review already checked for that merge.
+
+If `Because` / `In order to` cannot be evidenced, do not invent them. Treat the node as a story no-op (cursor still advances).
+
+When a line is warranted:
+
+```markdown
+### 2026-08-28 - Alice - PR #412
+
+- **Did:** extract auth into middleware
+- **Because:** token checks were duplicated in three handlers (shown in the diff / review)
+- **In order to:** make session expiry consistent (stated in the PR or checkable in the change)
+- **Evidence:** PR #412, merge `abc123def`, review artifacts if used
+```
+
+Heading date is `YYYY-MM-DD`. Actor and source follow, separated by ` - `. Newest first.
+
+Digest MAY compact older entries after later iterations so the document stays readable. Compaction MUST NOT invent claims. Cursor history is not compacted: `last_merged_sha` remains the tape.
+
+## Catch-up on default (later digest)
+
+`last_merged_sha` is a **cursor on default**, first-parent only. Context MUST follow that tape. It MUST NOT jump a node.
+
+A digest run is catch-up, not "on this merge, digest that SHA":
+
+1. Read the cursor from the write tip (the one open context update PR if it exists, else the merged context branch). Empty cursor: bootstrap (set to default `HEAD`).
+2. Walk `last_merged_sha` → current default `HEAD` with `git log --first-parent --reverse`.
+3. Visit **every** commit on that walk, in order.
+4. For each node: maybe update the story (only if evidenced and important). **Always** advance the cursor to that SHA.
+5. When that walk includes at least one commit, survey the current served tree before the story update. If a refined catalog is already on the context branch, keep slices whose package set is unchanged. Drop packages the tree no longer has. Place a new package on the slice that owns its sole importer, or give it a new slice when no single slice owns that neighborhood. Only slices whose package set changed are rewritten. The first map, when no refined catalog exists yet, still runs the full catalog pipeline. A caught-up cursor does not refresh.
+6. The new cursor is the last node fully processed. Incomplete nodes MUST NOT be skipped.
+
+**Concurrent merges.** Two merges (`A` cursor, then `B`, then `C` at HEAD) MUST process `B` then `C` on the cursor. Story lines are optional per node. One digest worker per repo (Actions concurrency `context-digest-<repo-id>`). One open update PR; restack. Product review reads only the **merged** context tip.
+
+**Linearize with default first-parent**, not PR numbers or wall-clock. Squash-to-default: each squash is one node. Merge commits: each first-parent commit on default is one node.
+
+## History rewrite (v1)
+
+If `last_merged_sha` is not an ancestor of default `HEAD`, digest enters **rewrite** mode (not normal catch-up).
+
+1. Record a chronology event; set `meta.yaml` `rewrite_pending` + `rewrite_new_head`.
+2. If `rewrite_why` is empty, Gate blocks until `@majordomo why <reason>` on the context PR.
+3. When why is present, reshape story (`architecture.md` at minimum), reset cursor to new HEAD, clear rewrite flags.
+4. Open/restack the update PR as usual.
+
+## Conversation before merge (v1)
+
+The context PR is the merge vehicle and talk surface.
+
+- Humans MUST NOT commit on that branch.
+- Only comments starting with `@majordomo` count (`context.gateCommentPrefix` override for tests).
+  - `@majordomo reject <reason>` → gate regen on next digest (story re-run).
+  - `@majordomo done` → conversation complete; human may merge.
+  - `@majordomo why <reason>` → supplies rewrite reason when history was rewritten.
+- Gate state persists in `gate.json` on the update branch.
+- Default: **human clicks merge**. `context.autoMerge: true` opts into forge merge when gate is `done`.
+
+## Two skill classes (do not mix)
+
+Mechanical review skills and agenting (grounding) packs are different jobs. They MUST NOT share a file, a directory tree, or OpenCode skill discovery.
+
+| Class | Lives | Job | Must not |
+|-------|--------|-----|----------|
+| **Mechanical** | Go state machine (`orchestrate`, `agent` loops, later per-batch steps). Rubric labels may stay as data, not a step script for the model. | Order, IO, schema, retries, checkpoints. Same idea as generate/score loops. | Absorb project story. Rely on the LLM to remember MUST/NEVER steps. |
+| **Agenting** | Served context branch: `agenting/<area>/` (not `SKILL.md`) | Who this system is: mission, shape, evidenced decisions for that area. | Become review criteria or replace the machine. |
+
+### Mechanical as a state machine (later)
+
+Today the **coarse** machine already exists: prep → file waves → finalize → prose → summary loop → tech loop, with checkpoints. The **fine** protocol still lives in `pr-review.agent.md` (which file to read, write `<slug>.md`, classify tags, no shell). The model is asked to police itself. That is the part to pull into Go, like `RunSummaryLoop`.
+
+Go owns the states. OpenCode is one action inside a state: "given this input and optional agenting pack, produce this artifact." Go then validates and either advances, retries, or fails.
+
+Example file-review batch:
+
+1. **Prepare** (Go `internal/filereview`): load reviewables from batch `manifest.json`.
+2. **Judge** (strop in-process): write per-file markdown under `per-file/`.
+3. **Validate** (Go): parse MD → structured reports; every reviewable has an artifact; every finding has severity + text (or explicit no-issues). Invalid → retry with `filereview_feedback.md`, up to a cap, then fail the batch.
+4. **Assemble** (Go): write `findings.json`; rewrite markdown from structured reports (MD is the display formatter).
+
+Implemented in `internal/filereview`; `orchestrate` waves call `filereview.Run`.
+
+The LLM MUST NOT be given bash for review batches (already the intent). The machine MUST NOT offer tools the state does not allow.
+
+What stays in the model: whether something is actually a defect, and wording. What leaves the prompt: step order, completeness, output shape, "you may not skip a file."
+
+`pr-review-*/SKILL.md` shrinks toward rubric *data* the validator and the short Judge prompt both read. It MUST NOT remain a 500-line execution protocol.
+
+**Workflows are deterministic.** Prep, waves, Prepare → Judge → Validate → Assemble, generate/eval/gate: Go + strop. Same inputs must take the same path. The LLM is only the Judge action (and optional workspace-tool calls). It MUST NOT choose the next mechanical state.
+
+**Markdown is offboarded from the mechanical path.** `pr-review.agent.md` and step-by-step SKILL protocols stop being the machine. They MAY remain as generated human docs that describe the code, or they go away. They MUST NOT be what `dispatch` executes.
+
+What stays markdown on purpose:
+
+- Agenting packs and the context story (teaching, selected per task)
+- Optional rubric tables as data (YAML/MD that the machine loads, not a script the model follows)
+- Operator docs under `docs/`
+
+Do not keep two sources of truth. If the machine changes, update code first; docs follow.
+
+Prep still selects **which** mechanical machine (code vs docs vs summary). It copies rubric data if needed. It attaches agenting **beside** the Judge input, never folded into the machine.
+
+### Driver: strop + DSPy; OpenCode as tools (later)
+
+Do not grow another homemade generate/score loop. Majordomo should **drive** judgment through [strop](https://github.com/behaviorengineering/strop) (DSPy JobRunner, composition walks, refinement, Gate). OpenCode becomes a **tool** the runner may call when a job needs a repo workspace (read/grep/edit/shell), not the agent that owns the protocol.
+
+| Layer | Owns |
+|-------|------|
+| **Majordomo Go** | Poll, prep, waves, checkpoints, which job/pack, selected agenting input. |
+| **strop** | Generate → evaluate → refine until gate. Field/section/phase walks. Structured-output validation. Human Gate (conversation, reject-and-regen) without humans editing files. |
+| **DSPy modules** | Judge signatures (findings, summary sections, digest story). Evaluators that score those fields. |
+| **Workspace tool (port)** | Optional: explore or edit a checkout when staged diffs are not enough (digest, tech-deep, context PR amend). **OpenCode is one adapter.** |
+
+File-review often needs **no** workspace tool: prep already staged the diff. JobRunner + XML/mandatory-field validation is enough. Call the port when the module must look past the batch.
+
+The workspace is a **Go interface** (cwd-bounded: `Read`, `Grep`, `Edit`, `Shell` as the job allows). Implemented in `internal/workspace` (`Local`, `Stub`, `Guard` with `AllowNone` / `AllowTechDeep` / `AllowDigest`). DSPy/strop and Majordomo call the port only. They MUST NOT import OpenCode APIs or `agent-dispatch.sh` except inside one adapter package (`internal/workspace/opencode`, skeleton only today).
+
+Per-job allowlist (locked):
+
+| Job | Port |
+|-----|------|
+| File-review Judge | **None** (prep staged the diff) |
+| Summary / tech Judge | None |
+| Tech-deep | `Read`, `Grep` |
+| Digest / context amend | `Read`, `Grep`, `Edit` (no `Shell` unless a later job opts in) |
+| Tests | stub adapter (no process) |
+
+Adapters can be swapped or stacked without changing Judge modules:
+
+- OpenCode CLI (today's runtime)
+- another coding agent
+- a sandbox (no network, tighter FS)
+- a stub for tests (no LLM, no process)
+
+Enhance behind the same port (timeouts, allowlists, tracing). Do not leak adapter flags into strop or into `pr-review.agent.md`.
+
+Map today's loops onto strop instead of new `for` loops:
+
+- Summary / tech write→score → `pkg/judge` + strop `JobRunner` + evaluator packs under `pkg/judge/evaluation/{summary,tech}` (rubric IDs stay in Majordomo). Review loops live in `pkg/review/dispatch`.
+- File-review completeness → Go validate after generate (strop validators for required fields; Majordomo checks every reviewable has an artifact).
+- Context conversation-before-merge → `humanreview.Gate` + reviewflow ports (comment = reject/regen message). `agentsession` for the short-lived transcript.
+- Context story / compaction → **section-walk** over mission, architecture, conventions, weaknesses, chronology (lock passed sections). Not a separate phase-walk over the same files.
+
+Strop boundary rules still apply: no product prompts inside strop; Majordomo owns signatures, rubric copy, and the workspace-tool adapter.
+
+Judge always runs in-process via strop (`pkg/judge`). OpenCode is not a protocol driver. The `majordomo-agent` image may still put OpenCode on PATH later for workspace tools only. Majordomo `go.mod` pins tagged `github.com/behaviorengineering/strop`.
+
+## Grounding: selected agenting packs (v1 prep)
+
+Do **not** dump the dossier into every OpenCode batch.
+
+The story files (`mission.md`, `architecture.md`, …) are the human-readable source. Digest **materializes** small agenting packs plus an index (LLM story generation still later). Review **selects** packs by changed paths and job mode, independently of which mechanical skill the batch uses. The model MUST NOT probe `agenting/`.
+
+```text
+agenting/index.yaml
+agenting/<area>/GROUNDING.md
+```
+
+`index.yaml` shape:
+
+```yaml
+packs:
+  overview:
+    modes: [summary, technical, digest]
+  auth:
+    globs: ["**/auth/**", "**/*jwt*"]
+    modes: [files, summary, technical]
+```
+
+Examples:
+
+- Summary / tech synthesis: `agenting/overview` plus area packs that match the PR's files. Mechanical skill remains `pr-review-summary` / `pr-review-technical`.
+- File-review batch on `internal/auth/**`: mechanical `pr-review-code` plus agenting `agenting/auth` only.
+- Unrelated docs batch: mechanical `pr-review-docs`; maybe no agenting pack, or overview only.
+
+Selection MUST stay small. If an area pack does not match the task, it MUST NOT be attached.
+
+**Shipped (v1):** `pkg/agenting` loads `index.yaml`; prep (`AttachGrounding`) selects packs by glob + mode, copies `GROUNDING.md` into each batch `/.grounding/<id>.md`, and records `grounding_packs` on `manifest.json`. Pass `--context-dir` or `MAJORDOMO_CONTEXT_DIR` (merged context tip). Tower review workflow shallow-clones `majordomo-context/<repo-id>` when it exists. **`majordomo dispatch`** resolves paths and sets `MAJORDOMO_GROUNDING`; `agent-dispatch.sh` appends `grounding:` to the OpenCode prompt; `pr-review.agent.md` Step 1.5 reads only those files.
+
+`pipelines.*.agentContext` in central YAML is **legacy** (still materialized today). It is not a substitute for packs. Phase 6 grounding is `agenting/`.
+
+## Digest inference cache
+
+Teaching files live on `majordomo-context/<repo-id>`. A reseed may delete those
+refs. Fingerprint-keyed LLM/RLM outputs live on a **separate** inference-cache branch.
+Aborted seed resume means cache hits on the next **full** run, not a partial teaching-tree commit
+(the seed still clones a fresh temp context until the final bootstrap commit).
+
+### PR-seeded stage replay (local-only)
+
+Operators can re-run later seed stages from an existing context PR without pushing:
+
+```bash
+majordomo-context digest --repo-id <id> --workdir <clone> \
+  --resume-pr <N> --from-stage catalog|intervention|story \
+  --work-story-dir <durable-dir>
+```
+
+- Loads that PR's head tree into a temp context dir (evidence + teaching files).
+- Skips survey; starts at `--from-stage` (`catalog` includes human-intervention then story;
+  `intervention` then story; `story` alone).
+- Inference-cache Lookup/Store and skip stats still apply (same fingerprints as a full seed).
+- **Local-only:** does not push `majordomo-context/*`, does not open/update the context PR.
+  Result JSON includes `action=resume`, `resume_pr`, `resume_head`, `from_stage`, and
+  `local_out_dir` (copy under the work-story dump) plus `resume_provenance.json`.
+- Fail-closed when the PR tree lacks stage inputs (story needs refined snapshot + ledger).
+
+This is distinct from cache-hit soft resume on a normal digest: cache hits skip LLM calls
+inside a full chain; `--resume-pr` skips earlier stages entirely and keeps teaching output local.
+
+### Filesystem local seed workspace (no forge)
+
+For testing and interrupted seed iteration without branches or PRs:
+
+```bash
+majordomo-context digest --repo-id <id> --workdir <clone> \
+  --local-seed-dir /path/to/seeds/<id>
+
+majordomo-context digest --repo-id <id> --workdir <clone> \
+  --local-seed-dir /path/to/seeds/<id> --from-stage intervention
+```
+
+Workspace layout:
+
+```text
+<local-seed-dir>/
+  workspace.yaml       # repo, source SHA, completed stage
+  context/             # teaching tree (validate with majordomo context validate --dir …/context)
+  analysis/            # persisted draft catalog + architecture inputs
+  inference-cache/     # DigestStore files; Flush never configures a remote
+  work-story/          # RLM + module traces (default when --work-story-dir omitted)
+  local.diff
+```
+
+- No forge token, origin fetch for context, context push, or inference-cache branch push.
+- LLM provider credentials and typology binary are still required for stages that call them.
+- Pins `repo_id` + workdir `HEAD` in `workspace.yaml`. Moved HEAD fails closed unless `--allow-source-move`.
+- Promotion to a context PR stays manual in v1. Discard by deleting the directory.
+- Operator skill: `ai-copilots/skills/majordomo-local-seed/SKILL.md`.
+
+- Branch: `majordomo-inference-cache/<repo-id>` (`config.InferenceCacheBranch`; `DigestCacheBranch` aliases it). Legacy `majordomo-digest-cache/*` is cold-start superseded.
+- Artifacts under `digest/`: `inspect/`, `ledger/`, `cluster/`, `refine/`, `intervention/`, `story/` (plus legacy `cluster_audit/` for full-list audits)
+- Hit when stable evidence hashes + model/prompt/schema match; do not key on ephemeral RLM prose
+- End-of-run log line reports hit/miss counts (including cluster_cot, refine, intervention, story) and `estimated_tokens_saved`
+- **Push on the go:** each successful Store commits and pushes the cache branch immediately. Do not wait for job success; a failed reseed must still leave durable hits. **Exception:** `--local-seed-dir` uses a filesystem DigestStore with no push configuration.
+- Opt out with `cache.disableSkips: true` (same flag as PR review analysis skips)
+- Reseed scripts MUST delete only `majordomo-context/*`; they MUST NOT delete `majordomo-inference-cache/*`
+
+CLI helpers: `majordomo cache digest-lookup` / `digest-store` / `digest-push`.
+Operator rule: `ai-copilots/skills/majordomo-inference-cache/SKILL.md`.
+
+## Local AI work story (operator testing)
+
+Digest clones the served repo into an OS temp analysis tree and deletes that tree on exit.
+RLM JSONL and Judge runreports used to live only there, so a finished local reseed left nothing to reopen.
+
+Durable dump (not the teaching branch):
+
+- Flag: `majordomo-context digest --work-story-dir <dir>`
+- Or env parent: `MAJORDOMO_DIGEST_WORK_STORY_DIR` → `<parent>/<repo-id>-<timestamp>`
+- Default: `tmp/digest-runs/<repo-id>-<timestamp>` under the process cwd
+- Contents: `rlm-traces/<task>/`, `module-traces/` (CoT/Predict TraceSession JSONL), `logs/runs/`, and a short `README.md`
+- Result JSON includes `work_story_dir`
+
+## Poll exclusion
+
+Product poll ignores PRs whose base or head starts with:
+
+- `majordomo-context/` (covers durable base and `…-update` head)
+- `majordomo-pr-reviewer-cache/`
+- `majordomo-poll-cache/`
+- `majordomo-digest-cache/`
+
+Implemented in `internal/poll` (`isMajordomoInternalBranch`).
+
+## Read model for review (v1)
+
+Checkout the **merged** context tip only. Open context update PRs are not grounding until merged. Attach only the **selected** agenting packs for that batch, next to the mechanical skill, never folded into it. Review workflow sets `MAJORDOMO_CONTEXT_DIR` from a shallow clone of `majordomo-context/<repo-id>` when present.
+
+## Later slices (not this work)
+
+1. **Mechanical state machine.** Drive Judge with strop DSPy. Workspace port + per-job allowlists. Pull step protocol out of `pr-review.agent.md`. Structured findings; MD formatter after Validate.
+2. **Poll filter.** Done: skip context and cache-branch PRs in `internal/poll`.
+
+## Related
+
+- [Typology cluster: mechanical walk vs RLM](10.1-slice-grouping-decision.md)
+- [PLAN: Control Tower](../PLAN-control-tower-github-go.md) (Decision 5)
+- `pkg/contextstore` (schema)
+- `internal/contextdigest` (catch-up job)
+- `majordomo context validate`
+- `majordomo-context digest`

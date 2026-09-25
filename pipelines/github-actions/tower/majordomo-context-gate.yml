@@ -1,0 +1,185 @@
+# Faster context gate regen — trigger digest for one served repo without waiting for cron.
+# Canonical workflow shape: .majordomo/pipelines/github-actions/tower/majordomo-context-gate.yml
+name: majordomo-context-gate
+
+on:
+  repository_dispatch:
+    types: [context-gate]
+  workflow_dispatch:
+    inputs:
+      repo_id:
+        description: "Served repo id (required)"
+        required: true
+        type: string
+      force_compact:
+        description: "Run compaction even when under threshold"
+        required: false
+        default: false
+        type: boolean
+      majordomo_context_image:
+        description: "Optional majordomo-context factory image override (default: vars.MAJORDOMO_CONTEXT_IMAGE)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      scm: ${{ steps.meta.outputs.scm }}
+      owner: ${{ steps.meta.outputs.owner }}
+      name: ${{ steps.meta.outputs.name }}
+      clone_url: ${{ steps.meta.outputs.clone_url }}
+      forge_image: ${{ steps.meta.outputs.forge_image }}
+    env:
+      REPO_ID: ${{ github.event.client_payload.repo_id || github.event.inputs.repo_id }}
+      MAJORDOMO_GH_IMAGE: ${{ vars.MAJORDOMO_GH_IMAGE }}
+      MAJORDOMO_GLAB_IMAGE: ${{ vars.MAJORDOMO_GLAB_IMAGE }}
+      MAJORDOMO_CONTEXT_IMAGE: ${{ github.event.inputs.majordomo_context_image || vars.MAJORDOMO_CONTEXT_IMAGE }}
+      TOWER_SCRIPTS: ${{ github.workspace }}/.majordomo/pipelines/scripts/tower
+    steps:
+      - name: Checkout tower (with submodule)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Extract majordomo-context factory CLI from image
+        run: bash "${TOWER_SCRIPTS}/extract-majordomo-context-cli.sh" "${MAJORDOMO_CONTEXT_IMAGE}" "${{ github.workspace }}/majordomo-context"
+
+      - name: Write factory license
+        env:
+          MAJORDOMO_CONTEXT_LICENSE_B64: ${{ secrets.MAJORDOMO_CONTEXT_LICENSE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MAJORDOMO_CONTEXT_LICENSE_B64}" ]; then
+            echo "secrets.MAJORDOMO_CONTEXT_LICENSE is required" >&2
+            exit 1
+          fi
+          if printf '%s' "${MAJORDOMO_CONTEXT_LICENSE_B64}" | head -c 1 | grep -q '{'; then
+            printf '%s\n' "${MAJORDOMO_CONTEXT_LICENSE_B64}" > "${{ github.workspace }}/majordomo-context.lic"
+          else
+            printf '%s' "${MAJORDOMO_CONTEXT_LICENSE_B64}" | base64 -d > "${{ github.workspace }}/majordomo-context.lic"
+          fi
+
+      - name: Build Typology CLI
+        run: |
+          set -euo pipefail
+          GOBIN="${{ github.workspace }}" go install github.com/behaviorengineering/typology/cmd/typology@v0.1.2
+          chmod +x "${{ github.workspace }}/typology"
+
+      - name: Resolve repo metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          ./majordomo-context repos --license ./majordomo-context.lic --config-dir majordomo-central-config --out repos.json
+          row=$(jq -c --arg id "${REPO_ID}" '.repos[] | select(.repo_id == $id)' repos.json)
+          if [ -z "${row}" ]; then
+            echo "Unknown repo_id: ${REPO_ID}"
+            exit 1
+          fi
+          scm=$(jq -r '.scm' <<<"${row}")
+          echo "scm=${scm}" >> "$GITHUB_OUTPUT"
+          echo "owner=$(jq -r '.owner' <<<"${row}")" >> "$GITHUB_OUTPUT"
+          echo "name=$(jq -r '.name' <<<"${row}")" >> "$GITHUB_OUTPUT"
+          echo "clone_url=$(jq -r '.clone_url' <<<"${row}")" >> "$GITHUB_OUTPUT"
+          img=$(bash "${TOWER_SCRIPTS}/resolve-forge-image.sh" "${scm}")
+          echo "forge_image=${img}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload majordomo-context CLI
+        uses: actions/upload-artifact@v7
+        with:
+          name: majordomo-context-cli
+          path: majordomo-context
+          if-no-files-found: error
+
+      - name: Upload Typology CLI
+        uses: actions/upload-artifact@v7
+        with:
+          name: typology-cli
+          path: typology
+          if-no-files-found: error
+
+  digest:
+    needs: resolve
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.resolve.outputs.forge_image }}
+    defaults:
+      run:
+        shell: bash
+    concurrency:
+      group: context-digest-${{ github.event.client_payload.repo_id || github.event.inputs.repo_id }}
+      cancel-in-progress: false
+    env:
+      REPO_ID: ${{ github.event.client_payload.repo_id || github.event.inputs.repo_id }}
+      FORCE_COMPACT: ${{ github.event.client_payload.force_compact || github.event.inputs.force_compact }}
+      SCM: ${{ needs.resolve.outputs.scm }}
+      OWNER: ${{ needs.resolve.outputs.owner }}
+      NAME: ${{ needs.resolve.outputs.name }}
+      MODULE_SCOPE: ${{ github.event.client_payload.module_scope || github.event.inputs.module_scope || '' }}
+      CLONE_URL: ${{ needs.resolve.outputs.clone_url }}
+      GH_TOKEN_XYNOVA: ${{ secrets.GH_TOKEN_XYNOVA }}
+      GH_TOKEN_BEHAVIORENGINEERING: ${{ secrets.GH_TOKEN_BEHAVIORENGINEERING }}
+      GITLAB_TOKEN_BEHAVIORENGINEERING: ${{ secrets.GITLAB_TOKEN_BEHAVIORENGINEERING }}
+      BITBUCKET_TOKEN: ${{ secrets.BITBUCKET_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      MAJORDOMO_MODEL: ${{ vars.MAJORDOMO_MODEL }}
+      TOWER_SCRIPTS: .majordomo/pipelines/scripts/tower
+    steps:
+      - name: Checkout tower (with submodule)
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Download majordomo-context CLI
+        uses: actions/download-artifact@v8
+        with:
+          name: majordomo-context-cli
+          path: .
+
+      - name: Download Typology CLI
+        uses: actions/download-artifact@v8
+        with:
+          name: typology-cli
+          path: .
+
+      - name: Make majordomo-context executable
+        run: |
+          set -euo pipefail
+          chmod +x ./majordomo-context ./typology
+          test -x ./majordomo-context
+          test -x ./typology
+
+      - name: Verify forge CLI on PATH
+        run: bash "${TOWER_SCRIPTS}/verify-forge-cli.sh"
+
+      - name: Run context digest (gate acceleration)
+        env:
+          MAJORDOMO_REPO_ID: ${{ env.REPO_ID }}
+        run: |
+          set -euo pipefail
+          bash "${TOWER_SCRIPTS}/clone-served-repo.sh" served/repo
+          extra=""
+          if [ "${FORCE_COMPACT}" = "true" ]; then extra="--force-compact"; fi
+          ./majordomo-context digest --license ./majordomo-context.lic \
+            --config-dir majordomo-central-config \
+            --repo-id "${REPO_ID}" \
+            --workdir "${PWD}/served/repo" \
+            --typology-binary "${PWD}/typology" \
+            --module-scope "${MODULE_SCOPE}" \
+            --bootstrap-survey-policy auto \
+            --out digest-result.json \
+            ${extra}
+          action=$(jq -r '.action' digest-result.json)
+          echo "Digest action: ${action}"

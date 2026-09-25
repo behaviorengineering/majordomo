@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# uv / venv
+.venv/
+.python-version
+
+# OS
+.DS_Store
+Thumbs.db
+
+tmp/
+logs/
+.pipelines-worktree/
+.majordomo/
+
+# Go
+/majordomo
+*.exe
+*.test
+*.out
+bin/
+# Strop ai-copilots (run scripts/wire-strop-ai-copilots.sh after strop bumps)
+.cursor/skills/strop-pipeline-pattern
+.cursor/skills/strop-orchestration
+.cursor/skills/strop-human-review

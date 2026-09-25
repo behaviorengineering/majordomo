@@ -1,0 +1,142 @@
+# Setup
+
+*Majordomo — repository operations for evolving software.*
+
+Target runtime: **GitHub Actions control tower** + **Go CLI** (`majordomo`). Majordomo is a control plane for evolving repositories; PR review is one workflow on that plane. See **[PLAN — Control Tower, GitHub Actions, and Go](PLAN-control-tower-github-go.md)**.
+
+## What runs today
+
+| Piece | Location | Notes |
+|-------|----------|--------|
+| Review skills / personas | `agents/` | Rubrics and templates |
+| Go control plane | `cmd/majordomo`, `internal/` | `run review`, prep, orchestrate, dispatch, publish, poll, context digest |
+| Agent dispatch | `pipelines/scripts/agent-dispatch.sh` | OpenCode wrapper; needs `MAJORDOMO_BIN` or `majordomo` on PATH for all-diffs |
+| Agent + SA + forge images | `dockerfiles/` | Dual `public` / `corp` stages |
+| Image CI | `.github/workflows/` | SA tools, agent, forge CLI (`gh` / `glab`) |
+
+Pipeline Python is gone. Remaining bash is dispatch and image build only.
+
+## Install the CLI
+
+**Preferred (bootstrap / tower setup):** download a release binary from [GitHub Releases](https://github.com/behaviorengineering/majordomo/releases/latest), put `majordomo` on your `PATH`, then run `majordomo submodule` (or follow the control-tower pin steps in the [PLAN](PLAN-control-tower-github-go.md)).
+
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml) (GoReleaser). Version is injected into `internal/cli.Version` via ldflags.
+
+**From source** (this repo):
+
+```bash
+go build -o majordomo ./cmd/majordomo
+./majordomo version
+```
+
+## Local jobs (same command as CI)
+
+Laptop and the tower review workflow both call `majordomo run review`. Publish is off unless you pass `--publish`. `--until` stops after a stage (`clone`, `sa`, `prep`, `waves`, `finalize`, `prose`, `synth`, `report`, `publish`).
+
+```bash
+# From the control-tower repo root (this layout).
+go build -o majordomo ./.majordomo/cmd/majordomo
+
+# Mechanical only (no LLM)
+./majordomo run review \
+  --config-dir majordomo-central-config \
+  --repo-id polypus \
+  --pr 123 \
+  --workdir /path/to/polypus \
+  --until prep
+
+# Full review, do not comment on the PR
+export ANTHROPIC_API_KEY=YOUR_KEY   # or OPENAI_API_KEY
+./majordomo run review \
+  --config-dir majordomo-central-config \
+  --repo-id polypus \
+  --pr 123 \
+  --workdir /path/to/polypus
+
+# Context digest (already a local CLI)
+./majordomo context digest \
+  --config-dir majordomo-central-config \
+  --repo-id polypus \
+  --workdir /path/to/polypus
+```
+
+Stage commands (`prep`, `dispatch`, `orchestrate`, `publish`) still exist for debugging one step. CI is checkout, build, secrets, then `majordomo run review --publish`.
+
+## Embedded LLM gateway (Bifrost)
+
+Judge (strop/DSPy) talks **OpenAI chat completions only** to an in-process Bifrost loopback. Real keys stay in the gateway Account:
+
+| Env | Role |
+|-----|------|
+| `ANTHROPIC_API_KEY` | Anthropic (primary when present) |
+| `OPENAI_API_KEY` | OpenAI |
+| `GEMINI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY` | Gemini |
+| `MAJORDOMO_MODEL` | Logical model name (gateway maps + fallbacks) |
+
+Provider retries and Anthropic→OpenAI→Gemini failover live in Bifrost.
+
+**OpenCode harness:** `majordomo dispatch --opencode …` (or `agent.RunOpenCode`) starts the gateway, strips real provider keys from the child env, sets dummy `OPENAI_API_KEY` / `OPENCODE_PROVIDER_API_KEY`, `OPENAI_BASE_URL` to the loopback, and injects `OPENCODE_CONFIG_CONTENT` so OpenCode’s openai provider hits Bifrost. Default `majordomo dispatch` / `orchestrate` stay on in-process strop Judge (no OpenCode).
+
+## Observability and failure dumps
+
+Three different libraries own three different dumps. Do not invent a fourth.
+
+| Switch | What it is | When it fires |
+|--------|------------|---------------|
+| OTEL / olly-style failure dump | JSON span tree under `{output-dir}/logs/inference-failures/` (or `tmp/logs/inference-failures/`) | Process envelope ends with **ERROR** only |
+| Digest AI work story | Durable local dump for testing AI: `rlm-traces/<task>/`, `module-traces/`, and `logs/runs/` under `--work-story-dir` (default `tmp/digest-runs/<repo-id>-<timestamp>`, or `MAJORDOMO_DIGEST_WORK_STORY_DIR/<repo-id>-<timestamp>`). Path is logged and returned as `work_story_dir` in digest `--out` JSON. | Every digest that runs Judge/RLM; **survives** analysis-clone cleanup |
+| strop `runreport` | JSON timeline of Judge module/eval steps inside the work-story dir (`logs/runs/`) | Digest Judge work (success or fail); not committed to the teaching branch |
+| strop `RLMConfig.TraceDir` | Full RLM REPL JSONL for `rlm-viewer` inside the work-story dir (`rlm-traces/<task>/`) | Inspect, ledger, cluster-audit, and bootstrap-story RLM Completes |
+| strop module TraceSession | CoT/Predict inputs+outputs JSONL via dspy-go `TracingInterceptor` + `AttachModuleTrace` (`module-traces/`) | Digest Judge Generate/Evaluate when work story is prepared |
+
+Do not look under OS temp `majordomo-typology-*` after the process exits; that analysis clone is deleted on purpose. Teaching artifacts land on the context PR; AI work-story dumps stay local for operators.
+
+```bash
+./majordomo context digest \
+  --config-dir majordomo-central-config \
+  --repo-id polypus \
+  --workdir /path/to/polypus \
+  --work-story-dir /path/to/tower/tmp/digest-runs/polypus-manual
+```
+
+Tracing is on by default. OTLP export is configured under `observability:` in `_defaults.yaml` (or a per-repo overlay):
+
+```yaml
+observability:
+  endpoint: "localhost:4317"   # Phoenix OTLP gRPC; empty skips OTLP
+  api_key: ${PHOENIX_API_KEY}  # optional Bearer for Phoenix/Arize with auth
+```
+
+Env still overrides when set (`MAJORDOMO_OTEL_ENDPOINT`, `MAJORDOMO_OTEL_API_KEY` / `PHOENIX_API_KEY`, `MAJORDOMO_OTEL_ENABLED=0`). Digest, orchestrate, and run review nest work under one process TraceID (returned as `trace_id` on digest JSON). On a failed `run review` / `orchestrate`, the full OpenInference trace is also written to the failure-dump path above. Disable with `MAJORDOMO_OTEL_ENABLED=0` or `observability.enabled: false`.
+
+Provider allow-list: `typology_slice_grouping_audit` is an RLM Complete path (like slice meaning). Configure it under job providers or fall back to `typology_inspect`. Do not register a dummy CoT ctor for it. Token totals appear in the digest `llm_usage` summary under `typology_slice_grouping_audit`.
+
+## Local image builds
+
+```bash
+# SA tools (public)
+majordomo build-sa-tools
+
+# OpenCode agent image (public)
+DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
+  bash pipelines/scripts/build-copilot-image.sh \
+    local majordomo-agent local-test dockerfiles/Dockerfile.agent
+
+# Forge CLI images (public) — job containers for publish; majordomo binary is built in-job
+DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
+  bash pipelines/scripts/build-copilot-image.sh \
+    local majordomo-gh local-test dockerfiles/Dockerfile.gh
+DOCKER_BUILD_TARGET=public SKIP_PUSH=true \
+  bash pipelines/scripts/build-copilot-image.sh \
+    local majordomo-glab local-test dockerfiles/Dockerfile.glab
+```
+
+Corp agents/forge: pass `PACKAGE_REGISTRY_HOST`, `CORP_CA_CERT_URL`, `DEBIAN_REPO_PATH`, `NPM_VIRTUAL_PATH` (agent only), `DOCKER_PULL_DOMAIN`, and registry credentials — see Dockerfile headers.
+
+**OpenCode LLM auth (agent job, per-run):** inject a provider API key as a secret/env into the agent container. Do not bake keys into the image. `agent-dispatch.sh` requires at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENCODE_PROVIDER_API_KEY` (use the last for custom OpenAI-compatible gateways, with `baseURL` in `opencode.json` / `OPENCODE_CONFIG_CONTENT` via `{env:OPENCODE_PROVIDER_API_KEY}`). Served-repo SCM tokens are separate: `GH_TOKEN_<OWNER>` / `GITLAB_TOKEN_<OWNER>` (optional `MAJORDOMO_CREDENTIAL_<REPO_ID>`). Do not use unqualified `GH_TOKEN` / `GITLAB_TOKEN` for served repos.
+
+**Publish (GitHub/GitLab):** run tower jobs inside `majordomo-gh` or `majordomo-glab` so `gh` / `glab` are on PATH. Reference workflow shape and shared scripts: [pipelines/github-actions/tower/README.md](pipelines/github-actions/tower/README.md). Each control tower copies those workflows into `.github/workflows/` and sets its own registry variables. Bitbucket publish remains HTTP.
+
+## Submodule consumers
+
+If an app repo still vendors this project as `.majordomo/`, use [03 — Manage Submodule](03-manage-submodule.md) (`majordomo submodule`) for pin/update. Prefer the control-tower model so served app repos stay clean.

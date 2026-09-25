@@ -1,0 +1,1 @@
+Run the **code-review-staged** skill (`.cursor/skills/code-review-staged/SKILL.md`). Ask the user for target path(s) (default: changed files or `internal/`). Present the stage menu and wait for a selection. Say **and fix** only after the review handoff if they want violations fixed.

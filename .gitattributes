@@ -1,0 +1,33 @@
+# Enforce Unix line endings (LF) ONLY for files executed in Linux containers
+# These will fail with CRLF when run in containers
+
+# Shell scripts (executed in containers - CRITICAL)
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Python files (executed in containers - CRITICAL)
+*.py text eol=lf
+
+# Markdown (UTF-8, consistent line endings)
+*.md text eol=lf
+
+# SQL scripts (executed in database containers - CRITICAL)
+*.sql text eol=lf
+
+# Everything else uses default Git behavior (auto CRLF handling)
+# This includes:
+# - Dockerfiles (just text, Docker reads them fine with CRLF)
+# - Jenkinsfiles (Jenkins parses them, line endings don't matter)
+# - YAML/JSON/TOML (parsers handle both CRLF and LF)
+# - .gitignore, .md, etc. (never executed in containers)
+
+# Prevent binary files from being modified
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

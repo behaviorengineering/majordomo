@@ -1,0 +1,95 @@
+# Majordomo forge image — GitHub CLI only (no majordomo binary, no OpenCode).
+#
+# Public:
+#   docker build --target public -t majordomo-gh -f dockerfiles/Dockerfile.gh .
+#
+# Corp:
+#   DOCKER_BUILDKIT=1 docker build --target corp \
+#     --build-arg BASE_IMAGE=<DOCKER_PULL_DOMAIN>/debian:bookworm-slim \
+#     --build-arg PACKAGE_REGISTRY_HOST=... --build-arg CORP_CA_CERT_URL=... \
+#     --build-arg DEBIAN_REPO_PATH=... \
+#     --secret id=username,env=REGISTRY_USER --secret id=token,env=REGISTRY_TOKEN \
+#     -t majordomo-gh -f dockerfiles/Dockerfile.gh .
+
+ARG BASE_IMAGE=debian:bookworm-slim
+ARG GH_VERSION=2.67.0
+
+FROM debian:bookworm-slim AS public
+
+ARG TARGETARCH
+ARG GH_VERSION
+ARG GH_DOWNLOAD_BASE=https://github.com/cli/cli/releases/download
+
+WORKDIR /workspace
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        jq \
+        bash \
+        locales \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+RUN arch="${TARGETARCH}" \
+    && case "${arch}" in amd64|arm64) ;; *) echo "unsupported arch ${arch}"; exit 1 ;; esac \
+    && curl -fsSL "${GH_DOWNLOAD_BASE}/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz" \
+        | tar -xz -C /tmp \
+    && mv "/tmp/gh_${GH_VERSION}_linux_${arch}/bin/gh" /usr/local/bin/gh \
+    && rm -rf "/tmp/gh_${GH_VERSION}_linux_${arch}" \
+    && gh --version
+
+CMD ["gh"]
+
+FROM ${BASE_IMAGE} AS corp
+
+ARG TARGETARCH
+ARG GH_VERSION
+ARG GH_DOWNLOAD_BASE=https://github.com/cli/cli/releases/download
+ARG PACKAGE_REGISTRY_HOST
+ARG CORP_CA_CERT_URL
+ARG DEBIAN_REPO_PATH
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+WORKDIR /workspace
+
+RUN --mount=type=secret,id=username \
+    --mount=type=secret,id=token \
+    --mount=type=bind,source=dockerfiles/sa-tools/scripts,target=/tmp/sa-scripts,ro \
+    /bin/sh /tmp/sa-scripts/setup-corp-apt.sh \
+        locales \
+        git \
+        jq \
+        bash \
+        curl \
+    && sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen
+
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
+
+RUN arch="${TARGETARCH}" \
+    && case "${arch}" in amd64|arm64) ;; *) echo "unsupported arch ${arch}"; exit 1 ;; esac \
+    && curl -fsSL "${GH_DOWNLOAD_BASE}/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz" \
+        | tar -xz -C /tmp \
+    && mv "/tmp/gh_${GH_VERSION}_linux_${arch}/bin/gh" /usr/local/bin/gh \
+    && rm -rf "/tmp/gh_${GH_VERSION}_linux_${arch}" \
+    && gh --version
+
+ENV HTTP_PROXY=
+ENV HTTPS_PROXY=
+ENV NO_PROXY=
+
+CMD ["gh"]

@@ -1,0 +1,41 @@
+---
+alwaysApply: true
+description: Global code quality and anti-cheating rules for Majordomo. No placeholders, no fake separation of concerns, clear failures.
+---
+
+# Global code quality
+
+## Anti-cheating (mandatory)
+
+- MUST NOT refactor by only moving code without real separation of concerns.
+- MUST NOT create modules with artificial separation (for example by line count only).
+- MUST NOT implement placeholder logic that returns hardcoded values.
+- MUST NOT create fake implementations that skip real business logic.
+- MUST NOT use deprecated patterns when a modern alternative is already in the repo.
+- MUST NOT create modules that cannot be tested independently.
+- MUST NOT skip work due to missing dependencies; fix the dependencies instead.
+- MUST NOT use fallbacks that hide real problems.
+- MUST NOT create code that can be skipped; code must work or fail clearly.
+
+## Implementation (mandatory)
+
+- MUST implement real business logic, not placeholder functions.
+- MUST keep clear separation of concerns when refactoring.
+- MUST make code independently testable.
+- MUST NOT claim functionality works without implementing it.
+- MUST NOT hide problems with silent fallbacks.
+
+## Quality check before claiming done
+
+- [ ] Code performs real business logic (not placeholders)
+- [ ] Refactoring creates real separation of concerns
+- [ ] Modern patterns match the rest of the repo
+- [ ] Code is independently testable
+- [ ] Dependencies are fixed (not worked around)
+- [ ] Failures are clear and explicit (no silent fallbacks)
+
+## Related
+
+- Go generation/gates: `.cursor/skills/golang-quality/SKILL.md` (via `.cursor/rules/golang.mdc`)
+- Go staged review: `.cursor/skills/code-review-staged/SKILL.md`
+- Majordomo layout/CLI: `.cursor/skills/review-go-architecture/SKILL.md`, `.cursor/skills/review-go-cli/SKILL.md`
