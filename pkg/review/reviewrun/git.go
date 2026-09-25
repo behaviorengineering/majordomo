@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	forgeauth "github.com/behaviorengineering/majordomo-forge-clients/pkg/auth"
-	forgerun "github.com/behaviorengineering/majordomo-forge-clients/pkg/gitrun"
+	forgeauth "github.com/behaviorengineering/gitvalet/pkg/auth"
+	forgerun "github.com/behaviorengineering/gitvalet/pkg/gitrun"
 )
 
 func git(dir, token, scm string, args ...string) (string, error) {
