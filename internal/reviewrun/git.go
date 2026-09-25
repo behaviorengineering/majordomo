@@ -1,37 +1,16 @@
 package reviewrun
 
 import (
-	"bytes"
-	"fmt"
-	"os/exec"
+	"context"
 	"strings"
 
-	"github.com/behaviorengineering/majordomo/internal/githttps"
+	forgeauth "github.com/behaviorengineering/majordomo-forge-clients/pkg/auth"
+	forgerun "github.com/behaviorengineering/majordomo-forge-clients/pkg/gitrun"
 )
 
-func authConfigArgs(token, scm string) []string {
-	return githttps.ExtraHeaderArgs(token, scm)
-}
-
 func git(dir, token, scm string, args ...string) (string, error) {
-	var cmdArgs []string
-	cmdArgs = append(cmdArgs, authConfigArgs(token, scm)...)
-	if strings.TrimSpace(dir) != "" {
-		cmdArgs = append(cmdArgs, "-C", dir)
-	}
-	cmdArgs = append(cmdArgs, args...)
-	cmd := exec.Command("git", cmdArgs...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return stdout.String(), fmt.Errorf("git %s: %s", strings.Join(args, " "), msg)
-	}
-	return stdout.String(), nil
+	run := forgerun.Runner{Cred: forgeauth.Credential{Token: token, SCM: scm}}
+	return run.Run(contextBackground(), dir, args...)
 }
 
 func gitTrim(dir, token, scm string, args ...string) (string, error) {
@@ -40,29 +19,12 @@ func gitTrim(dir, token, scm string, args ...string) (string, error) {
 }
 
 func gitAllowFail(dir, token, scm string, args ...string) (string, int) {
-	var cmdArgs []string
-	cmdArgs = append(cmdArgs, authConfigArgs(token, scm)...)
-	if strings.TrimSpace(dir) != "" {
-		cmdArgs = append(cmdArgs, "-C", dir)
-	}
-	cmdArgs = append(cmdArgs, args...)
-	cmd := exec.Command("git", cmdArgs...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err == nil {
-		return strings.TrimSpace(stdout.String()), 0
-	}
-	if ee, ok := err.(*exec.ExitError); ok {
-		return stdout.String(), ee.ExitCode()
-	}
-	return stdout.String(), 1
+	run := forgerun.Runner{Cred: forgeauth.Credential{Token: token, SCM: scm}}
+	return run.AllowFail(contextBackground(), dir, args...)
 }
 
 func isGitRepo(dir string) bool {
-	_, code := gitAllowFail(dir, "", "", "rev-parse", "--is-inside-work-tree")
-	return code == 0
+	return forgerun.Runner{}.IsRepo(dir)
 }
 
 func shaMatch(got, want string) bool {
@@ -101,4 +63,9 @@ func splitOwnerName(cloneURL string) (owner, name string) {
 		return path[:i], path[i+1:]
 	}
 	return "", path
+}
+
+// reviewrun git helpers are synchronous; use a non-cancelable background context.
+func contextBackground() context.Context {
+	return context.Background()
 }

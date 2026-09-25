@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/XiaoConstantine/dspy-go v0.88.1
+	github.com/behaviorengineering/majordomo-forge-clients v0.1.0
 	github.com/behaviorengineering/strop v0.3.8
 	github.com/behaviorengineering/typology v0.1.2
 	github.com/maximhq/bifrost/core v1.7.0

@@ -80,6 +80,8 @@ github.com/aymanbagabas/go-udiff v0.3.1 h1:LV+qyBQ2pqe0u42ZsUEtPiCaUoqgA9gYRDs3v
 github.com/aymanbagabas/go-udiff v0.3.1/go.mod h1:G0fsKmG+P6ylD0r6N/KgQD/nWzgfnl8ZBcNLgcbrw8E=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
+github.com/behaviorengineering/majordomo-forge-clients v0.1.0 h1:lSZS2jOrkkNMn1qPVIrfR/3Y3CDrkcAT8OlyX+3p+bU=
+github.com/behaviorengineering/majordomo-forge-clients v0.1.0/go.mod h1:BSufHquGFU3p0kk1sJV6lu2nzshCcT+1vpoaYHvNnSk=
 github.com/behaviorengineering/strop v0.3.8 h1:wZqKtszLE+zLfxvtThL+8IY8xqWaQ8xZ16OksIEU2Dg=
 github.com/behaviorengineering/strop v0.3.8/go.mod h1:ZXzOR9YRdQhE7RaajwqhxwQSQmu8P1bYF6F9P9TKGYM=
 github.com/behaviorengineering/typology v0.1.2 h1:YleaJxwFXmFB6YZ5CkIaIsjjU+PvToCfkrA8+Gv517A=
