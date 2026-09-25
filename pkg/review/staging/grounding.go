@@ -7,14 +7,13 @@ import (
 	"path/filepath"
 
 	"github.com/behaviorengineering/majordomo/pkg/context/agenting"
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 // AttachGrounding selects agenting packs per batch manifest and stages GROUNDING.md copies.
-func AttachGrounding(contextDir string, batches []BatchEntry) error {
-	contextDir = filepath.Clean(contextDir)
-	idx, err := agenting.LoadIndex(contextDir)
-	if err != nil {
-		return fmt.Errorf("agenting: %w", err)
+func AttachGrounding(snap *contextprovider.Snapshot, batches []BatchEntry) error {
+	if snap == nil {
+		return nil
 	}
 	for _, b := range batches {
 		manifestPath := filepath.Join(b.StagingDir, "manifest.json")
@@ -23,12 +22,12 @@ func AttachGrounding(contextDir string, batches []BatchEntry) error {
 			return err
 		}
 		mode := agenting.ModeForSkill(b.Skill)
-		packIDs := agenting.Select(idx, mode, files)
+		packIDs := agenting.Select(snap.Index, mode, files)
 		if len(packIDs) == 0 {
 			logf("INFO", "Grounding: %s/%s — no packs for mode %s", b.Skill, b.BatchNum, mode)
 			continue
 		}
-		staged, err := agenting.Stage(contextDir, b.StagingDir, packIDs)
+		staged, err := snap.StagePacks(b.StagingDir, packIDs)
 		if err != nil {
 			return err
 		}

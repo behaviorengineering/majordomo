@@ -1,10 +1,13 @@
 package staging
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
+
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 // Run executes the full prep pipeline.
@@ -87,9 +90,25 @@ func Run(opts Options) error {
 	if err := WriteBatchPlan(batchEntries, batchPlanSkills, opts.StagingDir); err != nil {
 		return err
 	}
-	if strings.TrimSpace(opts.ContextDir) != "" {
-		if err := AttachGrounding(opts.ContextDir, batchEntries); err != nil {
-			return err
+	provider := opts.ContextProvider
+	if provider == nil {
+		explicit := ResolveContextDir(opts.ContextDir)
+		if explicit != "" {
+			provider = contextprovider.NewChain(contextprovider.ChainConfig{ExplicitDir: explicit})
+		}
+	}
+	if provider != nil {
+		snap, err := provider.Resolve(context.Background(), contextprovider.Request{RepoID: opts.RepoID})
+		if err != nil {
+			if errors.Is(err, contextprovider.ErrNoContext) {
+				logf("INFO", "no context snapshot; proceeding without grounding")
+			} else {
+				return contextprovider.FormatResolveError(err)
+			}
+		} else if snap != nil {
+			if err := AttachGrounding(snap, batchEntries); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

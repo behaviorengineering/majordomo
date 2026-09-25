@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 )
 
 func ensureServedRepo(opts Options, token, scm, cloneURL, headSHA, baseBranch string) error {
@@ -103,32 +101,4 @@ func resolveDefaultBranch(dir, token, scm string) string {
 		}
 	}
 	return ""
-}
-
-func maybeContextDir(opts Options, token, scm, cloneURL, repoID string) string {
-	if opts.ContextDir != "" {
-		return opts.ContextDir
-	}
-	if cloneURL == "" {
-		return ""
-	}
-	branch := config.ContextBranch(repoID)
-	out, err := gitTrim(opts.WorkDir, token, scm, "ls-remote", "--heads", "origin", branch)
-	if err != nil || out == "" {
-		return ""
-	}
-	dest := filepath.Join(filepath.Dir(opts.WorkDir), "majordomo-context-"+repoID)
-	if isGitRepo(dest) {
-		return dest
-	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		logf("WARN", "context dir mkdir: %v", err)
-		return ""
-	}
-	logf("INFO", "cloning context branch %s → %s", branch, dest)
-	if _, err := git("", token, scm, "clone", "--depth", "1", "--branch", branch, "--single-branch", cloneURL, dest); err != nil {
-		logf("WARN", "context branch clone skipped: %v", err)
-		return ""
-	}
-	return dest
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/review/filereview"
 	"github.com/behaviorengineering/majordomo/pkg/review/report"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
+	contextprovider "github.com/behaviorengineering/majordomo/pkg/context/provider"
 )
 
 // Options configures an orchestrate run.
@@ -40,6 +41,7 @@ type Options struct {
 	AgentContextPath  string
 	SummaryConfigPath string
 	ContextDir        string // merged context-branch checkout (agenting); optional
+	ContextProvider   contextprovider.ContextProvider
 
 	// ConfigDir + RepoID load majordomo-central-config and materialize routing/agentContext
 	// when RoutingPath / AgentContextPath are empty.
@@ -137,6 +139,8 @@ func Run(opts Options) error {
 			SummaryConfigPath: opts.SummaryConfigPath,
 			RepoRoot:          opts.RepoRoot,
 			ContextDir:        staging.ResolveContextDir(opts.ContextDir),
+			RepoID:            opts.RepoID,
+			ContextProvider:   opts.ContextProvider,
 		})
 		if err != nil {
 			if errors.Is(err, staging.ErrNothingToReview) {

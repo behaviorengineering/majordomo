@@ -35,7 +35,7 @@ Keep this useful even when the factory is absent or unpaid.
 | Post comments and status | `pkg/forge/publish`, `status`, `pkg/review/report` |
 | Remember “already reviewed this SHA” | `pkg/platform/cache` (review / poll cursors) |
 | Tower wiring (CLI, config, images, workflows) | `cmd/`, `pkg/platform/config`, `internal/ops/cli`, Docker, Actions |
-| **Read and select** existing grounding packs | `pkg/context/agenting` |
+| **Read and select** existing grounding packs | `pkg/context/agenting` + `pkg/context/provider` (`ContextProvider`) |
 | **Validate** context tree shape | `pkg/context/store` (schema / check) |
 | Parse human gate comments (`@majordomo …`) | `pkg/context/gate` |
 | Mechanical review rubrics | `agents/` (how to review, not who this product is) |
@@ -78,10 +78,11 @@ Do not expose rejected candidates, internal scores, or digest stage traces throu
 
 ### Compatibility contract (staged)
 
-1. **Judge runtime:** empty `RuntimeOptions.Tasks` registers **review** generators only. Factory callers pass their own task names plus `RuntimeOptions.Generators` (and usually `AfterGenerators` for digest eval packs). Digest prompts live in private `majordomo-context`, not in open `pkg/judge/modules`.
-2. **Provider routing:** `config.JobForTask` keeps review + context-digest task names; factories may `RegisterJobForTask` for extra names.
-3. **CLI:** public `majordomo` exposes `context validate` / gate read and review/poll cache; it does **not** expose `cache digest-*`. Digest CLI lives on `majordomo-context`.
-4. **Cache:** `DigestCachePrefix` (`digest`) remains the open branch path convention. `DigestStore` and digest fingerprints live in private `majordomo-context`; the open module keeps review/poll cache plus shared hash helpers (`PackageSourceHash`, `HashDigestParts`).
+1. **Context provider:** the open runner consumes finished packs through `pkg/context/provider.ContextProvider`. Implementations resolve a read-only `ContextSnapshot` (index + provenance + staged pack copies). Explicit `--context-dir` / `MAJORDOMO_CONTEXT_DIR` fail closed on invalid trees; optional remote branch discovery degrades gracefully (review without grounding). The provider never exposes factory prompts, scores, rejected candidates, or inference traces.
+2. **Judge runtime:** empty `RuntimeOptions.Tasks` registers **review** generators only. Factory callers pass their own task names plus `RuntimeOptions.Generators` (and usually `AfterGenerators` for digest eval packs). Digest prompts live in private `majordomo-context`, not in open `pkg/judge/modules`.
+3. **Provider routing:** `config.JobForTask` keeps review + context-digest task names; factories may `RegisterJobForTask` for extra names.
+4. **CLI:** public `majordomo` exposes `context validate` / gate read and review/poll cache; it does **not** expose `cache digest-*`. Digest CLI lives on `majordomo-context`.
+5. **Cache:** `DigestCachePrefix` (`digest`) remains the open branch path convention. `DigestStore` and digest fingerprints live in private `majordomo-context`; the open module keeps review/poll cache plus shared hash helpers (`PackageSourceHash`, `HashDigestParts`).
 
 ## Packaging (in progress)
 
@@ -89,7 +90,7 @@ Do not expose rejected candidates, internal scores, or digest stage traces throu
 2. **Closed factory:** private GitLab module [`majordomo-context`](https://gitlab.com/behaviorengineering/majordomo-context) ships a licensed, optionally garbled binary (`digest` / `repos` / `gate`). Pattern: kairos Ed25519 Gate + GoReleaser `-tags release`. Imports majordomo `pkg/` domains; keeps `internal/digest`, `internal/license`, `internal/ops/cli`.
 3. **Not required:** SaaS digest API. Hosted factory remains a later option.
 4. **Avoid:** open-core build tags as the only IP boundary.
-5. **Landed (this strip):** open majordomo no longer ships digest generator prompts or `DigestStore`. Factory owns prompts + store and registers via `Generators`; open module keeps schema, selection, gate, review generators, path prefix, and the registration seam.
+5. **Landed:** open majordomo no longer ships digest generator prompts or `DigestStore`. Factory owns prompts + store and registers via `Generators`. Review prep resolves context through `ContextProvider` (filesystem checkout today; remote orphan branch when no explicit dir).
 
 ## One-line pitch
 
