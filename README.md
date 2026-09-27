@@ -154,6 +154,15 @@ go build -o majordomo ./cmd/majordomo
 
 **Go CLI (common commands):**
 
+Local operator overlay (optional; CI uses env + `--config-dir` only):
+
+```bash
+majordomo init   # ~/.config/majordomo/config.yaml + config.yaml.example
+# Set config_dir and secrets: (GH_TOKEN_<ORG>, PHOENIX_API_KEY, ...)
+```
+
+Control tower YAML stays under `majordomo-central-config/` (or `--config-dir` / `MAJORDOMO_CONFIG_DIR`).
+
 ```bash
 majordomo poll --config-dir majordomo-central-config --out pending-reviews.json
 majordomo run review --config-dir majordomo-central-config --repo-id <id> --pr <n> [--until prep] [--publish]

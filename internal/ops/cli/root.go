@@ -43,6 +43,10 @@ func NewRoot() *cobra.Command {
 		Long: `Majordomo — repository operations for evolving software.
 
 Control-plane CLI for PR/MR review: poll, prep, orchestrate, publish, and cache.
+
+Local operator overlay: majordomo init writes ~/.config/majordomo/config.yaml (optional secrets and default config_dir).
+Control tower YAML stays under --config-dir (default majordomo-central-config).
+
 See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -51,6 +55,8 @@ See docs/PLAN-control-tower-github-go.md.`,
 			return errSubcommandRequired
 		},
 	}
+
+	addOperatorFlags(root)
 
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newPollCmd())
@@ -125,6 +131,7 @@ func newPollCmd() *cobra.Command {
 			if out == "-" {
 				out = ""
 			}
+			configDir = towerConfigDir(configDir)
 			return poll.Run(poll.Options{
 				ConfigDir: configDir,
 				CursorDir: cursorDir,
@@ -132,7 +139,7 @@ func newPollCmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	cmd.Flags().StringVar(&configDir, "config-dir", "", "path to majordomo-central-config (default: MAJORDOMO_CONFIG_DIR, operator config_dir, or majordomo-central-config)")
 	cmd.Flags().StringVar(&cursorDir, "cursor-dir", ".poll-cache", "local poll-cursor store (use Actions cache)")
 	cmd.Flags().StringVar(&outPath, "out", "pending-reviews.json", "write pending reviews JSON (\"-\" for stdout)")
 	return cmd
@@ -145,6 +152,7 @@ func newPrepCmd() *cobra.Command {
 		Short: "Classify diffs, cluster files, write staging manifest",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configDir = towerConfigDir(configDir)
 			matDir := config.MaterializeDirForStaging(args[1])
 			routingPath, agentContextPath, _, err := config.ResolvePrepPaths(
 				configDir, repoID, pipeline, matDir, routing, agentContext,
@@ -250,6 +258,7 @@ func newOrchestrateCmd() *cobra.Command {
 		Use:   "orchestrate",
 		Short: "Run review waves, checkpoints, finalize, and synthesis loops",
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			configDir = towerConfigDir(configDir)
 			if concurrency <= 0 {
 				if v := os.Getenv("COPILOT_CONCURRENCY"); v != "" {
 					if n, err := strconv.Atoi(v); err == nil {
@@ -340,6 +349,7 @@ func newRunReviewCmd() *cobra.Command {
 Publish is off unless --publish (CI sets it). --until stops after a stage:
 clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configDir = towerConfigDir(configDir)
 			return reviewrun.Run(reviewrun.Options{
 				ConfigDir:   configDir,
 				RepoID:      repoID,
@@ -362,7 +372,7 @@ clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 			})
 		},
 	}
-	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	cmd.Flags().StringVar(&configDir, "config-dir", "", "path to majordomo-central-config (default: MAJORDOMO_CONFIG_DIR, operator config_dir, or majordomo-central-config)")
 	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id (required)")
 	cmd.Flags().StringVar(&pr, "pr", "", "PR/MR number (required)")
 	cmd.Flags().StringVar(&headSHA, "head-sha", "", "head commit to review (default: workdir HEAD)")
@@ -391,6 +401,7 @@ func newSACmd() *cobra.Command {
 		Use:   "sa",
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			configDir = towerConfigDir(configDir)
 			return sa.Run(sa.Options{
 				ConfigDir:   configDir,
 				RepoID:      repoID,
@@ -401,7 +412,7 @@ func newSACmd() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
+	cmd.Flags().StringVar(&configDir, "config-dir", "", "path to majordomo-central-config (default: MAJORDOMO_CONFIG_DIR, operator config_dir, or majordomo-central-config)")
 	cmd.Flags().StringVar(&repoID, "repo-id", "", "served repo id (required)")
 	cmd.Flags().StringVar(&repoRoot, "repo-root", "", "served repo checkout (default: cwd)")
 	cmd.Flags().StringVar(&baseBranch, "base-branch", "", "base branch for changed-file list (required)")
