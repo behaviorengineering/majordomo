@@ -5,3 +5,4 @@
 | [majordomo-inference-cache](majordomo-inference-cache/SKILL.md) | Adding generate / evaluate / RLM steps; ensuring keyed skip paths so unchanged inputs do not re-burn tokens |
 | [majordomo-local-seed](majordomo-local-seed/SKILL.md) | Filesystem-only digest seeding with `--local-seed-dir`; checkpoint resume without forge push |
 | [majordomo-capability-claims](majordomo-capability-claims/SKILL.md) | Editing claim codes, is/must_not, entailment, or ledger prompts so LLM instructions stay aligned with Go gates |
+| [majordomo-operator-config](majordomo-operator-config/SKILL.md) | XDG operator config, `majordomo init`, secrets, and default `config_dir` for local dev (tower YAML unchanged) |

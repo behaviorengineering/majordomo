@@ -1,0 +1,14 @@
+# Majordomo operator config (~/.config/majordomo/config.yaml)
+# Run: majordomo init
+#
+# Optional default for --config-dir when the flag and MAJORDOMO_CONFIG_DIR are unset.
+# config_dir: majordomo-central-config
+#
+# Declare secrets for env → keyring → optional SOPS resolution.
+# CI injects env only; omit secrets: in container templates.
+secrets:
+  # - GH_TOKEN_YOUR_ORG
+  # - env: PHOENIX_API_KEY
+  #   required: false
+  # - env: MAJORDOMO_CREDENTIAL_your-repo-id
+  #   required: true
