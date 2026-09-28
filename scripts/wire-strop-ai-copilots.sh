@@ -9,7 +9,7 @@ test -d "$MOD/ai-copilots/skills" || {
 	exit 1
 }
 mkdir -p .cursor/skills
-for name in strop-pipeline-pattern strop-orchestration strop-human-review; do
+for name in strop-pipeline-pattern strop-orchestration strop-human-review inference-pace; do
 	ln -snf "$MOD/ai-copilots/skills/${name}" ".cursor/skills/${name}"
 	test -f ".cursor/skills/${name}/SKILL.md"
 done
