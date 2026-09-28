@@ -6,7 +6,7 @@ require (
 	github.com/XiaoConstantine/dspy-go v0.88.1
 	github.com/behaviorengineering/majordomo-forge-clients v0.1.1
 	github.com/behaviorengineering/operatorconfig v0.1.1
-	github.com/behaviorengineering/strop v0.3.8
+	github.com/behaviorengineering/strop v0.5.8
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13

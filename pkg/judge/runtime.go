@@ -113,24 +113,27 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 		svc = observability.DefaultServiceName
 	}
 	retryConfig := DefaultModuleRetryConfig()
-	interceptorSetup := factory.NewInterceptorSetup(
-		otelOn, svc, &retryConfig, defaultModuleTimeout,
-		dspyTracing.OpenInferenceModuleInterceptor,
-		nil,
-		reg.GetModelProvider,
-		reg.GetModuleModel,
-		func(moduleName, modelID string) { reg.RegisterModuleModel(moduleName, modelID) },
-		nil,
-		opts.RunReport,
-	)
+	interceptorSetup := factory.NewInterceptorSetup(factory.InterceptorSetupConfig{
+		OpenInferenceEnabled:           otelOn,
+		OpenInferenceServiceName:       svc,
+		RetryConfig:                    &retryConfig,
+		ModuleTimeout:                  defaultModuleTimeout,
+		CreateOpenInferenceInterceptor: dspyTracing.OpenInferenceModuleInterceptor,
+		ProviderLookup:                 reg.GetModelProvider,
+		ModelIDByModuleName:            reg.GetModuleModel,
+		OnRegisterModuleModel: func(moduleName, modelID string) {
+			reg.RegisterModuleModel(moduleName, modelID)
+		},
+		RunReports: opts.RunReport,
+	})
 	// Required inputs for factory-registered digest tasks (string ids; prompts live privately).
 	interceptorSetup.RegisterRequiredInputs("bootstrap_story", []string{
 		"repo_id", "readme_snapshot",
 	})
-	interceptorSetup.RegisterRequiredInputs("typology_slice_grouping", []string{
+	interceptorSetup.RegisterRequiredInputs("typology_slice_merge_proposer", []string{
 		"repo_id", "package_roles", "mechanical_grouping_yaml", "readme_snapshot",
 	})
-	interceptorSetup.RegisterRequiredInputs("typology_slice_catalog", []string{
+	interceptorSetup.RegisterRequiredInputs("typology_slice_catalog_assembler", []string{
 		"repo_id", "slice_meaning_ledger_yaml", "package_roles", "readme_snapshot",
 	})
 	configurator := factory.NewModuleConfigurator(llmFactory, interceptorSetup, nil)
