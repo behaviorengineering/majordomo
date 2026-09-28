@@ -87,8 +87,12 @@ func JobForTask(task string) string {
 	extraJobForTaskMu.RUnlock()
 
 	switch task {
-	case "bootstrap_story", "digest_story", "typology_inspect",
-		"typology_slice_meaning", "typology_slice_grouping_audit", "typology_slice_grouping", "typology_slice_catalog",
+	case "bootstrap_story", "digest_story",
+		"typology_package_inspector", "typology_slice_objective_ledger_writer",
+		"typology_slice_merge_challenger", "typology_slice_merge_proposer", "typology_slice_catalog_assembler",
+		// Deprecated aliases (pre agentive rename); remove after all hosts bump _defaults.yaml.
+		"typology_inspect", "typology_slice_meaning", "typology_slice_grouping_audit",
+		"typology_slice_grouping", "typology_slice_catalog",
 		"typology_human_intervention",
 		"typology_intervention_journey", "typology_intervention_brief",
 		"typology_intervention_weaknesses", "typology_intervention_pr_priority",

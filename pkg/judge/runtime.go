@@ -83,6 +83,9 @@ type RuntimeOptions struct {
 	// AfterGenerators optionally registers evaluation workflows after generators.
 	// majordomo-context uses this for digest/bootstrap/typology packs.
 	AfterGenerators func(ctx context.Context, reg *registry.ModuleRegistry, evalFactory *factory.EvaluatorFactory, providers map[string]stropdspy.ProviderConfig) error
+	// WrapLLM optionally decorates every LLM after CreateLLM (batch pacing, host-specific).
+	// Nil means identity. Applied to generators and evaluators on this runtime.
+	WrapLLM func(core.LLM) core.LLM
 }
 
 // NewRuntime builds a Judge runtime from central-config AI providers and job_configs.
@@ -103,6 +106,9 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 		reg.RegisterModelProvider(modelID, providerType)
 	}, defaultModuleTimeout)
 	llmFactory.SetInstrumentHTTP(observability.InstrumentHTTPClient)
+	if opts.WrapLLM != nil {
+		llmFactory.SetWrapLLM(opts.WrapLLM)
+	}
 
 	otelOn := true
 	if v := os.Getenv("MAJORDOMO_OTEL_ENABLED"); v == "0" {
