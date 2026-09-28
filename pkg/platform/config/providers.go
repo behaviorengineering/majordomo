@@ -71,7 +71,8 @@ type ModuleTaskConfig struct {
 	Provider string `yaml:"provider"`
 }
 
-var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+// envPlaceholderRE matches ${VAR} and bash-style ${VAR:-default} (default may be empty).
+var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}`)
 
 // JobForTask maps a generator task name to its job_configs key.
 // Review tasks resolve to JobPRReview. Context-digest task names remain as a
@@ -87,8 +88,12 @@ func JobForTask(task string) string {
 	extraJobForTaskMu.RUnlock()
 
 	switch task {
-	case "bootstrap_story", "digest_story", "typology_inspect",
-		"typology_slice_meaning", "typology_slice_grouping_audit", "typology_slice_grouping", "typology_slice_catalog",
+	case "bootstrap_story", "digest_story",
+		"typology_package_inspector", "typology_slice_objective_ledger_writer",
+		"typology_slice_merge_challenger", "typology_slice_merge_proposer", "typology_slice_catalog_assembler",
+		// Deprecated aliases (pre agentive rename); remove after all hosts bump _defaults.yaml.
+		"typology_inspect", "typology_slice_meaning", "typology_slice_grouping_audit",
+		"typology_slice_grouping", "typology_slice_catalog",
 		"typology_human_intervention",
 		"typology_intervention_journey", "typology_intervention_brief",
 		"typology_intervention_weaknesses", "typology_intervention_pr_priority",
@@ -250,8 +255,19 @@ func (o Observability) Expand() Observability {
 
 func expandEnvVars(s string) string {
 	return strings.TrimSpace(envPlaceholderRE.ReplaceAllStringFunc(s, func(match string) string {
-		name := match[2 : len(match)-1]
-		return os.Getenv(name)
+		sub := envPlaceholderRE.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return ""
+		}
+		name := sub[1]
+		val := os.Getenv(name)
+		if val != "" {
+			return val
+		}
+		if len(sub) >= 3 && strings.Contains(match, ":-") {
+			return sub[2]
+		}
+		return val
 	}))
 }
 
