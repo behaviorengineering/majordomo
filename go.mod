@@ -3,9 +3,9 @@ module github.com/behaviorengineering/majordomo
 go 1.27.0
 
 require (
-	github.com/XiaoConstantine/dspy-go v0.88.1
+	github.com/XiaoConstantine/dspy-go v0.89.0
 	github.com/behaviorengineering/gitvalet v0.1.2
-	github.com/behaviorengineering/strop v0.3.8
+	github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13
@@ -25,7 +25,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.7.2 // indirect
-	github.com/XiaoConstantine/llm-go v0.3.1 // indirect
+	github.com/XiaoConstantine/llm-go v0.3.5 // indirect
 	github.com/XiaoConstantine/mcp-go v0.3.1 // indirect
 	github.com/andybalholm/brotli v1.2.2 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.66.0 // indirect
@@ -74,12 +74,12 @@ require (
 	github.com/emvi/iso-639-1 v1.1.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/go-playground/validator/v10 v10.30.3 // indirect
+	github.com/go-playground/validator/v10 v10.30.4 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
@@ -93,14 +93,14 @@ require (
 	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
-	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mark3labs/mcp-go v0.43.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/mattn/go-sqlite3 v1.14.49 // indirect
+	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
@@ -141,7 +141,7 @@ require (
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	google.golang.org/genai v1.69.0 // indirect
+	google.golang.org/genai v1.71.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.2 // indirect

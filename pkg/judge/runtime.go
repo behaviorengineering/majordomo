@@ -113,16 +113,17 @@ func NewRuntime(ctx context.Context, cfg config.RepoConfig, opts RuntimeOptions)
 		svc = observability.DefaultServiceName
 	}
 	retryConfig := DefaultModuleRetryConfig()
-	interceptorSetup := factory.NewInterceptorSetup(
-		otelOn, svc, &retryConfig, defaultModuleTimeout,
-		dspyTracing.OpenInferenceModuleInterceptor,
-		nil,
-		reg.GetModelProvider,
-		reg.GetModuleModel,
-		func(moduleName, modelID string) { reg.RegisterModuleModel(moduleName, modelID) },
-		nil,
-		opts.RunReport,
-	)
+	interceptorSetup := factory.NewInterceptorSetup(factory.InterceptorSetupConfig{
+		OpenInferenceEnabled:           otelOn,
+		OpenInferenceServiceName:       svc,
+		RetryConfig:                    &retryConfig,
+		ModuleTimeout:                  defaultModuleTimeout,
+		CreateOpenInferenceInterceptor: dspyTracing.OpenInferenceModuleInterceptor,
+		ProviderLookup:                 reg.GetModelProvider,
+		ModelIDByModuleName:            reg.GetModuleModel,
+		OnRegisterModuleModel:          func(moduleName, modelID string) { reg.RegisterModuleModel(moduleName, modelID) },
+		RunReports:                     opts.RunReport,
+	})
 	// Required inputs for factory-registered digest tasks (string ids; prompts live privately).
 	interceptorSetup.RegisterRequiredInputs("bootstrap_story", []string{
 		"repo_id", "readme_snapshot",
