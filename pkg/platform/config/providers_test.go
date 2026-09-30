@@ -116,6 +116,24 @@ func TestGetAIProviderExpandsEnv(t *testing.T) {
 	}
 }
 
+func TestExpandEnvVarsDefault(t *testing.T) {
+	t.Setenv("POLY_TEST_BASE", "")
+	got := expandEnvVars("${POLY_TEST_BASE:-http://127.0.0.1:1320}/v1")
+	if got != "http://127.0.0.1:1320/v1" {
+		t.Fatalf("empty env default: %q", got)
+	}
+	t.Setenv("POLY_TEST_BASE", "https://polypus.example.ts.net")
+	got = expandEnvVars("${POLY_TEST_BASE:-http://127.0.0.1:1320}/v1")
+	if got != "https://polypus.example.ts.net/v1" {
+		t.Fatalf("set env: %q", got)
+	}
+	t.Setenv("POLY_TEST_PLAIN", "")
+	got = expandEnvVars("${POLY_TEST_PLAIN}")
+	if got != "" {
+		t.Fatalf("plain empty: %q", got)
+	}
+}
+
 func TestGetAIProviderFailsUnresolvedKey(t *testing.T) {
 	t.Setenv("MISSING_PROVIDER_KEY", "")
 	cfg := RepoConfig{

@@ -71,7 +71,8 @@ type ModuleTaskConfig struct {
 	Provider string `yaml:"provider"`
 }
 
-var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+// envPlaceholderRE matches ${VAR} and bash-style ${VAR:-default} (default may be empty).
+var envPlaceholderRE = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}`)
 
 // JobForTask maps a generator task name to its job_configs key.
 // Review tasks resolve to JobPRReview. Context-digest task names remain as a
@@ -254,8 +255,19 @@ func (o Observability) Expand() Observability {
 
 func expandEnvVars(s string) string {
 	return strings.TrimSpace(envPlaceholderRE.ReplaceAllStringFunc(s, func(match string) string {
-		name := match[2 : len(match)-1]
-		return os.Getenv(name)
+		sub := envPlaceholderRE.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return ""
+		}
+		name := sub[1]
+		val := os.Getenv(name)
+		if val != "" {
+			return val
+		}
+		if len(sub) >= 3 && strings.Contains(match, ":-") {
+			return sub[2]
+		}
+		return val
 	}))
 }
 
