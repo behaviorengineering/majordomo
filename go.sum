@@ -22,8 +22,12 @@ github.com/MakeNowJust/heredoc v1.0.0 h1:cXCdzVdstXyiTqTvfqk9SDHpKNjxuom+DOlyEeQ
 github.com/MakeNowJust/heredoc v1.0.0/go.mod h1:mG5amYoWBHf8vpLOuehzbGGw0EHxpZZ6lCpQ4fNJ8LE=
 github.com/XiaoConstantine/dspy-go v0.88.1 h1:NAtBNeS/42lPhBmAyuqiz/dtugqyVsQXUbytd0BsQ0Q=
 github.com/XiaoConstantine/dspy-go v0.88.1/go.mod h1:yS0M5qJnuNzrq84mDsKd6QL+SM86Hl/hsEnlMXp7BH8=
+github.com/XiaoConstantine/dspy-go v0.89.0 h1:OJ9xEBXdnfx9pwfMhTnbiBA7j/Zmm1IwvEZaC+QiRug=
+github.com/XiaoConstantine/dspy-go v0.89.0/go.mod h1:7lFfVptvpH67btGztiYB/P1vqGsMsEOtQvUMbSH/p3U=
 github.com/XiaoConstantine/llm-go v0.3.1 h1:UNvmjChb6YSiFN5Vq9nohkxviEOv8G3LE5KnxaABU4I=
 github.com/XiaoConstantine/llm-go v0.3.1/go.mod h1:CEbOcYyulg86F9WU2y2pQmytnqe1bHmfDvttEs5yN2c=
+github.com/XiaoConstantine/llm-go v0.3.5 h1:2Zcw1TWgVHf/u/aYMAxz97gmQecA2bR9NfC65t0imns=
+github.com/XiaoConstantine/llm-go v0.3.5/go.mod h1:CEbOcYyulg86F9WU2y2pQmytnqe1bHmfDvttEs5yN2c=
 github.com/XiaoConstantine/mcp-go v0.3.1 h1:5aSrqvvulbKI1hxN7Aj3iSotX0VRSpDShXIDls4ZC+U=
 github.com/XiaoConstantine/mcp-go v0.3.1/go.mod h1:qsY3Gm4CYMREmoLXEMwtf0Hdb5F957kgcpF6huoNHcY=
 github.com/andybalholm/brotli v1.2.2 h1:HzTuoo2ErYQqf5qvcJInB8uvqSVxRttzkFexPWtnceM=
@@ -84,6 +88,8 @@ github.com/behaviorengineering/gitvalet v0.1.2 h1:knlRHMaiIWwHCvmByE6VuehMzmco35
 github.com/behaviorengineering/gitvalet v0.1.2/go.mod h1:9tt9MELYU7SnhKrz0qdBgrQyuw/HriiugoWTven70zs=
 github.com/behaviorengineering/strop v0.3.8 h1:wZqKtszLE+zLfxvtThL+8IY8xqWaQ8xZ16OksIEU2Dg=
 github.com/behaviorengineering/strop v0.3.8/go.mod h1:ZXzOR9YRdQhE7RaajwqhxwQSQmu8P1bYF6F9P9TKGYM=
+github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740 h1:Ipg5LRj0nKS4Gs5IWFwXAODjZ7brmzYs8SGfVfloJqA=
+github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740/go.mod h1:9q5ityg3GeKtip5HMoq6G4h9ar5U2tID13UAXBM2Guw=
 github.com/behaviorengineering/typology v0.1.2 h1:YleaJxwFXmFB6YZ5CkIaIsjjU+PvToCfkrA8+Gv517A=
 github.com/behaviorengineering/typology v0.1.2/go.mod h1:qJK2fWhvo0+3zSn1EVBaqNw2S544yRJDBP7GiNvxbHE=
 github.com/buger/jsonparser v1.2.0 h1:4EFcvK1kD4jyj6YqNK6skK6w+y7FHHBR+XBCtxwu/6g=
@@ -156,6 +162,8 @@ github.com/frankban/quicktest v1.14.6 h1:7Xjx+VpznH+oBnejlPUj8oUpdxnVs4f8XU8WnHk
 github.com/frankban/quicktest v1.14.6/go.mod h1:4ptaffx2x8+WTWXmUCuVU6aPUX1/Mz7zb5vbUoiM6w0=
 github.com/gabriel-vasile/mimetype v1.4.13 h1:46nXokslUBsAJE/wMsp5gtO500a4F3Nkz9Ufpk2AcUM=
 github.com/gabriel-vasile/mimetype v1.4.13/go.mod h1:d+9Oxyo1wTzWdyVUPMmXFvp4F9tea18J8ufA774AB3s=
+github.com/gabriel-vasile/mimetype v1.4.15 h1:05iP/CYtZ/w455R/KZM6rZ5ieAdh99UPtd+d3YzLmaI=
+github.com/gabriel-vasile/mimetype v1.4.15/go.mod h1:azpTcoLcDZRNgFou5j+APrqQx9HqVPWa6ijYQIIVswQ=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/go-logr/logr v1.4.4 h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8=
 github.com/go-logr/logr v1.4.4/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
@@ -169,6 +177,8 @@ github.com/go-playground/universal-translator v0.18.1 h1:Bcnm0ZwsGyWbCzImXv+pAJn
 github.com/go-playground/universal-translator v0.18.1/go.mod h1:xekY+UJKNuX9WP91TpwSH2VMlDf28Uj24BCp08ZFTUY=
 github.com/go-playground/validator/v10 v10.30.3 h1:4MU6YkEwx7GbcPJOZxrtbu+QfF3pJLJuaYTeAH0DYy8=
 github.com/go-playground/validator/v10 v10.30.3/go.mod h1:4Axh7oCNGcoGkqLoE4YWt6n20mcEIsPRlB7vPk3lpyc=
+github.com/go-playground/validator/v10 v10.30.4 h1:9Rcod2ZPO6mOEG6b4GqyoHE/H6//Ze0RuhOo1hT1x0w=
+github.com/go-playground/validator/v10 v10.30.4/go.mod h1:numpT+RPLE91R9oYWMY/R9zRgJBewr3IXHko4OISPpk=
 github.com/goccy/go-json v0.10.5 h1:Fq85nIqj+gXn/S5ahsiTlK3TmC85qgirsdTP/+DeaC4=
 github.com/goccy/go-json v0.10.5/go.mod h1:oq7eo15ShAhp70Anwd5lgX2pLfOS3QCiwU/PULtXL6M=
 github.com/godbus/dbus/v5 v5.0.4/go.mod h1:xhWf0FNVPg57R7Z0UbKHbJfkEywrmjJnf7w5xrFpKfA=
@@ -216,6 +226,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/leodido/go-urn v1.4.0 h1:WT9HwE9SGECu3lg4d/dIA+jxlljEa1/ffXKmRjqdmIQ=
 github.com/leodido/go-urn v1.4.0/go.mod h1:bvxc+MVxLKB4z00jd1z+Dvzr47oO32F/QSNjSBOlFxI=
+github.com/leodido/go-urn v1.5.0 h1:pLqT2kq1zpHW/1D18QMjMpdtX7cekxqtJJjg5ANyWw0=
+github.com/leodido/go-urn v1.5.0/go.mod h1:9BORnCDhdPBJNDEX+w1bJisa8yOKYi116VeO96s4ifE=
 github.com/lucasb-eyer/go-colorful v1.2.0 h1:1nnpGOrhyZZuNyfu1QjKiUICQ74+3FNCN69Aj6K7nkY=
 github.com/lucasb-eyer/go-colorful v1.2.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/mark3labs/mcp-go v0.43.2 h1:21PUSlWWiSbUPQwXIJ5WKlETixpFpq+WBpbMGDSVy/I=
@@ -233,6 +245,8 @@ github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6T
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
 github.com/mattn/go-sqlite3 v1.14.49 h1:B8jBHC3xhxZgxztrgruTuLucebnULQnx4W7cF7SAE9w=
 github.com/mattn/go-sqlite3 v1.14.49/go.mod h1:6JTjA44L93a0QCyJef5YvlPoKXntQPjzWv5gtm9sB6w=
+github.com/mattn/go-sqlite3 v1.14.52 h1:wVbm2Qnf4OXkqhBTSPuCRZDRnxfbVrrmiCEroVdog8U=
+github.com/mattn/go-sqlite3 v1.14.52/go.mod h1:6JTjA44L93a0QCyJef5YvlPoKXntQPjzWv5gtm9sB6w=
 github.com/maximhq/bifrost/core v1.7.0 h1:iUmSfqXwVdDbyJXWIO+S8AYz6JOTWoyhGON4Z4a/p7Q=
 github.com/maximhq/bifrost/core v1.7.0/go.mod h1:jjdqJc0+fCNl3irgUGfSDzgZupMSRLNm4E/2Q7KZKks=
 github.com/minio/asm2plan9s v0.0.0-20200509001527-cdd76441f9d8 h1:AMFGa4R4MiIpspGNG7Z948v4n35fFGB3RR3G/ry4FWs=
@@ -390,6 +404,8 @@ gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
 gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
 google.golang.org/genai v1.69.0 h1:quP3Rbiz0Mn+zPfXsWHQQwOx8IfO2MnQehZUbrJ/jPo=
 google.golang.org/genai v1.69.0/go.mod h1:mDdPDFXo1Ats7f1WXVyZgWb/CkMzFWTWJruIMy7hGIU=
+google.golang.org/genai v1.71.0 h1:Wfo9n0uSzMhZH7d+rP7QxxSWELEDSD4z6O8W/C9s3oM=
+google.golang.org/genai v1.71.0/go.mod h1:mDdPDFXo1Ats7f1WXVyZgWb/CkMzFWTWJruIMy7hGIU=
 google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 h1:ax2KzoSRIZU/M0cIxri3pKxy99vniH1PVxWC6si/eZI=
 google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688/go.mod h1:1RJ9BQGyNdZwkGc1eTqkErfRZ6RJyYPHZo73BZ1vQqI=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 h1:cYNAzI2sUwhmCcoj9TxvihSrqsxt6uIkj3rDRhSDmW4=
