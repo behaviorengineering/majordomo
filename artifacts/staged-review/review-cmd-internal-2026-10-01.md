@@ -201,6 +201,11 @@ Generation checks without findings: no HTTP body, transaction, cancellation, SQL
 - `GOTOOLCHAIN=go1.27.0 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run ./cmd/... ./internal/...`: passed with 0 issues.
 - Outbound process calls now use `internal/ops/process` with required caller deadlines, retry classification, and shared circuit breakers.
 
+Draft PR: [#76](https://github.com/behaviorengineering/majordomo/pull/76)
+
+## Pass B
+Status: ready to inspect consultant stages 4, 5, and 6 against the post-fix tree.
+
 ## Open Questions
 
 ## Resolutions
