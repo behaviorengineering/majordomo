@@ -204,9 +204,21 @@ Generation checks without findings: no HTTP body, transaction, cancellation, SQL
 Draft PR: [#76](https://github.com/behaviorengineering/majordomo/pull/76)
 
 ## Pass B
-Status: ready to inspect consultant stages 4, 5, and 6 against the post-fix tree.
+Status: Stage 4 is in progress against the post-fix tree.
+
+### Stage 4: Architecture
+**Score:** pending consultant reply
+
+#### Open Architecture: Root CLI wiring facade spans all command domains
+**Location:** `internal/ops/cli/root.go:10-31`, command constructors through `root.go:840`
+**Observation:** `internal/ops/cli` imports and registers the review, cache, context, report, SA, and submodule command domains in one root file. The `RunE` bodies mostly construct options and delegate, while the file also owns shared OTEL configuration and all command registration.
+**Question:** Is keeping all command registration and shared OTEL setup in this single CLI facade intentional, or should command families be split into focused registration files or packages?
+**Possible outcomes:**
+- If intentional: classify as a non-issue and document the root as the CLI composition boundary.
+- If it should split: record an architecture finding and defer implementation until you approve it.
 
 ## Open Questions
+- Stage 4: Is the single root CLI wiring facade intentional, or should command families be split?
 
 ## Resolutions
 | Finding | Outcome |
