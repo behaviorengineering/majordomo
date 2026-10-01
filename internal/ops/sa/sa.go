@@ -2,13 +2,16 @@
 package sa
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/ops/command"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
@@ -18,6 +21,8 @@ type ToolRunner func(scriptPath, slug, image, command, repoRoot string, files []
 
 // Options configures a majordomo sa run.
 type Options struct {
+	Context     context.Context
+	Logger      *slog.Logger
 	ConfigDir   string
 	RepoID      string
 	RepoRoot    string
@@ -30,13 +35,22 @@ type Options struct {
 	ChangedFiles []string
 }
 
-func logf(level, format string, args ...any) {
-	ts := time.Now().UTC().Format("2006-01-02 15:04:05")
-	fmt.Printf("[%s] [%s] %s\n", ts, level, fmt.Sprintf(format, args...))
+func logMessage(logger *slog.Logger, level, format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
+	switch level {
+	case "WARN":
+		logger.Warn(message)
+	default:
+		logger.Info(message)
+	}
 }
 
 // Run executes configured staticAnalysis tools.
 func Run(opts Options) error {
+	logger := opts.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
 	if opts.ConfigDir == "" || opts.RepoID == "" {
 		return fmt.Errorf("sa requires --config-dir and --repo-id")
 	}
@@ -48,7 +62,7 @@ func Run(opts Options) error {
 		return err
 	}
 	if len(cfg.StaticAnalysis) == 0 {
-		logf("INFO", "no staticAnalysis tools configured for %s — skipping", opts.RepoID)
+		logMessage(logger, "INFO", "no staticAnalysis tools configured for %s - skipping", opts.RepoID)
 		return nil
 	}
 
@@ -72,8 +86,8 @@ func Run(opts Options) error {
 		}
 		files = setup.AllFiles
 	}
-	logf("INFO", "========== majordomo sa ==========")
-	logf("INFO", "repo %s: %d changed file(s), %d tool(s)", opts.RepoID, len(files), len(cfg.StaticAnalysis))
+	logMessage(logger, "INFO", "========== majordomo sa ==========")
+	logMessage(logger, "INFO", "repo %s: %d changed file(s), %d tool(s)", opts.RepoID, len(files), len(cfg.StaticAnalysis))
 
 	scriptsDir := opts.ScriptsDir
 	if scriptsDir == "" {
@@ -89,28 +103,38 @@ func Run(opts Options) error {
 
 	runner := opts.Runner
 	if runner == nil {
-		runner = defaultToolRunner
+		if opts.Context == nil {
+			return fmt.Errorf("sa: context is required")
+		}
+		if _, ok := opts.Context.Deadline(); !ok {
+			return fmt.Errorf("sa: context deadline is required")
+		}
+		runner = func(scriptPath, slug, image, commandName, repoRoot string, files []string) error {
+			return defaultToolRunner(opts.Context, scriptPath, slug, image, commandName, repoRoot, files)
+		}
 	}
 
+	var toolErrors []error
 	for _, tool := range cfg.StaticAnalysis {
 		slug := config.ResolveSAToolSlug(tool)
 		matched := filterFiles(files, tool.Glob)
 		if len(matched) == 0 {
-			logf("INFO", "skip %s: no files match %q", slug, tool.Glob)
+			logMessage(logger, "INFO", "skip %s: no files match %q", slug, tool.Glob)
 			continue
 		}
 		image := config.ResolveSAImage(tool, opts.ImagePrefix)
 		cmd := strings.TrimSpace(tool.Command)
 		if cmd == "" {
-			logf("WARN", "skip %s: empty command", slug)
+			logMessage(logger, "WARN", "skip %s: empty command", slug)
 			continue
 		}
-		logf("INFO", "run %s image=%s files=%d", slug, image, len(matched))
+		logMessage(logger, "INFO", "run %s image=%s files=%d", slug, image, len(matched))
 		if err := runner(scriptPath, slug, image, cmd, repoRoot, matched); err != nil {
-			logf("WARN", "%s: %v (continuing)", slug, err)
+			logMessage(logger, "WARN", "%s: %v (continuing)", slug, err)
+			toolErrors = append(toolErrors, fmt.Errorf("%s: %w", slug, err))
 		}
 	}
-	return nil
+	return errors.Join(toolErrors...)
 }
 
 func filterFiles(files []string, glob string) []string {
@@ -127,13 +151,20 @@ func filterFiles(files []string, glob string) []string {
 	return out
 }
 
-func defaultToolRunner(scriptPath, slug, image, command, repoRoot string, files []string) error {
-	args := append([]string{slug, image, command, repoRoot}, files...)
-	cmd := exec.Command(scriptPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = repoRoot
-	if err := cmd.Run(); err != nil {
+func defaultToolRunner(ctx context.Context, scriptPath, slug, image, commandName, repoRoot string, files []string) error {
+	args := append([]string{slug, image, commandName, repoRoot}, files...)
+	stdout, stderr, err := command.NewRunner().Run(ctx, scriptPath, args, nil, repoRoot)
+	if stdout != "" {
+		if _, writeErr := io.WriteString(os.Stdout, stdout); writeErr != nil {
+			return fmt.Errorf("write run-sa-tool.sh output: %w", writeErr)
+		}
+	}
+	if stderr != "" {
+		if _, writeErr := io.WriteString(os.Stderr, stderr); writeErr != nil {
+			return fmt.Errorf("write run-sa-tool.sh error output: %w", writeErr)
+		}
+	}
+	if err != nil {
 		return fmt.Errorf("run-sa-tool.sh %s: %w", slug, err)
 	}
 	return nil
@@ -147,7 +178,10 @@ func resolveScriptsDir(repoRoot string) (string, error) {
 	if v := os.Getenv("MAJORDOMO_SCRIPTS"); v != "" {
 		candidates = append([]string{v}, candidates...)
 	}
-	wd, _ := os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("resolve scripts directory: %w", err)
+	}
 	dir := wd
 	for i := 0; i < 8 && dir != ""; i++ {
 		candidates = append(candidates,
