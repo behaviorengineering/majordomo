@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -47,7 +48,9 @@ See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
+			if err := cmd.Help(); err != nil {
+				return fmt.Errorf("print help: %w", err)
+			}
 			return errSubcommandRequired
 		},
 	}
@@ -109,8 +112,9 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
+			return err
 		},
 	}
 }
@@ -193,7 +197,7 @@ func newDispatchCmd() *cobra.Command {
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
 		Short: "Run one Judge batch (in-process strop; --opencode for harness)",
 		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			mode := dispatch.ModeFiles
 			switch {
 			case finalize:
@@ -211,8 +215,14 @@ func newDispatchCmd() *cobra.Command {
 			case techDeep:
 				mode = dispatch.ModeTechnicalDeep
 			}
+			otelCfg := resolveOTELConfig(args[2], "", "")
+			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
+				return fmt.Errorf("otel init: %w", otelErr)
+			}
+			ctx, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.dispatch")
+			defer observability.EndSpanWithStatus(span, &err)
 			opts := dispatch.DispatchOptions{
-				Context:    cmd.Context(),
+				Context:    ctx,
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],
@@ -392,6 +402,7 @@ func newSACmd() *cobra.Command {
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return sa.Run(sa.Options{
+				Context:     cmd.Context(),
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
@@ -499,8 +510,8 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			return err
 		},
 	})
 	var pr, sha string
@@ -821,7 +832,12 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			return satools.Run(satools.Options{
+				Context: cmd.Context(),
+				DryRun:  dryRun,
+				Verbose: verbose,
+				Corp:    corp,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -835,7 +851,9 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
+			return submodule.Run(submodule.Options{Context: ctx})
 		},
 	}
 }
