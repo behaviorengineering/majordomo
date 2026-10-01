@@ -12,8 +12,8 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/ops/sa"
 	"github.com/behaviorengineering/majordomo/internal/ops/satools"
 	"github.com/behaviorengineering/majordomo/internal/ops/submodule"
-	"github.com/behaviorengineering/majordomo/pkg/context/gate"
-	"github.com/behaviorengineering/majordomo/pkg/context/store"
+	contextgate "github.com/behaviorengineering/majordomo/pkg/context/gate"
+	contextstore "github.com/behaviorengineering/majordomo/pkg/context/store"
 	"github.com/behaviorengineering/majordomo/pkg/forge/publish"
 	"github.com/behaviorengineering/majordomo/pkg/forge/status"
 	"github.com/behaviorengineering/majordomo/pkg/platform/cache"
@@ -32,8 +32,38 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// errSubcommandRequired is returned when the root is invoked with no subcommand.
-var errSubcommandRequired = fmt.Errorf("subcommand required")
+const agentGuideText = `Majordomo %s
+Repository operations for evolving software.
+
+Role and boundaries:
+  Majordomo coordinates repository review and publishing workflows.
+  Inspect inputs before running commands that mutate state.
+
+Agent guide:
+  Read AGENTS.md and ai-copilots/README.md before extending this module.
+  Read the relevant ai-copilots/skills/*/SKILL.md before operating a workflow.
+
+Inspect:
+  majordomo version
+  majordomo status <commit-sha> <state>
+  majordomo context validate --dir <directory>
+  majordomo cache precheck --project-id <id> --cache-dir <directory>
+
+Plan and dry-run:
+  majordomo prep <base-branch> <staging-dir>
+  majordomo build-sa-tools --dry-run
+  majordomo run review --until <stage>
+
+Execute and mutate:
+  majordomo run review --publish
+  majordomo publish <pr-number> <summary-file> <mode>
+  majordomo submodule
+
+Automation rules:
+  Prefer --dry-run where available.
+  Use explicit confirmation flags or non-interactive inputs for mutations.
+  Review command help before supplying credentials or publishing results.
+`
 
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
@@ -47,8 +77,8 @@ See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			return errSubcommandRequired
+			_, err := fmt.Fprintf(cmd.OutOrStdout(), agentGuideText, Version)
+			return err
 		},
 	}
 
@@ -109,8 +139,9 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
+			return err
 		},
 	}
 }
@@ -392,6 +423,7 @@ func newSACmd() *cobra.Command {
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return sa.Run(sa.Options{
+				Context:     cmd.Context(),
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
@@ -499,8 +531,8 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			return err
 		},
 	})
 	var pr, sha string
@@ -821,7 +853,12 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			return satools.Run(satools.Options{
+				Context: cmd.Context(),
+				DryRun:  dryRun,
+				Verbose: verbose,
+				Corp:    corp,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -835,7 +872,7 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			return submodule.Run(submodule.Options{Context: cmd.Context()})
 		},
 	}
 }
