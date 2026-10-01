@@ -210,6 +210,7 @@ the command constructors split by lifecycle or domain?
 - `go test ./internal/ops/... ./cmd/...`: passed.
 - `go test ./...`: passed.
 - `go vet ./...`: passed.
+- Follow-up verification: `go test ./...`, `go vet ./...`, and target lint all passed.
 - Added dependency: `github.com/failsafe-go/failsafe-go v0.9.8`.
 
 ## Pass A Commit
