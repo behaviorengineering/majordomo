@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,6 +36,15 @@ var Version = "dev"
 // errSubcommandRequired is returned when the root is invoked with no subcommand.
 var errSubcommandRequired = fmt.Errorf("subcommand required")
 
+const commandTimeout = 30 * time.Minute
+
+func commandError(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", op, err)
+}
+
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
@@ -47,7 +57,9 @@ See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
+			if err := cmd.Help(); err != nil {
+				return fmt.Errorf("print root help: %w", err)
+			}
 			return errSubcommandRequired
 		},
 	}
@@ -109,8 +121,9 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
+			return commandError("write version", err)
 		},
 	}
 }
@@ -125,11 +138,11 @@ func newPollCmd() *cobra.Command {
 			if out == "-" {
 				out = ""
 			}
-			return poll.Run(poll.Options{
+			return commandError("poll", poll.Run(poll.Options{
 				ConfigDir: configDir,
 				CursorDir: cursorDir,
 				OutPath:   out,
-			})
+			}))
 		},
 	}
 	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
@@ -150,7 +163,7 @@ func newPrepCmd() *cobra.Command {
 				configDir, repoID, pipeline, matDir, routing, agentContext,
 			)
 			if err != nil {
-				return err
+				return commandError("resolve prep paths", err)
 			}
 			opts := staging.Options{
 				Context:           cmd.Context(),
@@ -163,7 +176,7 @@ func newPrepCmd() *cobra.Command {
 				ContextSHA:        staging.ResolveContextSHA(contextSHA),
 				RepoID:            repoID,
 			}
-			return staging.Run(opts)
+			return commandError("prep", staging.Run(opts))
 		},
 	}
 	cmd.Flags().StringVar(&routing, "routing", "", "path to routing JSON")
@@ -193,7 +206,7 @@ func newDispatchCmd() *cobra.Command {
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
 		Short: "Run one Judge batch (in-process strop; --opencode for harness)",
 		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			mode := dispatch.ModeFiles
 			switch {
 			case finalize:
@@ -211,8 +224,20 @@ func newDispatchCmd() *cobra.Command {
 			case techDeep:
 				mode = dispatch.ModeTechnicalDeep
 			}
+			baseCtx := cmd.Context()
+			if baseCtx == nil {
+				return fmt.Errorf("dispatch: context is required")
+			}
+			ctx, cancel := context.WithTimeout(baseCtx, commandTimeout)
+			defer cancel()
+			otelCfg := observability.ResolveConfig(args[2])
+			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
+				return fmt.Errorf("otel init: %w", otelErr)
+			}
+			ctx, span := observability.StartChainSpan(ctx, otelCfg.ServiceName, "majordomo.dispatch")
+			defer observability.EndSpanWithStatus(span, &err)
 			opts := dispatch.DispatchOptions{
-				Context:    cmd.Context(),
+				Context:    ctx,
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],
@@ -220,9 +245,9 @@ func newDispatchCmd() *cobra.Command {
 				ScriptsDir: scriptsDir,
 			}
 			if useOpenCode {
-				return dispatch.RunOpenCode(opts)
+				return commandError("dispatch with OpenCode", dispatch.RunOpenCode(opts))
 			}
-			return dispatch.Dispatch(opts)
+			return commandError("dispatch", dispatch.Dispatch(opts))
 		},
 	}
 	cmd.Flags().StringVar(&scriptsDir, "scripts-dir", "", "pipelines/scripts directory")
@@ -267,7 +292,7 @@ func newOrchestrateCmd() *cobra.Command {
 			}
 			ctx, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.orchestrate")
 			defer observability.EndSpanWithStatus(span, &err)
-			return orchestrate.Run(orchestrate.Options{
+			return commandError("orchestrate", orchestrate.Run(orchestrate.Options{
 				Context:           ctx,
 				PRNumber:          pr,
 				BaseBranch:        baseBranch,
@@ -288,7 +313,7 @@ func newOrchestrateCmd() *cobra.Command {
 				RepoID:            repoID,
 				ContextDir:        staging.ResolveContextDir(contextDir),
 				BatchTimeout:      timeout,
-			})
+			}))
 		},
 	}
 	cmd.Flags().StringVar(&pr, "pr", "", "PR/MR number (required)")
@@ -340,7 +365,7 @@ func newRunReviewCmd() *cobra.Command {
 Publish is off unless --publish (CI sets it). --until stops after a stage:
 clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return reviewrun.Run(reviewrun.Options{
+			return commandError("run review", reviewrun.Run(reviewrun.Options{
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				PRNumber:    pr,
@@ -359,7 +384,7 @@ clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 				SkipDeep:    skipDeep,
 				SkipReport:  skipReport,
 				Concurrency: concurrency,
-			})
+			}))
 		},
 	}
 	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
@@ -391,14 +416,21 @@ func newSACmd() *cobra.Command {
 		Use:   "sa",
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return sa.Run(sa.Options{
+			baseCtx := cmd.Context()
+			if baseCtx == nil {
+				return fmt.Errorf("sa: context is required")
+			}
+			ctx, cancel := context.WithTimeout(baseCtx, commandTimeout)
+			defer cancel()
+			return commandError("static analysis", sa.Run(sa.Options{
+				Context:     ctx,
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
 				BaseBranch:  baseBranch,
 				ScriptsDir:  scriptsDir,
 				ImagePrefix: imagePrefix,
-			})
+			}))
 		},
 	}
 	cmd.Flags().StringVar(&configDir, "config-dir", "majordomo-central-config", "path to majordomo-central-config")
@@ -419,7 +451,7 @@ func newPublishCmd() *cobra.Command {
 		Short: "Publish summary to PR/MR (github|gitlab via gh/glab; bitbucket HTTP)",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return publish.Run(publish.Options{
+			return commandError("publish", publish.Run(publish.Options{
 				SCM:             scm,
 				PRNumber:        args[0],
 				SummaryFile:     args[1],
@@ -429,7 +461,7 @@ func newPublishCmd() *cobra.Command {
 				GitHubRepo:      repo,
 				GitLabHost:      gitlabHost,
 				GitLabProjectID: gitlabProjectID,
-			})
+			}))
 		},
 	}
 	cmd.Flags().StringVar(&scm, "scm", "github", "scm forge: github|gitlab|bitbucket")
@@ -448,12 +480,12 @@ func newStatusCmd() *cobra.Command {
 		Short: "Post commit/check status (INPROGRESS|SUCCESSFUL|FAILED)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return status.Run(status.Options{
+			return commandError("status", status.Run(status.Options{
 				SCM:       scm,
 				CommitSHA: args[0],
 				State:     status.State(args[1]),
 				Context:   contextName,
-			})
+			}))
 		},
 	}
 	cmd.Flags().StringVar(&scm, "scm", "github", "scm forge: github|bitbucket")
@@ -471,7 +503,7 @@ func newCacheCmd() *cobra.Command {
 		Short: "Validate majordomo-pr-reviewer-cache branch name",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cache.ValidateReviewCacheBranch(args[0])
+			return commandError("validate cache branch", cache.ValidateReviewCacheBranch(args[0]))
 		},
 	})
 	var remote, branch, worktree string
@@ -479,7 +511,7 @@ func newCacheCmd() *cobra.Command {
 		Use:   "push",
 		Short: "Push review-cache branch with constrained auth",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return cache.Push(cache.PushOptions{Remote: remote, Branch: branch, Worktree: worktree})
+			return commandError("push cache", cache.Push(cache.PushOptions{Remote: remote, Branch: branch, Worktree: worktree}))
 		},
 	}
 	pushCmd.Flags().StringVar(&remote, "remote", "", "https remote URL")
@@ -497,10 +529,10 @@ func newCacheCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := cache.ReadPollCursor(args[0])
 			if err != nil {
-				return err
+				return commandError("read poll cursor", err)
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			return commandError("write poll cursor", err)
 		},
 	})
 	var pr, sha string
@@ -511,10 +543,10 @@ func newCacheCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := cache.ReadPollCursor(args[0])
 			if err != nil {
-				return err
+				return commandError("read poll cursor", err)
 			}
 			cache.RecordHead(c, pr, sha)
-			return cache.WritePollCursor(args[0], c)
+			return commandError("write poll cursor", cache.WritePollCursor(args[0], c))
 		},
 	}
 	setCmd.Flags().StringVar(&pr, "pr", "", "PR number")
@@ -555,9 +587,9 @@ func newCacheCmd() *cobra.Command {
 			}
 			result, err := cache.Precheck(opts)
 			if err != nil {
-				return err
+				return commandError("precheck cache", err)
 			}
-			return cache.PrintJSONPretty(result)
+			return commandError("print cache precheck", cache.PrintJSONPretty(result))
 		},
 	}
 	precheckCmd.Flags().StringVar(&projectID, "project-id", "", "project id")
@@ -608,9 +640,9 @@ func newCacheCmd() *cobra.Command {
 				OutputSchemaVersion:   outputSchemaVersion,
 			})
 			if err != nil {
-				return err
+				return commandError("lookup cache", err)
 			}
-			return cache.PrintJSON(result)
+			return commandError("print cache lookup", cache.PrintJSON(result))
 		},
 	}
 	lookupCmd.Flags().StringVar(&indexFile, "index-file", "", "precheck index JSON")
@@ -674,9 +706,9 @@ func newCacheCmd() *cobra.Command {
 				ArtifactFiles:         storeArtifactFiles,
 			})
 			if err != nil {
-				return err
+				return commandError("store cache", err)
 			}
-			return cache.PrintJSON(result)
+			return commandError("print cache store", cache.PrintJSON(result))
 		},
 	}
 	storeCmd.Flags().StringVar(&storeCacheDir, "cache-dir", "", "cache directory")
@@ -717,9 +749,9 @@ func newCacheCmd() *cobra.Command {
 				OutputDir: restoreOut,
 			})
 			if err != nil {
-				return err
+				return commandError("restore cache", err)
 			}
-			return cache.PrintJSON(result)
+			return commandError("print cache restore", cache.PrintJSON(result))
 		},
 	}
 	restoreCmd.Flags().StringVar(&restoreCacheDir, "cache-dir", "", "cache directory")
@@ -743,7 +775,7 @@ func newContextCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate a context-branch worktree (meta.yaml, chronology, required files)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return contextstore.ValidateTree(dir)
+			return commandError("validate context tree", contextstore.ValidateTree(dir))
 		},
 	}
 	validate.Flags().StringVar(&dir, "dir", "", "context worktree directory")
@@ -762,7 +794,7 @@ func newContextCmd() *cobra.Command {
 			}
 			s, err := contextgate.LoadSidecar(d)
 			if err != nil {
-				return err
+				return commandError("load context gate", err)
 			}
 			enc := json.NewEncoder(cmd.OutOrStdout())
 			enc.SetIndent("", "  ")
@@ -821,7 +853,13 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			baseCtx := cmd.Context()
+			if baseCtx == nil {
+				return fmt.Errorf("sa tools: context is required")
+			}
+			ctx, cancel := context.WithTimeout(baseCtx, commandTimeout)
+			defer cancel()
+			return satools.Run(satools.Options{Context: ctx, DryRun: dryRun, Verbose: verbose, Corp: corp})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -835,7 +873,13 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			baseCtx := cmd.Context()
+			if baseCtx == nil {
+				return fmt.Errorf("submodule: context is required")
+			}
+			ctx, cancel := context.WithTimeout(baseCtx, commandTimeout)
+			defer cancel()
+			return submodule.Run(submodule.Options{Context: ctx})
 		},
 	}
 }

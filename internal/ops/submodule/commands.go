@@ -325,7 +325,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 func (m *manager) pushToOrigin() error {
 	branch, err := m.currentBranch(m.parentRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("read parent branch: %w", err)
 	}
 	m.printf("Pushing '%s' to origin...\n", branch)
 	out, err := m.git([]string{"push", "origin", branch}, m.parentRoot, true)
