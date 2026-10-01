@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -16,15 +17,21 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
 	defer func() {
 		aigateway.ShutdownGlobal()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = observability.Flush(ctx)
-		_ = observability.Shutdown(ctx)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := observability.Flush(shutdownCtx); err != nil {
+			log.Printf("observability flush: %v", err)
+		}
+		if err := observability.Shutdown(shutdownCtx); err != nil {
+			log.Printf("observability shutdown: %v", err)
+		}
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	if err := cli.NewRoot().ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)
