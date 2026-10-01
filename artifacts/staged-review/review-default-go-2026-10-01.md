@@ -2,6 +2,7 @@
 **Date:** 2026-10-01
 **Target:** `./cmd/...` and `./internal/...` because this run has no diff against `main`
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8. Pass B: 4, 5, 6.
+**Pass A Fix Commit:** `3027ca5` (`fix mechanical staged review findings`)
 
 ## Stages
 - [x] 1. Automated Tools (8/10)
@@ -193,6 +194,8 @@ Print the structured agent operating guide on bare invocation and exit successfu
 ### Stage 6: Testability
 
 ## Open Questions
+
+- Stage 1 tooling: `golangci-lint` is unavailable, so the lint gate remains unverified.
 
 ## Resolutions
 
