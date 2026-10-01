@@ -3,13 +3,15 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -26,6 +28,8 @@ type Options struct {
 	Out io.Writer
 	// GitRunner overrides git execution (tests). nil → real git.
 	GitRunner func(args []string, cwd string, check bool) (string, error)
+	// Context controls real git execution.
+	Context context.Context
 	// Prompt reads a line after printing prompt (tests). nil → stdin.
 	Prompt func(prompt string) (string, error)
 	// ReadKey reads a single choice character (tests). nil → line-based fallback.
@@ -35,8 +39,9 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when no parent repository exists.
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
@@ -56,10 +61,10 @@ func Run(opts Options) error {
 			return err
 		}
 		if parentBranch != pipelinesBranch {
-			return m.promptOffBranchContext(parentBranch)
+			return m.withOutputError(m.promptOffBranchContext(parentBranch))
 		}
 	}
-	return m.opsMenuLoop()
+	return m.withOutputError(m.opsMenuLoop())
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -93,11 +98,17 @@ func (m *manager) findParentRepoRoot(submoduleRoot string) string {
 		return ""
 	}
 	rel = filepath.ToSlash(rel)
-	indexEntry, _ := m.git([]string{"ls-files", "--stage", rel}, parent, false)
+	indexEntry, err := m.git([]string{"ls-files", "--stage", rel}, parent, false)
+	if err != nil {
+		return ""
+	}
 	if strings.HasPrefix(indexEntry, "160000") {
 		return parent
 	}
-	gitDirRaw, _ := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
+	gitDirRaw, err := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
+	if err != nil {
+		return ""
+	}
 	if gitDirRaw == "" {
 		return ""
 	}
@@ -126,7 +137,10 @@ func (m *manager) isGitlinkInIndex(submoduleName string) bool {
 	if m.parentRoot == "" {
 		return false
 	}
-	entry, _ := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
+	entry, err := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
+	if err != nil {
+		return false
+	}
 	return strings.HasPrefix(entry, "160000")
 }
 
@@ -143,7 +157,10 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 }
 
 func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, false)
+	if err != nil {
+		return true
+	}
 	return strings.TrimSpace(out) != ""
 }
 
@@ -186,7 +203,10 @@ func (m *manager) confirmAndReset() (bool, error) {
 }
 
 func (m *manager) remoteTrackingSHA(branch string) string {
-	out, _ := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
+	out, err := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
+	if err != nil {
+		return ""
+	}
 	return out
 }
 
@@ -219,24 +239,60 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	if m.opts.Context == nil {
+		return "", errors.New("submodule git context is required")
+	}
+	result, err := process.Run(process.Options{
+		Context:   m.opts.Context,
+		Name:      "git",
+		Args:      args,
+		Dir:       cwd,
+		Networked: isNetworkedGit(args),
+	})
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
-		if !check {
-			return out, nil
-		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(result.Stderr))
 	}
 	return out, nil
 }
 
+func (m *manager) gitCommit(args []string, cwd string) (string, error) {
+	out, err := m.git(args, cwd, true)
+	if err != nil {
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "nothing to commit") || strings.Contains(lower, "nothing added to commit") {
+			return "", nil
+		}
+	}
+	return out, err
+}
+
+func isNetworkedGit(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "clone", "fetch", "ls-remote", "pull", "push":
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(m.out(), format, args...); err != nil {
+		m.outputErr = fmt.Errorf("write submodule output: %w", err)
+	}
+}
+
+func (m *manager) withOutputError(err error) error {
+	if m.outputErr != nil {
+		return errors.Join(err, m.outputErr)
+	}
+	return err
 }
 
 func (m *manager) out() io.Writer {
