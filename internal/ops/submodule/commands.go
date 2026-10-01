@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+const (
+	submoduleNotTrackedMessage = "  Warning: submodule not tracked on this branch; skipping parent pointer update.\n"
+	nothingToCommitMessage     = "Nothing to commit: submodule pointer already up to date.\n"
+)
+
 func (m *manager) pullWithRecovery(branch string) (string, bool, error) {
 	out, err := m.git([]string{"pull", "origin", branch}, m.submoduleRoot, true)
 	if err == nil {
@@ -17,19 +22,19 @@ func (m *manager) pullWithRecovery(branch string) (string, bool, error) {
 	if gerr == nil {
 		mergeHead := filepath.Join(gitDir, "MERGE_HEAD")
 		if st, e := os.Stat(mergeHead); e == nil && !st.IsDir() {
-			m.printf("Warning: pull left repo in a conflicted merge state — aborting.\n")
+			m.printf("Warning: pull left repo in a conflicted merge state; aborting.\n")
 			if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, false); abortErr != nil {
 				return "", false, fmt.Errorf("git merge --abort failed: %w", abortErr)
 			}
 		}
 	}
-	m.printf("Error: git pull failed — %v\n", err)
+	m.printf("Error: git pull failed: %v\n", err)
 	raw, perr := m.prompt(fmt.Sprintf("Reset hard to 'origin/%s' (discards all local changes)? (y/N): ", branch))
 	if perr != nil {
 		return "", false, perr
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — no changes made.\n")
+		m.printf("Cancelled: no changes made.\n")
 		return "", false, nil
 	}
 	if _, err := m.git([]string{"fetch", "origin"}, m.submoduleRoot, true); err != nil {
@@ -64,16 +69,16 @@ func (m *manager) selectBranch(branches []string, current string) (string, error
 	}
 	choice, err := strconv.Atoi(raw)
 	if err != nil {
-		m.printf("Invalid input — expected a number.\n")
+		m.printf("Invalid input: expected a number.\n")
 		return "", nil
 	}
 	if choice < 1 || choice > len(branches) {
-		m.printf("Invalid choice — enter a number between 1 and %d.\n", len(branches))
+		m.printf("Invalid choice: enter a number between 1 and %d.\n", len(branches))
 		return "", nil
 	}
 	selected := branches[choice-1]
 	if selected == current {
-		m.printf("Already on '%s' — nothing to do.\n", selected)
+		m.printf("Already on '%s': nothing to do.\n", selected)
 		return "", nil
 	}
 	return selected, nil
@@ -128,13 +133,13 @@ func (m *manager) cmdUpdate() (bool, error) {
 				return false, fmt.Errorf("git rev-parse after reset failed: %w", err)
 			}
 		} else {
-			m.printf("Skipped — submodule left at diverged state.\n")
+			m.printf("Skipped: submodule left at diverged state.\n")
 		}
 	}
 	changed := localSHA != shaBefore
 	if m.parentRoot != "" {
 		if !m.isGitlinkInIndex(m.submoduleName) {
-			m.printf("  ⚠️  Submodule not tracked on this branch — skipping parent pointer update.\n")
+			m.printf(submoduleNotTrackedMessage)
 		} else {
 			if _, err := m.git([]string{"add", m.submoduleName}, m.parentRoot, true); err != nil {
 				return false, fmt.Errorf("git add submodule failed: %w", err)
@@ -145,7 +150,7 @@ func (m *manager) cmdUpdate() (bool, error) {
 				return false, fmt.Errorf("git commit submodule update failed: %w", err)
 			}
 			if commitOut == "" {
-				m.printf("Nothing to commit — submodule pointer already up to date.\n")
+				m.printf(nothingToCommitMessage)
 			} else {
 				m.printf("%s\n", commitOut)
 			}
@@ -196,7 +201,7 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 	}
 	if m.parentRoot != "" {
 		if !m.isGitlinkInIndex(m.submoduleName) {
-			m.printf("  ⚠️  Submodule not tracked on this branch — skipping parent pointer update.\n")
+			m.printf(submoduleNotTrackedMessage)
 		} else {
 			if _, err := m.git([]string{"submodule", "set-branch", "--branch", selected, m.submoduleName}, m.parentRoot, true); err != nil {
 				return false, fmt.Errorf("git submodule set-branch failed: %w", err)
@@ -234,7 +239,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 		return false, nil
 	}
 	if !m.isGitlinkInIndex(m.submoduleName) {
-		m.printf("  ⚠️  Submodule not tracked on this branch — skipping parent pointer update.\n")
+		m.printf(submoduleNotTrackedMessage)
 		return false, nil
 	}
 	if _, err := m.git([]string{"add", m.submoduleName}, m.parentRoot, true); err != nil {
@@ -246,7 +251,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 		return false, fmt.Errorf("git commit submodule pin failed: %w", err)
 	}
 	if commitOut == "" {
-		m.printf("Nothing to commit — submodule pointer already up to date.\n")
+		m.printf(nothingToCommitMessage)
 	} else {
 		m.printf("%s\n", commitOut)
 	}
@@ -304,7 +309,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 		return false, fmt.Errorf("git commit worktree update failed: %w", err)
 	}
 	if commitOut == "" {
-		m.printf("Nothing to commit — submodule pointer already up to date.\n")
+		m.printf(nothingToCommitMessage)
 	} else {
 		m.printf("%s\n", commitOut)
 		committed = true
