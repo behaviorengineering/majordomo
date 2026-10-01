@@ -2,13 +2,14 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	commandrun "github.com/behaviorengineering/majordomo/internal/ops/command"
 )
 
 // Options configures a local SA tool image build run.
@@ -16,8 +17,9 @@ type Options struct {
 	DryRun  bool
 	Verbose bool
 	Corp    bool
+	Context context.Context
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
-	// Empty → discover from cwd.
+	// An empty value discovers the root from the current working directory.
 	RepoRoot string
 	// Runner overrides command execution (tests).
 	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
@@ -61,6 +63,14 @@ func Run(opts Options) error {
 			fmt.Printf("  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df)
 		}
 		return nil
+	}
+	if opts.Runner == nil {
+		if opts.Context == nil {
+			return fmt.Errorf("satools: context is required")
+		}
+		if _, ok := opts.Context.Deadline(); !ok {
+			return fmt.Errorf("satools: context deadline is required")
+		}
 	}
 
 	buildSh, err := findBuildScript(repoRoot, workspace)
@@ -117,7 +127,7 @@ func resolveRepoRoot(explicit string) (string, error) {
 		if _, err := os.Stat(filepath.Join(dir, "dockerfiles", "sa-tools")); err == nil {
 			return dir, nil
 		}
-		// Vendored as .majordomo under a parent workspace.
+		// The repository may be vendored as .majordomo under a parent workspace.
 		if filepath.Base(dir) == ".majordomo" {
 			return dir, nil
 		}
@@ -218,7 +228,11 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		_, _, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag: %v", tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -227,14 +241,8 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	stdout, stderr, err := commandrun.Run(opts.Context, name, name, args, dir, env)
+	return stdout, stderr, err
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
