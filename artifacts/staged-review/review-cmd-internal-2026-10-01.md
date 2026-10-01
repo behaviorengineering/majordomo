@@ -19,7 +19,7 @@
 - Pass B: not started.
 - Scores: pending.
 - Counts: critical 0, medium 1, low 0, open 1.
-- Draft PR/MR: pending.
+- Draft PR/MR: [#80](https://github.com/behaviorengineering/majordomo/pull/80).
 - Pass A fix commit: `d3031f7`.
 
 ## Findings
