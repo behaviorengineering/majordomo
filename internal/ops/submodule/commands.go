@@ -18,7 +18,7 @@ func (m *manager) pullWithRecovery(branch string) (string, bool, error) {
 		mergeHead := filepath.Join(gitDir, "MERGE_HEAD")
 		if st, e := os.Stat(mergeHead); e == nil && !st.IsDir() {
 			m.printf("Warning: pull left repo in a conflicted merge state — aborting.\n")
-			if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, false); abortErr != nil {
+			if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, true); abortErr != nil {
 				return "", false, fmt.Errorf("git merge --abort failed: %w", abortErr)
 			}
 		}
@@ -102,7 +102,10 @@ func (m *manager) cmdUpdate() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	remoteSHA := m.remoteTrackingSHA(current)
+	remoteSHA, err := m.remoteTrackingSHA(current)
+	if err != nil {
+		return false, err
+	}
 	if remoteSHA != "" && localSHA != remoteSHA {
 		msg := fmt.Sprintf(
 			"Warning: local HEAD (%s) does not match origin/%s (%s).\n"+
@@ -140,8 +143,8 @@ func (m *manager) cmdUpdate() (bool, error) {
 				return false, fmt.Errorf("git add submodule failed: %w", err)
 			}
 			commitMsg := fmt.Sprintf("Update %s submodule to latest '%s'", m.submoduleName, current)
-			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
-			if err != nil {
+			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, true)
+			if err != nil && !isNothingToCommit(err) {
 				return false, fmt.Errorf("git commit submodule update failed: %w", err)
 			}
 			if commitOut == "" {
@@ -176,12 +179,14 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 	if err != nil || !ok {
 		return false, err
 	}
-	if gitDir, gerr := m.gitDir(m.submoduleRoot); gerr == nil {
-		if st, e := os.Stat(filepath.Join(gitDir, "MERGE_HEAD")); e == nil && !st.IsDir() {
-			m.printf("Warning: aborting in-progress merge before switching branch.\n")
-			if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, false); abortErr != nil {
-				return false, fmt.Errorf("git merge --abort failed: %w", abortErr)
-			}
+	gitDir, gerr := m.gitDir(m.submoduleRoot)
+	if gerr != nil {
+		return false, fmt.Errorf("inspect merge state: %w", gerr)
+	}
+	if st, e := os.Stat(filepath.Join(gitDir, "MERGE_HEAD")); e == nil && !st.IsDir() {
+		m.printf("Warning: aborting in-progress merge before switching branch.\n")
+		if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, true); abortErr != nil {
+			return false, fmt.Errorf("git merge --abort failed: %w", abortErr)
 		}
 	}
 	if _, err := m.git([]string{"checkout", "-B", selected, "origin/" + selected}, m.submoduleRoot, true); err != nil {
@@ -205,8 +210,8 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 				return false, fmt.Errorf("git add submodule metadata failed: %w", err)
 			}
 			commitMsg := fmt.Sprintf("Pin %s submodule to branch '%s'", m.submoduleName, selected)
-			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
-			if err != nil {
+			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, true)
+			if err != nil && !isNothingToCommit(err) {
 				return false, fmt.Errorf("git commit submodule branch failed: %w", err)
 			}
 			if commitOut == "" {
@@ -241,8 +246,8 @@ func (m *manager) cmdPinCommit() (bool, error) {
 		return false, fmt.Errorf("git add submodule failed: %w", err)
 	}
 	commitMsg := fmt.Sprintf("Pin %s submodule to commit %s", m.submoduleName, sha)
-	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
-	if err != nil {
+	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, true)
+	if err != nil && !isNothingToCommit(err) {
 		return false, fmt.Errorf("git commit submodule pin failed: %w", err)
 	}
 	if commitOut == "" {
@@ -253,7 +258,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 	return true, nil
 }
 
-func (m *manager) cmdUpdateViaWorktree() (bool, error) {
+func (m *manager) cmdUpdateViaWorktree() (committed bool, retErr error) {
 	sha, err := m.git([]string{"rev-parse", "HEAD"}, m.submoduleRoot, true)
 	if err != nil {
 		return false, err
@@ -272,6 +277,9 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	}
 	remoteRef, remoteErr := m.git([]string{"rev-parse", "--verify", "origin/" + pipelinesBranch}, m.parentRoot, false)
 	if remoteErr != nil {
+		if !isMissingRemoteRef(remoteErr) {
+			return false, fmt.Errorf("verify remote pipelines branch: %w", remoteErr)
+		}
 		remoteRef = ""
 	}
 	if remoteRef == "" {
@@ -289,18 +297,19 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	if _, err := m.git([]string{"worktree", "add", "--detach", worktreePath, "origin/" + pipelinesBranch}, m.parentRoot, true); err != nil {
 		return false, fmt.Errorf("git worktree add failed: %w", err)
 	}
-	committed := false
 	defer func() {
 		m.printf("Cleaning up worktree...\n")
-		_, _ = m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false)
+		if _, err := m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, true); err != nil && retErr == nil {
+			retErr = fmt.Errorf("clean up worktree: %w", err)
+		}
 	}()
 	cacheInfo := fmt.Sprintf("160000,%s,%s", sha, m.submoduleName)
 	if _, err := m.git([]string{"update-index", "--cacheinfo", cacheInfo}, worktreePath, true); err != nil {
 		return false, err
 	}
 	commitMsg := fmt.Sprintf("Update %s to %s (branch: %s)", m.submoduleName, shortSHA, branch)
-	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, worktreePath, false)
-	if err != nil {
+	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, worktreePath, true)
+	if err != nil && !isNothingToCommit(err) {
 		return false, fmt.Errorf("git commit worktree update failed: %w", err)
 	}
 	if commitOut == "" {
