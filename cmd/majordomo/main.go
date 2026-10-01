@@ -16,6 +16,11 @@ import (
 )
 
 func main() {
+	root := cli.NewRoot()
+	runCtx, cancel := context.WithTimeout(context.Background(), 12*time.Hour)
+	defer cancel()
+	root.SetContext(runCtx)
+
 	defer func() {
 		aigateway.ShutdownGlobal()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -24,7 +29,7 @@ func main() {
 		_ = observability.Shutdown(ctx)
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)

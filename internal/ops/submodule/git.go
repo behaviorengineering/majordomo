@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -44,7 +46,7 @@ func Run(opts Options) error {
 	m := &manager{opts: opts}
 	root, err := m.findSubmoduleRoot()
 	if err != nil {
-		return err
+		return fmt.Errorf("find submodule root: %w", err)
 	}
 	m.submoduleRoot = root
 	m.parentRoot = m.findParentRepoRoot(root)
@@ -53,7 +55,7 @@ func Run(opts Options) error {
 	if m.parentRoot != "" {
 		parentBranch, err := m.currentBranch(m.parentRoot)
 		if err != nil {
-			return err
+			return fmt.Errorf("read parent repository branch: %w", err)
 		}
 		if parentBranch != pipelinesBranch {
 			return m.promptOffBranchContext(parentBranch)
@@ -73,7 +75,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: not inside a git repo: %w", err)
 	}
 	return out, nil
 }
@@ -93,12 +95,12 @@ func (m *manager) findParentRepoRoot(submoduleRoot string) string {
 		return ""
 	}
 	rel = filepath.ToSlash(rel)
-	indexEntry, _ := m.git([]string{"ls-files", "--stage", rel}, parent, false)
-	if strings.HasPrefix(indexEntry, "160000") {
+	indexEntry, err := m.git([]string{"ls-files", "--stage", rel}, parent, false)
+	if err == nil && strings.HasPrefix(indexEntry, "160000") {
 		return parent
 	}
-	gitDirRaw, _ := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
-	if gitDirRaw == "" {
+	gitDirRaw, err := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
+	if err != nil || gitDirRaw == "" {
 		return ""
 	}
 	gitDir := gitDirRaw
@@ -126,8 +128,8 @@ func (m *manager) isGitlinkInIndex(submoduleName string) bool {
 	if m.parentRoot == "" {
 		return false
 	}
-	entry, _ := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
-	return strings.HasPrefix(entry, "160000")
+	entry, err := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
+	return err == nil && strings.HasPrefix(entry, "160000")
 }
 
 func (m *manager) currentBranch(repoRoot string) (string, error) {
@@ -143,8 +145,8 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 }
 
 func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
-	return strings.TrimSpace(out) != ""
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, false)
+	return err == nil && strings.TrimSpace(out) != ""
 }
 
 func (m *manager) gitDir(repoRoot string) (string, error) {
@@ -163,7 +165,10 @@ func (m *manager) resetWorkingTree(repoRoot string) error {
 		return fmt.Errorf("git reset failed: %w", err)
 	}
 	_, err := m.git([]string{"clean", "-fd"}, repoRoot, true)
-	return err
+	if err != nil {
+		return fmt.Errorf("git clean failed: %w", err)
+	}
+	return nil
 }
 
 func (m *manager) confirmAndReset() (bool, error) {
@@ -186,7 +191,10 @@ func (m *manager) confirmAndReset() (bool, error) {
 }
 
 func (m *manager) remoteTrackingSHA(branch string) string {
-	out, _ := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
+	out, err := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
+	if err != nil {
+		return ""
+	}
 	return out
 }
 
@@ -219,20 +227,33 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	stdout, stderr, err := process.Run(m.opts.Context, process.Command{
+		Name:      "git",
+		Args:      args,
+		Dir:       cwd,
+		Operation: "git-" + args[0],
+		Remote:    isRemoteCommand(args),
+	})
+	out := strings.TrimSpace(stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
 	}
 	return out, nil
+}
+
+func isRemoteCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "fetch", "pull", "push", "clone", "ls-remote":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *manager) printf(format string, args ...any) {
