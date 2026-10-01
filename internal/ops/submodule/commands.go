@@ -18,7 +18,7 @@ func (m *manager) pullWithRecovery(branch string) (string, bool, error) {
 		mergeHead := filepath.Join(gitDir, "MERGE_HEAD")
 		if st, e := os.Stat(mergeHead); e == nil && !st.IsDir() {
 			m.printf("Warning: pull left repo in a conflicted merge state — aborting.\n")
-			if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, false); abortErr != nil {
+			if _, abortErr := m.git([]string{"merge", "--abort"}, m.submoduleRoot, true); abortErr != nil {
 				return "", false, fmt.Errorf("git merge --abort failed: %w", abortErr)
 			}
 		}
@@ -253,7 +253,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 	return true, nil
 }
 
-func (m *manager) cmdUpdateViaWorktree() (bool, error) {
+func (m *manager) cmdUpdateViaWorktree() (committed bool, runErr error) {
 	sha, err := m.git([]string{"rev-parse", "HEAD"}, m.submoduleRoot, true)
 	if err != nil {
 		return false, err
@@ -281,7 +281,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	worktreePath := filepath.Join(m.parentRoot, worktreeDir)
 	if st, e := os.Stat(worktreePath); e == nil && st.IsDir() {
 		m.printf("Removing stale worktree at '%s'...\n", worktreeDir)
-		if _, err := m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false); err != nil {
+		if _, err := m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, true); err != nil {
 			return false, fmt.Errorf("remove stale worktree failed: %w", err)
 		}
 	}
@@ -289,10 +289,12 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	if _, err := m.git([]string{"worktree", "add", "--detach", worktreePath, "origin/" + pipelinesBranch}, m.parentRoot, true); err != nil {
 		return false, fmt.Errorf("git worktree add failed: %w", err)
 	}
-	committed := false
 	defer func() {
 		m.printf("Cleaning up worktree...\n")
-		_, _ = m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false)
+		if _, cleanupErr := m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, true); cleanupErr != nil && runErr == nil {
+			committed = false
+			runErr = fmt.Errorf("clean up worktree failed: %w", cleanupErr)
+		}
 	}()
 	cacheInfo := fmt.Sprintf("160000,%s,%s", sha, m.submoduleName)
 	if _, err := m.git([]string{"update-index", "--cacheinfo", cacheInfo}, worktreePath, true); err != nil {

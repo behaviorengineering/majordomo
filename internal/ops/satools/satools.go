@@ -36,13 +36,13 @@ type buildResult struct {
 func Run(opts Options) error {
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve repository root: %w", err)
 	}
 	workspace := workspaceRoot(repoRoot)
 	saDir := saToolsDir(repoRoot)
 	dockerfiles, err := discoverDockerfiles(saDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("discover static-analysis Dockerfiles: %w", err)
 	}
 	if len(dockerfiles) == 0 {
 		return fmt.Errorf("no Dockerfiles found in %s", saDir)
@@ -86,7 +86,7 @@ Dry-run:   {{.DryRun}}
 
 	buildSh, err := findBuildScript(repoRoot, workspace)
 	if err != nil {
-		return err
+		return fmt.Errorf("find image build script: %w", err)
 	}
 
 	results := map[string]bool{}

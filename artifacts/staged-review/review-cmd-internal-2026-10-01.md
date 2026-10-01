@@ -8,7 +8,7 @@
 - [x] 1. Automated Tools (Pass A) — Score: 10/10 after fixes
 - [x] 2. Type Safety (Pass A) — Score: 10/10
 - [x] 3. Error Handling (Pass A) — Score: 10/10 after fixes
-- [ ] 4. Architecture (Pass B)
+- [ ] 4. Architecture (Pass B) — in progress
 - [ ] 5. Robustness (Pass B)
 - [ ] 6. Testability (Pass B)
 - [x] 7. Code Clarity (Pass A) — Score: 10/10
@@ -112,6 +112,63 @@ _, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
 **Rationale:** A failed post-build tag currently leaves the run marked successful.
 **Status:** fixed in Pass A
 
+#### Medium Error Handling: Worktree cleanup failure is discarded
+**Location:** `internal/ops/submodule/commands.go:292-300`
+**Severity:** Medium
+**Current Code:**
+```go
+defer func() {
+    m.printf("Cleaning up worktree...\n")
+    _, _ = m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false)
+}()
+```
+**Recommendation:** Capture cleanup failure and return it when the main operation succeeded.
+**Rationale:** A stale worktree can block later operations while the command reports success.
+**Status:** fixed in Pass A
+
+#### Medium Error Handling: OTEL configuration failure is ignored
+**Location:** `internal/ops/cli/root.go:90-117`
+**Severity:** Medium
+**Current Code:**
+```go
+if err != nil {
+    fmt.Fprintf(os.Stderr, "otel config load: %v\n", err)
+}
+return observability.ResolveConfig(outputDir, settings)
+```
+**Recommendation:** Return the configuration error from the resolver and stop orchestration before initialization.
+**Rationale:** Invalid observability configuration should not silently degrade tracing.
+**Status:** fixed in Pass A
+
+#### Medium Error Handling: Git causes and branch-state errors are collapsed
+**Location:** `internal/ops/submodule/git.go:71-77,143-150`
+**Severity:** Medium
+**Current Code:**
+```go
+if err != nil {
+    return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+}
+if err != nil {
+    return "(detached HEAD)", nil
+}
+```
+**Recommendation:** Wrap the original cause and treat only the explicit detached-HEAD diagnostic as expected.
+**Rationale:** Permission, repository, and Git process failures must not become invented valid state.
+**Status:** fixed in Pass A
+
+#### Low Error Handling: Path-discovery errors lack operation context
+**Location:** `internal/ops/sa/sa.go:54-92`, `internal/ops/satools/satools.go:34-89`
+**Severity:** Low
+**Current Code:**
+```go
+if err != nil {
+    return err
+}
+```
+**Recommendation:** Add operation context while preserving each cause with `%w`.
+**Rationale:** Context makes CLI failures actionable without losing `errors.Is` and `errors.As` behavior.
+**Status:** fixed in Pass A
+
 ### Stage 7: Code Clarity
 
 No findings. `gofmt -l ./cmd ./internal` reported no files, and the enabled `godot` check reported no comment-period violations.
@@ -159,12 +216,21 @@ fmt.Printf("\nResults: %d/%d passed\n", passed, len(names))
 
 ## Open Questions
 
+#### Open Architecture: Public review runner depends on internal static-analysis operations
+**Location:** `pkg/review/reviewrun/run.go:12,238-254`
+**Observation:** The public `reviewrun` package imports `internal/ops/sa` and constructs `sa.Options` directly when no injected runner is supplied.
+**Question:** Is this public-to-internal dependency intentional, or should the static-analysis service contract move to a public review package while the CLI-specific implementation stays under `internal/ops`?
+**Possible outcomes:**
+- If intentional: classify as a non-issue and document that `reviewrun` is a same-module product facade.
+- If not intentional: record an architecture finding for a follow-up boundary change.
+
 ## Pass A verification
 
 - `gofmt -l ./cmd ./internal ./pkg/review/reviewrun` passed.
 - `go vet ./...` passed.
 - `golangci-lint run ./cmd/... ./internal/... ./pkg/review/reviewrun/...` passed with 0 issues.
 - `go test ./cmd/... ./internal/ops/... ./pkg/review/reviewrun/...` passed.
+- Follow-up fixes were verified with `go test ./...`, `go vet ./...`, lint, and format checks.
 
 ## Resolutions
 | Finding | Outcome |

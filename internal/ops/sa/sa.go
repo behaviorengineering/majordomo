@@ -53,7 +53,7 @@ func Run(opts Options) error {
 	}
 	cfg, err := config.LoadMerged(opts.ConfigDir, opts.RepoID)
 	if err != nil {
-		return err
+		return fmt.Errorf("load static-analysis config: %w", err)
 	}
 	if len(cfg.StaticAnalysis) == 0 {
 		logf(logger, slog.LevelInfo, "no staticAnalysis tools configured for %s — skipping", opts.RepoID)
@@ -64,12 +64,12 @@ func Run(opts Options) error {
 	if repoRoot == "" {
 		repoRoot, err = os.Getwd()
 		if err != nil {
-			return err
+			return fmt.Errorf("get repository root: %w", err)
 		}
 	}
 	repoRoot, err = filepath.Abs(repoRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve repository root: %w", err)
 	}
 
 	files := opts.ChangedFiles
@@ -87,7 +87,7 @@ func Run(opts Options) error {
 	if scriptsDir == "" {
 		scriptsDir, err = resolveScriptsDir(repoRoot)
 		if err != nil {
-			return err
+			return fmt.Errorf("resolve static-analysis scripts: %w", err)
 		}
 	}
 	scriptPath := filepath.Join(scriptsDir, "run-sa-tool.sh")
@@ -172,7 +172,10 @@ func resolveScriptsDir(repoRoot string) (string, error) {
 	if v := os.Getenv("MAJORDOMO_SCRIPTS"); v != "" {
 		candidates = append([]string{v}, candidates...)
 	}
-	wd, _ := os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("get working directory: %w", err)
+	}
 	dir := wd
 	for i := 0; i < 8 && dir != ""; i++ {
 		candidates = append(candidates,

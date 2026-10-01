@@ -82,7 +82,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("determine submodule root: %w", err)
 	}
 	return out, nil
 }
@@ -142,7 +142,10 @@ func (m *manager) isGitlinkInIndex(submoduleName string) bool {
 func (m *manager) currentBranch(repoRoot string) (string, error) {
 	out, err := m.git([]string{"symbolic-ref", "--short", "HEAD"}, repoRoot, true)
 	if err != nil {
-		return "(detached HEAD)", nil
+		if strings.Contains(err.Error(), "not a symbolic ref") {
+			return "(detached HEAD)", nil
+		}
+		return "", fmt.Errorf("determine current branch: %w", err)
 	}
 	return out, nil
 }
