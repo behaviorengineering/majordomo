@@ -2,17 +2,19 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
@@ -25,15 +27,21 @@ type Options struct {
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("sa tools: context is required")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("sa tools: context deadline is required")
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve repository root: %w", err)
 	}
 	workspace := workspaceRoot(repoRoot)
 	saDir := saToolsDir(repoRoot)
 	dockerfiles, err := discoverDockerfiles(saDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("discover SA Dockerfiles: %w", err)
 	}
 	if len(dockerfiles) == 0 {
 		return fmt.Errorf("no Dockerfiles found in %s", saDir)
@@ -65,7 +73,7 @@ func Run(opts Options) error {
 
 	buildSh, err := findBuildScript(repoRoot, workspace)
 	if err != nil {
-		return err
+		return fmt.Errorf("find image build script: %w", err)
 	}
 
 	results := map[string]bool{}
@@ -218,7 +226,10 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if _, _, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), ""); tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag %s: %v", tag, tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -227,14 +238,14 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	result, err := ops.RunCommand(opts.Context, ops.CommandSpec{
+		Name:      name,
+		Args:      args,
+		Env:       env,
+		Dir:       dir,
+		Resilient: name == "bash",
+	})
+	return result.Stdout, result.Stderr, err
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
