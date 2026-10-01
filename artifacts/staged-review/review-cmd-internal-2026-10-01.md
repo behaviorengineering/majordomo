@@ -2,6 +2,7 @@
 **Date:** 2026-10-01
 **Target:** `./cmd/...` and `./internal/...` because the branch has no diff against `main`
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8. Pass B: 4, 5, 6.
+**Draft PR:** [Mechanical staged-review fixes](https://github.com/behaviorengineering/majordomo/pull/83)
 
 ## Stages
 - [x] 1. Automated Tools (Pass A) — Score: 10/10 after fixes
@@ -14,7 +15,7 @@
 - [x] 8. Generation Gates (Pass A) — Score: 10/10 after fixes
 
 ## Pass A status
-Mechanical findings will be fixed after stages 1, 2, 3, 7, and 8 complete.
+Mechanical findings were fixed in commit `2e02dc9` and pushed before consultant review.
 
 ## Findings
 
@@ -166,4 +167,14 @@ fmt.Printf("\nResults: %d/%d passed\n", passed, len(names))
 - `go test ./cmd/... ./internal/ops/... ./pkg/review/reviewrun/...` passed.
 
 ## Resolutions
-- All nine Pass A findings were fixed in the product tree.
+| Finding | Outcome |
+|---|---|
+| Missing `golangci-lint` | Fixed in Pass A by installing the current Go 1.27-compatible linter. |
+| Unchecked interactive output write | Fixed in Pass A by recording and returning the first output error. |
+| Discarded CLI help and output errors | Fixed in Pass A by returning wrapped write errors. |
+| Static-analysis failures only logged | Fixed in Pass A by returning an aggregate error after independent tools finish. |
+| Git status failure treated as clean | Fixed in Pass A by failing closed before reset operations. |
+| Test fixture setup errors discarded | Fixed in Pass A by failing fixtures immediately. |
+| Docker tag failure ignored | Fixed in Pass A by marking the build failed and preserving tag output. |
+| Bare process execution | Fixed in Pass A with the context-bound shared process seam and failsafe policies. |
+| Unstructured static-analysis logs and repeated report formatting | Fixed in Pass A with injected `slog` and templates. |
