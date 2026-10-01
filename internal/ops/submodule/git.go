@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/executil"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -35,8 +37,9 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when no parent repository exists.
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
@@ -47,7 +50,10 @@ func Run(opts Options) error {
 		return err
 	}
 	m.submoduleRoot = root
-	m.parentRoot = m.findParentRepoRoot(root)
+	m.parentRoot, err = m.findParentRepoRoot(root)
+	if err != nil {
+		return err
+	}
 	m.submoduleName = m.getSubmoduleName()
 
 	if m.parentRoot != "" {
@@ -59,7 +65,13 @@ func Run(opts Options) error {
 			return m.promptOffBranchContext(parentBranch)
 		}
 	}
-	return m.opsMenuLoop()
+	if err := m.opsMenuLoop(); err != nil {
+		return err
+	}
+	if m.outputErr != nil {
+		return fmt.Errorf("write submodule output: %w", m.outputErr)
+	}
+	return nil
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -73,42 +85,53 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: %w", err)
 	}
 	return out, nil
 }
 
-func (m *manager) findParentRepoRoot(submoduleRoot string) string {
+func (m *manager) findParentRepoRoot(submoduleRoot string) (string, error) {
 	parentCand := filepath.Dir(submoduleRoot)
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, parentCand, true)
 	if err != nil {
-		return ""
+		if isNotGitRepository(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("find parent repository: %w", err)
 	}
 	parent := out
 	if parent == submoduleRoot {
-		return ""
+		return "", nil
 	}
 	rel, err := filepath.Rel(parent, submoduleRoot)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("find submodule path: %w", err)
 	}
 	rel = filepath.ToSlash(rel)
-	indexEntry, _ := m.git([]string{"ls-files", "--stage", rel}, parent, false)
-	if strings.HasPrefix(indexEntry, "160000") {
-		return parent
+	indexEntry, err := m.git([]string{"ls-files", "--stage", rel}, parent, true)
+	if err != nil {
+		return "", fmt.Errorf("inspect parent gitlink: %w", err)
 	}
-	gitDirRaw, _ := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
+	if strings.HasPrefix(indexEntry, "160000") {
+		return parent, nil
+	}
+	gitDirRaw, err := m.git([]string{"rev-parse", "--git-dir"}, parent, true)
+	if err != nil {
+		return "", fmt.Errorf("find parent git directory: %w", err)
+	}
 	if gitDirRaw == "" {
-		return ""
+		return "", nil
 	}
 	gitDir := gitDirRaw
 	if !filepath.IsAbs(gitDir) {
 		gitDir = filepath.Join(parent, gitDirRaw)
 	}
 	if st, err := os.Stat(filepath.Join(gitDir, "modules", rel)); err == nil && st.IsDir() {
-		return parent
+		return parent, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect parent submodule metadata: %w", err)
 	}
-	return ""
+	return "", nil
 }
 
 func (m *manager) getSubmoduleName() string {
@@ -122,18 +145,24 @@ func (m *manager) getSubmoduleName() string {
 	return filepath.ToSlash(rel)
 }
 
-func (m *manager) isGitlinkInIndex(submoduleName string) bool {
+func (m *manager) isGitlinkInIndex(submoduleName string) (bool, error) {
 	if m.parentRoot == "" {
-		return false
+		return false, nil
 	}
-	entry, _ := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
-	return strings.HasPrefix(entry, "160000")
+	entry, err := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, true)
+	if err != nil {
+		return false, fmt.Errorf("inspect parent gitlink: %w", err)
+	}
+	return strings.HasPrefix(entry, "160000"), nil
 }
 
 func (m *manager) currentBranch(repoRoot string) (string, error) {
 	out, err := m.git([]string{"symbolic-ref", "--short", "HEAD"}, repoRoot, true)
 	if err != nil {
-		return "(detached HEAD)", nil
+		if isDetachedHead(err) {
+			return "(detached HEAD)", nil
+		}
+		return "", fmt.Errorf("read current branch: %w", err)
 	}
 	return out, nil
 }
@@ -142,9 +171,12 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 	return m.git([]string{"rev-parse", "--short", "HEAD"}, repoRoot, true)
 }
 
-func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
-	return strings.TrimSpace(out) != ""
+func (m *manager) isDirty(repoRoot string) (bool, error) {
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, true)
+	if err != nil {
+		return false, fmt.Errorf("read repository status: %w", err)
+	}
+	return strings.TrimSpace(out) != "", nil
 }
 
 func (m *manager) gitDir(repoRoot string) (string, error) {
@@ -167,7 +199,11 @@ func (m *manager) resetWorkingTree(repoRoot string) error {
 }
 
 func (m *manager) confirmAndReset() (bool, error) {
-	if !m.isDirty(m.submoduleRoot) {
+	dirty, err := m.isDirty(m.submoduleRoot)
+	if err != nil {
+		return false, err
+	}
+	if !dirty {
 		return true, nil
 	}
 	m.printf("Warning: submodule has local modifications (possibly from a force push).\n")
@@ -176,7 +212,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled: local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -185,9 +221,15 @@ func (m *manager) confirmAndReset() (bool, error) {
 	return true, nil
 }
 
-func (m *manager) remoteTrackingSHA(branch string) string {
-	out, _ := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
-	return out
+func (m *manager) remoteTrackingSHA(branch string) (string, error) {
+	out, err := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, true)
+	if err != nil {
+		if isMissingRef(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("read remote tracking SHA: %w", err)
+	}
+	return out, nil
 }
 
 func (m *manager) remoteBranches() ([]string, error) {
@@ -219,24 +261,39 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	stdout, stderr, err := executil.Run(m.opts.Context, "git", args, nil, cwd)
+	out := strings.TrimSpace(stdout)
 	if err != nil {
-		if !check {
-			return out, nil
-		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
 	}
 	return out, nil
 }
 
+func isNotGitRepository(err error) bool {
+	return strings.Contains(err.Error(), "not a git repository")
+}
+
+func isDetachedHead(err error) bool {
+	return strings.Contains(err.Error(), "is not a symbolic ref")
+}
+
+func isMissingRef(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "needed a single revision") ||
+		strings.Contains(message, "unknown revision")
+}
+
+func isNothingToCommit(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "nothing to commit") ||
+		strings.Contains(message, "no changes added to commit")
+}
+
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	_, m.outputErr = fmt.Fprintf(m.out(), format, args...)
 }
 
 func (m *manager) out() io.Writer {
