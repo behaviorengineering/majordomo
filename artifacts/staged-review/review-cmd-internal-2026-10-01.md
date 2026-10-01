@@ -268,7 +268,15 @@ return header + "\n\n" + strings.Join(items, "\n")
 - The Stage 7 structured-logging finding covers C14.
 
 ### Stage 4: Architecture
-Pending.
+In progress. Score pending.
+
+#### Open Architecture: Submodule manager mixes UI, repository discovery, and mutation
+**Location:** `internal/ops/submodule/git.go:39`, `internal/ops/submodule/commands.go:1`
+**Observation:** `manager` owns interactive prompts and output, Git process execution, repository discovery, branch selection, reset recovery, worktree mutation, and parent-pointer commits across more than ten methods.
+**Question:** Is keeping these concerns on one `manager` intentional, or should the Git operations and interactive UI split behind a focused service interface?
+**Possible outcomes:**
+- If intentional: record the facade boundary and keep this as a non-issue.
+- If not intentional: record an architecture finding for a later refactor. Do not auto-fix during consultant review.
 
 ### Stage 5: Robustness
 Pending.
@@ -277,7 +285,7 @@ Pending.
 Pending.
 
 ## Open Questions
-None yet.
+- Stage 4: Is the submodule manager's combined UI, Git, and mutation responsibility intentional?
 
 ## Resolutions
 | Finding | Severity | Location | Outcome |
