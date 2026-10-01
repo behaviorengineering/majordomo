@@ -12,14 +12,14 @@ Pass A fixes are complete. Verification passed for the full Go tree.
 | 1. Automated Tools | done | 7/10 | 0 | 0 | 1 | 1 |
 | 2. Type Safety | done | 10/10 | 0 | 0 | 0 | 0 |
 | 3. Error Handling | done | 10/10 | 0 | 0 | 0 | 0 |
-| 4. Architecture | pending | — | 0 | 0 | 0 | 0 |
+| 4. Architecture | in progress | — | 0 | 0 | 0 | 1 |
 | 5. Robustness | pending | — | 0 | 0 | 0 | 0 |
 | 6. Testability | pending | — | 0 | 0 | 0 | 0 |
 | 7. Code Clarity | done | 10/10 | 0 | 0 | 0 | 0 |
 | 8. Generation Gates | done | 10/10 | 0 | 0 | 0 | 0 |
 
 Pass A fix commit: `c82a78e`.
-Draft PR/MR: pending.
+Draft PR/MR: [#70](https://github.com/behaviorengineering/majordomo/pull/70).
 
 ## Stages
 
@@ -34,8 +34,16 @@ Draft PR/MR: pending.
 
 ## Now
 
-Pass A is complete. The fix commit is `c82a78e`. Consultant questions begin
-after the draft PR is opened.
+Stage 4, Architecture. `internal/ops/cli/root.go:1-900` imports many
+application packages as the command composition boundary.
+
+Question: Is this broad import surface intentional for the CLI wiring package,
+or should command construction be split into smaller command groups?
+
+Why this matters: A composition root may legitimately know many services, but
+an oversized root becomes harder to navigate and test. Splitting by command
+group can reduce coupling, while an unnecessary split can hide the CLI's
+composition boundary.
 
 ## Findings
 
@@ -207,7 +215,16 @@ start work accidentally and does not hide the available commands.
 
 ## Open Questions
 
-None yet.
+#### Open Architecture: CLI composition root coupling
+**Location:** `internal/ops/cli/root.go:1-900`
+**Observation:** The CLI root wires many command groups and imports many
+application packages.
+**Question:** Is the broad import surface intentional for this composition
+root, or should command construction be split into smaller command groups?
+**Possible outcomes:**
+- If intentional, classify as a non-issue with the composition-root rationale.
+- If not intentional, record an Architecture finding and defer the split until
+  the operator requests a fix.
 
 ## Resolutions
 
