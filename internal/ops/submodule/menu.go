@@ -26,6 +26,9 @@ func (m *manager) opsMenuLoop() error {
 			return err
 		}
 		m.printf("\n%s\n", m.buildOpsMenu(currentBranch))
+		if err := m.outputError(); err != nil {
+			return err
+		}
 		choice, err := m.readKey("Choice: ")
 		if err != nil {
 			return err
@@ -68,6 +71,9 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 	m.printf("1. 🔒 Safe  — update '%s' via isolated worktree\n", pipelinesBranch)
 	m.printf("2. ⚡ Direct — I know what I'm doing (operate on '%s')\n", currentParentBranch)
 	m.printf("q. Quit\n")
+	if err := m.outputError(); err != nil {
+		return err
+	}
 	for {
 		choice, err := m.readKey("\nContext: ")
 		if err != nil {

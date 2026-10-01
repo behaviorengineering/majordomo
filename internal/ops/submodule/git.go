@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -37,6 +39,7 @@ type manager struct {
 	submoduleRoot string
 	parentRoot    string // empty if none
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
@@ -56,10 +59,16 @@ func Run(opts Options) error {
 			return err
 		}
 		if parentBranch != pipelinesBranch {
-			return m.promptOffBranchContext(parentBranch)
+			if err := m.promptOffBranchContext(parentBranch); err != nil {
+				return err
+			}
+			return m.outputError()
 		}
 	}
-	return m.opsMenuLoop()
+	if err := m.opsMenuLoop(); err != nil {
+		return err
+	}
+	return m.outputError()
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -73,7 +82,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("determine submodule root: %w", err)
 	}
 	return out, nil
 }
@@ -133,7 +142,10 @@ func (m *manager) isGitlinkInIndex(submoduleName string) bool {
 func (m *manager) currentBranch(repoRoot string) (string, error) {
 	out, err := m.git([]string{"symbolic-ref", "--short", "HEAD"}, repoRoot, true)
 	if err != nil {
-		return "(detached HEAD)", nil
+		if strings.Contains(err.Error(), "not a symbolic ref") {
+			return "(detached HEAD)", nil
+		}
+		return "", fmt.Errorf("determine current branch: %w", err)
 	}
 	return out, nil
 }
@@ -142,9 +154,12 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 	return m.git([]string{"rev-parse", "--short", "HEAD"}, repoRoot, true)
 }
 
-func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
-	return strings.TrimSpace(out) != ""
+func (m *manager) isDirty(repoRoot string) (bool, error) {
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, true)
+	if err != nil {
+		return false, fmt.Errorf("git status failed: %w", err)
+	}
+	return strings.TrimSpace(out) != "", nil
 }
 
 func (m *manager) gitDir(repoRoot string) (string, error) {
@@ -167,7 +182,11 @@ func (m *manager) resetWorkingTree(repoRoot string) error {
 }
 
 func (m *manager) confirmAndReset() (bool, error) {
-	if !m.isDirty(m.submoduleRoot) {
+	dirty, err := m.isDirty(m.submoduleRoot)
+	if err != nil {
+		return false, err
+	}
+	if !dirty {
 		return true, nil
 	}
 	m.printf("Warning: submodule has local modifications (possibly from a force push).\n")
@@ -192,6 +211,9 @@ func (m *manager) remoteTrackingSHA(branch string) string {
 
 func (m *manager) remoteBranches() ([]string, error) {
 	m.printf("Fetching remote branches...\n")
+	if err := m.outputError(); err != nil {
+		return nil, err
+	}
 	if _, err := m.git([]string{"fetch", "--prune"}, m.submoduleRoot, true); err != nil {
 		return nil, fmt.Errorf("git fetch failed: %w", err)
 	}
@@ -219,24 +241,47 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	stdout, stderr, err := process.Run(process.Options{
+		Context:      m.opts.Context,
+		Dependency:   "git",
+		RetryNetwork: isNetworkGitCommand(args),
+		Name:         "git",
+		Args:         args,
+		Dir:          cwd,
+	})
+	out := strings.TrimSpace(stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
 	}
 	return out, nil
 }
 
+func isNetworkGitCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "fetch", "pull", "push":
+		return true
+	default:
+		return false
+	}
+}
+
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(m.out(), format, args...); err != nil {
+		m.outputErr = fmt.Errorf("write interactive output: %w", err)
+	}
+}
+
+func (m *manager) outputError() error {
+	return m.outputErr
 }
 
 func (m *manager) out() io.Writer {
@@ -251,6 +296,9 @@ func (m *manager) prompt(p string) (string, error) {
 		return m.opts.Prompt(p)
 	}
 	m.printf("%s", p)
+	if err := m.outputError(); err != nil {
+		return "", err
+	}
 	in := m.opts.In
 	if in == nil {
 		in = os.Stdin
