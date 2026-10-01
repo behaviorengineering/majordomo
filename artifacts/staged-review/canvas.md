@@ -2,7 +2,7 @@
 
 ## Progress
 
-- Pass A: complete, committed as `b15ff34`, with a follow-up fix pending commit.
+- Pass A: complete, committed as `b15ff34` and follow-up `f390dc1`, both pushed.
 - Pass B: in progress, Stage 4 architecture question is waiting for a reply.
 - Stage 1: done, score 9/10.
 - Stage 2: done, score 10/10.

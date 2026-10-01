@@ -246,4 +246,5 @@ The same direct execution pattern is used for Docker, Git, and static-analysis s
 ## Pass A Delivery
 
 - Commit: `b15ff34 fix mechanical staged review findings`.
+- Follow-up commit: `f390dc1 fix follow-up staged review findings`.
 - Draft PR: [#82](https://github.com/behaviorengineering/majordomo/pull/82).
