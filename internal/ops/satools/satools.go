@@ -3,16 +3,20 @@ package satools
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
@@ -27,13 +31,13 @@ type Options struct {
 func Run(opts Options) error {
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve repository root: %w", err)
 	}
 	workspace := workspaceRoot(repoRoot)
 	saDir := saToolsDir(repoRoot)
 	dockerfiles, err := discoverDockerfiles(saDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("discover SA Dockerfiles: %w", err)
 	}
 	if len(dockerfiles) == 0 {
 		return fmt.Errorf("no Dockerfiles found in %s", saDir)
@@ -65,7 +69,7 @@ func Run(opts Options) error {
 
 	buildSh, err := findBuildScript(repoRoot, workspace)
 	if err != nil {
-		return err
+		return fmt.Errorf("find image build script: %w", err)
 	}
 
 	results := map[string]bool{}
@@ -107,7 +111,7 @@ func resolveRepoRoot(explicit string) (string, error) {
 	}
 	wd, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get current directory: %w", err)
 	}
 	dir := wd
 	for {
@@ -159,7 +163,7 @@ func discoverDockerfiles(saDir string) ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read SA Dockerfiles directory: %w", err)
 	}
 	var out []string
 	for _, e := range entries {
@@ -218,7 +222,9 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if _, _, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), ""); tagErr != nil {
+			err = fmt.Errorf("tag %s: %w", tag, tagErr)
+		}
 	}
 	return err == nil, lines
 }
@@ -227,13 +233,17 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := process.Run(opts.Context, "sa-tool:"+name, process.Retryable, func() error {
+		stdout.Reset()
+		stderr.Reset()
+		cmd := exec.CommandContext(opts.Context, name, args...)
+		cmd.Env = env
+		cmd.Dir = dir
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		return cmd.Run()
+	})
 	return stdout.String(), stderr.String(), err
 }
 

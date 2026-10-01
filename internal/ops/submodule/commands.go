@@ -26,17 +26,17 @@ func (m *manager) pullWithRecovery(branch string) (string, bool, error) {
 	m.printf("Error: git pull failed — %v\n", err)
 	raw, perr := m.prompt(fmt.Sprintf("Reset hard to 'origin/%s' (discards all local changes)? (y/N): ", branch))
 	if perr != nil {
-		return "", false, perr
+		return "", false, fmt.Errorf("confirm pull recovery: %w", perr)
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
 		m.printf("Cancelled — no changes made.\n")
 		return "", false, nil
 	}
 	if _, err := m.git([]string{"fetch", "origin"}, m.submoduleRoot, true); err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("git fetch failed: %w", err)
 	}
 	if _, err := m.git([]string{"reset", "--hard", "origin/" + branch}, m.submoduleRoot, true); err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("git reset failed: %w", err)
 	}
 	if _, err := m.git([]string{"clean", "-fd"}, m.submoduleRoot, true); err != nil {
 		return "", false, fmt.Errorf("git clean failed: %w", err)
@@ -56,7 +56,7 @@ func (m *manager) selectBranch(branches []string, current string) (string, error
 	m.printf("\n")
 	raw, err := m.prompt("Enter branch number (or 'q' to cancel): ")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read branch choice: %w", err)
 	}
 	raw = strings.TrimSpace(raw)
 	if strings.ToLower(raw) == "q" {
@@ -82,25 +82,31 @@ func (m *manager) selectBranch(branches []string, current string) (string, error
 func (m *manager) cmdUpdate() (bool, error) {
 	shaBefore, err := m.git([]string{"rev-parse", "HEAD"}, m.submoduleRoot, true)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current commit: %w", err)
 	}
 	current, err := m.currentBranch(m.submoduleRoot)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current branch: %w", err)
 	}
 	ok, err := m.confirmAndReset()
 	if err != nil || !ok {
-		return false, err
+		if err != nil {
+			return false, fmt.Errorf("confirm reset: %w", err)
+		}
+		return false, nil
 	}
 	m.printf("Pulling latest on '%s' in '%s'...\n", current, m.submoduleName)
 	out, cont, err := m.pullWithRecovery(current)
 	if err != nil || !cont {
-		return false, err
+		if err != nil {
+			return false, fmt.Errorf("pull current branch: %w", err)
+		}
+		return false, nil
 	}
 	m.printf("%s\n", out)
 	localSHA, err := m.git([]string{"rev-parse", "HEAD"}, m.submoduleRoot, true)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read updated commit: %w", err)
 	}
 	remoteSHA := m.remoteTrackingSHA(current)
 	if remoteSHA != "" && localSHA != remoteSHA {
@@ -113,7 +119,7 @@ func (m *manager) cmdUpdate() (bool, error) {
 		m.printf("%s", msg)
 		raw, err := m.prompt("Fix now? (y/N): ")
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("confirm divergence repair: %w", err)
 		}
 		if strings.ToLower(strings.TrimSpace(raw)) == "y" {
 			if _, err := m.git([]string{"reset", "--hard", "origin/" + current}, m.submoduleRoot, true); err != nil {
@@ -157,7 +163,7 @@ func (m *manager) cmdUpdate() (bool, error) {
 func (m *manager) cmdSwitchBranch() (bool, error) {
 	branches, err := m.remoteBranches()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("load remote branches: %w", err)
 	}
 	if len(branches) == 0 {
 		m.printf("No remote branches found.\n")
@@ -165,16 +171,22 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 	}
 	current, err := m.currentBranch(m.submoduleRoot)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current branch: %w", err)
 	}
 	selected, err := m.selectBranch(branches, current)
 	if err != nil || selected == "" {
-		return false, err
+		if err != nil {
+			return false, fmt.Errorf("select branch: %w", err)
+		}
+		return false, nil
 	}
 	m.printf("\nSwitching to '%s'...\n", selected)
 	ok, err := m.confirmAndReset()
 	if err != nil || !ok {
-		return false, err
+		if err != nil {
+			return false, fmt.Errorf("confirm branch switch: %w", err)
+		}
+		return false, nil
 	}
 	if gitDir, gerr := m.gitDir(m.submoduleRoot); gerr == nil {
 		if st, e := os.Stat(filepath.Join(gitDir, "MERGE_HEAD")); e == nil && !st.IsDir() {
@@ -223,11 +235,11 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 func (m *manager) cmdPinCommit() (bool, error) {
 	sha, err := m.currentSHA(m.submoduleRoot)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current commit: %w", err)
 	}
 	branch, err := m.currentBranch(m.submoduleRoot)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current branch: %w", err)
 	}
 	m.printf("Pinning '%s' to %s (branch: %s)...\n", m.submoduleName, sha, branch)
 	if m.parentRoot == "" {
@@ -256,11 +268,11 @@ func (m *manager) cmdPinCommit() (bool, error) {
 func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	sha, err := m.git([]string{"rev-parse", "HEAD"}, m.submoduleRoot, true)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current commit: %w", err)
 	}
 	branch, err := m.currentBranch(m.submoduleRoot)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("read current branch: %w", err)
 	}
 	shortSHA := sha
 	if len(shortSHA) > 7 {
@@ -296,7 +308,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	}()
 	cacheInfo := fmt.Sprintf("160000,%s,%s", sha, m.submoduleName)
 	if _, err := m.git([]string{"update-index", "--cacheinfo", cacheInfo}, worktreePath, true); err != nil {
-		return false, err
+		return false, fmt.Errorf("update worktree index: %w", err)
 	}
 	commitMsg := fmt.Sprintf("Update %s to %s (branch: %s)", m.submoduleName, shortSHA, branch)
 	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, worktreePath, false)
@@ -311,7 +323,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 		m.printf("Pushing '%s' to origin...\n", pipelinesBranch)
 		pushOut, err := m.git([]string{"push", "origin", "HEAD:" + pipelinesBranch}, worktreePath, true)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("push worktree update: %w", err)
 		}
 		if pushOut == "" {
 			m.printf("Pushed '%s' to origin.\n", pipelinesBranch)
@@ -325,7 +337,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 func (m *manager) pushToOrigin() error {
 	branch, err := m.currentBranch(m.parentRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("read parent branch: %w", err)
 	}
 	m.printf("Pushing '%s' to origin...\n", branch)
 	out, err := m.git([]string{"push", "origin", branch}, m.parentRoot, true)

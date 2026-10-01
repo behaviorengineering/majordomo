@@ -24,7 +24,10 @@ func main() {
 		_ = observability.Shutdown(ctx)
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	err := cli.NewRoot().ExecuteContext(ctx)
+	cancel()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)

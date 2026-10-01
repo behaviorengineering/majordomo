@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,6 +41,7 @@ type Options struct {
 	SkipDeep    bool
 	SkipReport  bool
 	Concurrency int
+	Logger      *slog.Logger
 
 	// Injectables for tests.
 	Clone       func() error
@@ -242,6 +244,7 @@ func runSA(opts Options) error {
 			RepoRoot:   opts.WorkDir,
 			BaseBranch: opts.BaseBranch,
 			ScriptsDir: opts.ScriptsDir,
+			Logger:     opts.Logger,
 		})
 	}
 	if opts.BaseBranch == "" {
@@ -254,6 +257,7 @@ func runSA(opts Options) error {
 		RepoRoot:   opts.WorkDir,
 		BaseBranch: opts.BaseBranch,
 		ScriptsDir: opts.ScriptsDir,
+		Logger:     opts.Logger,
 	})
 }
 
