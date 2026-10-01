@@ -2,22 +2,24 @@
 package sa
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	opscommand "github.com/behaviorengineering/majordomo/internal/ops/command"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
 
 // ToolRunner executes run-sa-tool.sh (tests inject fakes).
-type ToolRunner func(scriptPath, slug, image, command, repoRoot string, files []string) error
+type ToolRunner func(ctx context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error
 
 // Options configures a majordomo sa run.
 type Options struct {
+	Context     context.Context
 	ConfigDir   string
 	RepoID      string
 	RepoRoot    string
@@ -90,6 +92,9 @@ func Run(opts Options) error {
 	runner := opts.Runner
 	if runner == nil {
 		runner = defaultToolRunner
+		if opts.Context == nil {
+			return fmt.Errorf("sa requires a context for tool execution")
+		}
 	}
 
 	for _, tool := range cfg.StaticAnalysis {
@@ -106,8 +111,8 @@ func Run(opts Options) error {
 			continue
 		}
 		logf("INFO", "run %s image=%s files=%d", slug, image, len(matched))
-		if err := runner(scriptPath, slug, image, cmd, repoRoot, matched); err != nil {
-			logf("WARN", "%s: %v (continuing)", slug, err)
+		if err := runner(opts.Context, scriptPath, slug, image, cmd, repoRoot, matched); err != nil {
+			return fmt.Errorf("run static-analysis tool %s: %w", slug, err)
 		}
 	}
 	return nil
@@ -127,13 +132,20 @@ func filterFiles(files []string, glob string) []string {
 	return out
 }
 
-func defaultToolRunner(scriptPath, slug, image, command, repoRoot string, files []string) error {
+func defaultToolRunner(ctx context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error {
 	args := append([]string{slug, image, command, repoRoot}, files...)
-	cmd := exec.Command(scriptPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = repoRoot
-	if err := cmd.Run(); err != nil {
+	stdout, stderr, err := opscommand.Run(ctx, "static-analysis", scriptPath, args, nil, repoRoot)
+	if stdout != "" {
+		if _, writeErr := fmt.Print(stdout); writeErr != nil {
+			return fmt.Errorf("write tool output: %w", writeErr)
+		}
+	}
+	if stderr != "" {
+		if _, writeErr := fmt.Fprint(os.Stderr, stderr); writeErr != nil {
+			return fmt.Errorf("write tool error output: %w", writeErr)
+		}
+	}
+	if err != nil {
 		return fmt.Errorf("run-sa-tool.sh %s: %w", slug, err)
 	}
 	return nil
