@@ -11,8 +11,8 @@
 - [x] 3. Error Handling (5/10)
 - [x] 7. Code Clarity (7/10)
 - [x] 8. Generation Gates (5/10)
-- [ ] 4. Architecture
-- [ ] 5. Robustness
+- [x] 4. Architecture (10/10)
+- [ ] 5. Robustness (in progress)
 - [ ] 6. Testability
 
 ## Findings
@@ -190,7 +190,21 @@ Print the structured agent operating guide on bare invocation and exit successfu
 
 ### Stage 4: Architecture
 
+No findings. The CLI delegates to operation packages, outbound process execution now has a shared seam, and the reviewed packages remain under the existing `internal/ops` domain.
+
 ### Stage 5: Robustness
+
+#### Open Robustness: Static-analysis failure policy in review runs
+**Location:** `pkg/review/reviewrun/run.go:194-196`
+**Observation:**
+The SA operation now returns failed-tool errors, but the review-run coordinator logs the error and continues to preparation and orchestration.
+
+**Question:**
+Should a failed static-analysis run fail the review job, or is continuing to later stages intentional?
+
+**Possible outcomes:**
+- If this is a problem: classify as Medium and return the SA error before later stages.
+- If continuing is intentional: record a non-issue with the operator and CI rationale.
 
 ### Stage 6: Testability
 
