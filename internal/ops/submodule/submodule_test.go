@@ -24,7 +24,10 @@ func TestFindParentRepoRootViaGitlink(t *testing.T) {
 		},
 		submoduleRoot: "/tmp/parent/.majordomo",
 	}
-	got := m.findParentRepoRoot("/tmp/parent/.majordomo")
+	got, err := m.findParentRepoRoot("/tmp/parent/.majordomo")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got != "/tmp/parent" {
 		t.Fatalf("got %q calls=%d", got, calls)
 	}
@@ -47,7 +50,11 @@ func TestFindParentRepoRootRejectsNonSubmodule(t *testing.T) {
 			},
 		},
 	}
-	if got := m.findParentRepoRoot("/tmp/same"); got != "" {
+	got, err := m.findParentRepoRoot("/tmp/same")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
 		t.Fatalf("expected empty, got %q", got)
 	}
 }
