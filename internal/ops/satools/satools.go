@@ -2,25 +2,27 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
-	// Empty → discover from cwd.
+	// Empty means discover from the current working directory.
 	RepoRoot string
 	// Runner overrides command execution (tests).
-	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
+	Runner func(ctx context.Context, name string, args []string, env []string, dir string) (stdout, stderr string, err error)
 }
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
@@ -68,6 +70,15 @@ func Run(opts Options) error {
 		return err
 	}
 
+	executor := process.NewExecutor(nil)
+	if opts.Runner == nil {
+		if opts.Context == nil {
+			return fmt.Errorf("satools: context is required for image builds")
+		}
+		if _, ok := opts.Context.Deadline(); !ok {
+			return fmt.Errorf("satools: context deadline is required for image builds")
+		}
+	}
 	results := map[string]bool{}
 	var names []string
 	for _, df := range dockerfiles {
@@ -75,7 +86,7 @@ func Run(opts Options) error {
 		names = append(names, tool)
 		tag := imageTag(tool)
 		fmt.Printf("Building %s (%s) ...\n", tag, mode)
-		ok, output := runBuild(opts, buildSh, df, workspace, tag, tool)
+		ok, output := runBuild(opts, executor, opts.Context, buildSh, df, workspace, tag, tool)
 		results[tool] = ok
 		printResult(tool, ok, output, opts.Verbose)
 	}
@@ -198,7 +209,7 @@ func findBuildScript(repoRoot, workspace string) (string, error) {
 	return "", fmt.Errorf("build-copilot-image.sh not found (searched under %s)", repoRoot)
 }
 
-func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (bool, []string) {
+func runBuild(opts Options, executor *process.Executor, ctx context.Context, buildSh, dockerfile, workspace, tag, tool string) (bool, []string) {
 	dockerfileArg := dockerfile
 	if rel, err := filepath.Rel(workspace, dockerfile); err == nil {
 		dockerfileArg = rel
@@ -214,27 +225,26 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 		env = unsetEnv(env, "PACKAGE_REGISTRY_HOST")
 	}
 	args := []string{buildSh, "local", "sa-" + tool, "local-test", dockerfileArg}
-	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace)
+	stdout, stderr, err := runCmd(opts, executor, ctx, "bash", args, env, workspace)
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagStdout, tagStderr, tagErr := runCmd(opts, executor, ctx, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagStdout != "" || tagStderr != "" {
+			lines = append(lines, strings.Split(strings.TrimRight(tagStdout+tagStderr, "\n"), "\n")...)
+		}
+		if tagErr != nil {
+			err = fmt.Errorf("docker tag %s: %w", tag, tagErr)
+		}
 	}
 	return err == nil, lines
 }
 
-func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
+func runCmd(opts Options, executor *process.Executor, ctx context.Context, name string, args, env []string, dir string) (string, string, error) {
 	if opts.Runner != nil {
-		return opts.Runner(name, args, env, dir)
+		return opts.Runner(ctx, name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	return executor.Run(ctx, name, args, env, dir)
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
