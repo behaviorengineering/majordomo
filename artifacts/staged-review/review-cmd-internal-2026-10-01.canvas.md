@@ -13,7 +13,7 @@
 | 5. Robustness | Pass B | pending | - |
 | 6. Testability | Pass B | pending | - |
 
-Pass A mechanical fixes: complete, pending commit and push.
+Pass A mechanical fixes: committed as `2aa433c`, pending push and draft PR.
 Counts: critical 0, medium 1, low 0, open 1.
 
 ## Now
