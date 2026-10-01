@@ -176,7 +176,17 @@ func logf(level, format string, args ...any) {
 **Status:** fixed in Pass A
 
 ## Open Questions
-None from Pass A.
+None from Pass A. Consultant questions begin after the Pass A handoff.
+
+## Pass A Verification
+- Commit: `3e8efdd` (`Fix mechanical staged-review findings`).
+- Branch pushed: `cursor/staged-code-review-process-702c`.
+- Draft PR: https://github.com/behaviorengineering/majordomo/pull/86
+- `go test ./...`: passed.
+- `go vet ./...`: passed.
+- `gofmt -l cmd internal`: passed with no output.
+- `golangci-lint v2.14.0 run ./cmd/... ./internal/...`: passed with 0 issues.
+- `go run ./cmd/majordomo`: printed the agent guide and exited 0.
 
 ## Resolutions
 - Tooling: non-issue after installing the latest Go 1.27-compatible linter and passing the gate.
