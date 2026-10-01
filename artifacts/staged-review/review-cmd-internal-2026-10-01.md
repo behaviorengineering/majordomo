@@ -201,8 +201,16 @@ Inject a clock or move timestamping into the shared logger. Do not use a leaf wa
 
 ## Progress
 
-- Pass A: in progress.
+- Pass A: complete and committed as `d29fd4b`.
 - Pass B: waiting for Pass A commit and push.
 - Scores: Stage 1 8/10, Stage 2 10/10, Stage 3 5/10, Stage 7 7/10, Stage 8 4/10.
 - Counts: critical 0 fixed, medium 1 open and 4 fixed, low 0 open and 4 fixed.
 - Draft PR/MR: pending.
+
+## Verification
+
+- `go test ./...` passed.
+- `go vet ./...` passed.
+- `gofmt -l cmd internal` reported no files.
+- `go run ./cmd/majordomo version` passed.
+- Bare `go run ./cmd/majordomo` printed help and returned the expected missing-subcommand error.
