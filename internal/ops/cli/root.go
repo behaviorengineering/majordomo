@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -68,6 +69,17 @@ Automation rules:
 `
 
 var agentGuide = template.Must(template.New("agent-guide").Parse(agentGuideTemplate))
+
+// ExitCode maps CLI errors to process exit codes.
+func ExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	if errors.Is(err, staging.ErrNothingToReview) {
+		return 2
+	}
+	return 1
+}
 
 func writeAgentGuide(w io.Writer) error {
 	return agentGuide.Execute(w, struct{ Version string }{Version: Version})
@@ -240,7 +252,19 @@ func newDispatchCmd() *cobra.Command {
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
 		Short: "Run one Judge batch (in-process strop; --opencode for harness)",
 		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			ctx, cancel, err := boundedCommandContext(cmd)
+			if err != nil {
+				return err
+			}
+			defer cancel()
+			otelCfg := resolveOTELConfig(args[2], "", "")
+			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
+				return fmt.Errorf("otel init: %w", otelErr)
+			}
+			ctx, span := observability.StartChainSpan(ctx, otelCfg.ServiceName, "majordomo.dispatch")
+			defer observability.EndSpanWithStatus(span, &err)
+
 			mode := dispatch.ModeFiles
 			switch {
 			case finalize:
@@ -259,7 +283,7 @@ func newDispatchCmd() *cobra.Command {
 				mode = dispatch.ModeTechnicalDeep
 			}
 			opts := dispatch.DispatchOptions{
-				Context:    cmd.Context(),
+				Context:    ctx,
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],

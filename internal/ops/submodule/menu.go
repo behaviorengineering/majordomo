@@ -3,20 +3,33 @@ package submodule
 import (
 	"fmt"
 	"strings"
+	"text/template"
 )
 
+var opsMenuTemplate = template.Must(template.New("ops-menu").Parse(
+	"Submodule Manager\n-----------------\nSubmodule : {{.Submodule}}\nBranch    : {{.Branch}}\n\n{{range .Items}}{{.}}\n{{end}}",
+))
+
 func (m *manager) buildOpsMenu(currentBranch string) string {
-	header := fmt.Sprintf(
-		"Submodule Manager\n-----------------\nSubmodule : %s\nBranch    : %s",
-		m.submoduleName, currentBranch,
-	)
 	items := []string{
 		"1. Update to latest (pull current branch)",
 		"2. Switch to a different branch",
 		"3. Pin to current commit",
 		"q. Quit",
 	}
-	return header + "\n\n" + strings.Join(items, "\n")
+	var out strings.Builder
+	if err := opsMenuTemplate.Execute(&out, struct {
+		Submodule string
+		Branch    string
+		Items     []string
+	}{
+		Submodule: m.submoduleName,
+		Branch:    currentBranch,
+		Items:     items,
+	}); err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(out.String(), "\n")
 }
 
 func (m *manager) opsMenuLoop() error {

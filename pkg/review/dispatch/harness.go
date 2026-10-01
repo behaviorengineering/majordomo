@@ -1,11 +1,11 @@
 package dispatch
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"time"
 
 	"github.com/behaviorengineering/majordomo/pkg/platform/aigateway"
 )
@@ -51,26 +51,30 @@ func RunOpenCode(opts DispatchOptions) error {
 
 	runner := opts.Runner
 	if runner == nil {
-		runner = defaultScriptRunner(opts.Timeout)
+		if opts.Context == nil {
+			return fmt.Errorf("opencode harness: context is required")
+		}
+		if _, ok := opts.Context.Deadline(); !ok {
+			return fmt.Errorf("opencode harness: context deadline is required")
+		}
+		ctx := opts.Context
+		if opts.Timeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
+			defer cancel()
+		}
+		runner = defaultScriptRunner(ctx)
 	}
 	return runner(script, args, env, "")
 }
 
-func defaultScriptRunner(timeout time.Duration) func(name string, args []string, env []string, dir string) error {
+func defaultScriptRunner(ctx context.Context) func(name string, args []string, env []string, dir string) error {
 	return func(name string, args []string, env []string, dir string) error {
-		cmd := exec.Command(name, args...)
+		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Env = env
 		cmd.Dir = dir
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if timeout > 0 {
-			timer := time.AfterFunc(timeout, func() {
-				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
-				}
-			})
-			defer timer.Stop()
-		}
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("opencode harness %s: %w", filepath.Base(name), err)
 		}

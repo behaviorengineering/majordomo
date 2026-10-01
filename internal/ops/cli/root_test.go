@@ -2,11 +2,21 @@ package cli_test
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/behaviorengineering/majordomo/internal/ops/cli"
 )
+
+func TestExitCode(t *testing.T) {
+	if got := cli.ExitCode(nil); got != 0 {
+		t.Fatalf("nil error exit code = %d, want 0", got)
+	}
+	if got := cli.ExitCode(errors.New("failure")); got != 1 {
+		t.Fatalf("generic error exit code = %d, want 1", got)
+	}
+}
 
 func TestBareCLIPrintsAgentGuide(t *testing.T) {
 	root := cli.NewRoot()
