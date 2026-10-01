@@ -6,6 +6,7 @@ require (
 	github.com/XiaoConstantine/dspy-go v0.89.0
 	github.com/behaviorengineering/gitvalet v0.1.2
 	github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740
+	github.com/failsafe-go/failsafe-go v0.9.8
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13
@@ -52,6 +53,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/behaviorengineering/typology v0.1.2 // indirect
+	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/buger/jsonparser v1.2.0 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.3-0.20260730064818-2a36d6da63e2 // indirect

@@ -2,13 +2,15 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
@@ -17,8 +19,12 @@ type Options struct {
 	Verbose bool
 	Corp    bool
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
-	// Empty → discover from cwd.
+	// Empty means discover from the current working directory.
 	RepoRoot string
+	// Context bounds external commands.
+	Context context.Context
+	// Output receives operator-facing progress.
+	Output io.Writer
 	// Runner overrides command execution (tests).
 	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
 }
@@ -49,16 +55,20 @@ func Run(opts Options) error {
 	if opts.Corp {
 		mode = "corp"
 	}
+	out := opts.Output
+	if out == nil {
+		out = os.Stdout
+	}
 	tools := make([]string, 0, len(dockerfiles))
 	for _, df := range dockerfiles {
 		tools = append(tools, toolName(df))
 	}
-	fmt.Printf("SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
+	fmt.Fprintf(out, "SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
 		mode, workspace, strings.Join(tools, ", "), opts.DryRun)
 
 	if opts.DryRun {
 		for _, df := range dockerfiles {
-			fmt.Printf("  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df)
+			fmt.Fprintf(out, "  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df)
 		}
 		return nil
 	}
@@ -74,10 +84,10 @@ func Run(opts Options) error {
 		tool := toolName(df)
 		names = append(names, tool)
 		tag := imageTag(tool)
-		fmt.Printf("Building %s (%s) ...\n", tag, mode)
+		fmt.Fprintf(out, "Building %s (%s) ...\n", tag, mode)
 		ok, output := runBuild(opts, buildSh, df, workspace, tag, tool)
 		results[tool] = ok
-		printResult(tool, ok, output, opts.Verbose)
+		printResult(out, tool, ok, output, opts.Verbose)
 	}
 
 	sort.Strings(names)
@@ -87,13 +97,13 @@ func Run(opts Options) error {
 			passed++
 		}
 	}
-	fmt.Printf("\nResults: %d/%d passed\n", passed, len(names))
+	fmt.Fprintf(out, "\nResults: %d/%d passed\n", passed, len(names))
 	for _, n := range names {
 		status := "FAIL"
 		if results[n] {
 			status = "PASS"
 		}
-		fmt.Printf("  %s  sa-%s\n", status, n)
+		fmt.Fprintf(out, "  %s  sa-%s\n", status, n)
 	}
 	if passed < len(names) {
 		return fmt.Errorf("%d/%d SA tool builds failed", len(names)-passed, len(names))
@@ -218,7 +228,11 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		_, _, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag failed: %v", tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -227,27 +241,21 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	result, err := process.DefaultRunner().Run(opts.Context, name, name, args, env, dir)
+	return result.Stdout, result.Stderr, err
 }
 
-func printResult(tool string, success bool, output []string, verbose bool) {
+func printResult(out io.Writer, tool string, success bool, output []string, verbose bool) {
 	marker := "✗"
 	status := "FAIL"
 	if success {
 		marker = "✓"
 		status = "PASS"
 	}
-	fmt.Printf("  %s sa-%s: %s\n", marker, tool, status)
+	fmt.Fprintf(out, "  %s sa-%s: %s\n", marker, tool, status)
 	if !success || verbose {
 		for _, line := range output {
-			fmt.Printf("      %s\n", line)
+			fmt.Fprintf(out, "      %s\n", line)
 		}
 	}
 }
