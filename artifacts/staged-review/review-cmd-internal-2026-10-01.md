@@ -265,6 +265,12 @@ if err := cli.NewRoot().Execute(); err != nil {
 - Unknown root command: passed, prints an error and the command catalog.
 - `golangci-lint run ./cmd/... ./internal/...`: not run because `golangci-lint` is unavailable.
 
+### Pass A handoff
+
+- Mechanical fixes committed in `c2d9e37` (`fix: apply mechanical staged review fixes`).
+- Pass A code is ready to push.
+- The only remaining Pass A item is the environment-level lint tooling gap.
+
 ## Resolutions
 
 | Finding | Outcome |

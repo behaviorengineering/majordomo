@@ -17,7 +17,7 @@ Counts: critical 2, medium 11, low 5, open 1.
 
 ## Now
 
-Pass A fixes applied, verification complete. Awaiting the mechanical commit and push.
+Pass A fixes applied and committed in `c2d9e37`. Push and draft PR creation are next.
 
 ## Resolutions
 
