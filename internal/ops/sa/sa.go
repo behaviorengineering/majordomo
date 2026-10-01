@@ -2,13 +2,15 @@
 package sa
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/ops/executil"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
@@ -24,19 +26,27 @@ type Options struct {
 	BaseBranch  string
 	ScriptsDir  string
 	ImagePrefix string
+	Context     context.Context
+	Logger      *slog.Logger
 	// Runner overrides script execution (tests).
 	Runner ToolRunner
 	// ChangedFiles injectable for tests; empty → git diff via staging.SetupGit.
 	ChangedFiles []string
 }
 
-func logf(level, format string, args ...any) {
-	ts := time.Now().UTC().Format("2006-01-02 15:04:05")
-	fmt.Printf("[%s] [%s] %s\n", ts, level, fmt.Sprintf(format, args...))
+func logf(logger *slog.Logger, level, format string, args ...any) {
+	slogLevel := slog.LevelInfo
+	if level == "WARN" {
+		slogLevel = slog.LevelWarn
+	}
+	logger.Log(context.Background(), slogLevel, fmt.Sprintf(format, args...), "level", level)
 }
 
 // Run executes configured staticAnalysis tools.
 func Run(opts Options) error {
+	if opts.Logger == nil {
+		return errors.New("sa logger is required")
+	}
 	if opts.ConfigDir == "" || opts.RepoID == "" {
 		return fmt.Errorf("sa requires --config-dir and --repo-id")
 	}
@@ -48,7 +58,7 @@ func Run(opts Options) error {
 		return err
 	}
 	if len(cfg.StaticAnalysis) == 0 {
-		logf("INFO", "no staticAnalysis tools configured for %s — skipping", opts.RepoID)
+		logf(opts.Logger, "INFO", "no staticAnalysis tools configured for %s; skipping", opts.RepoID)
 		return nil
 	}
 
@@ -72,8 +82,8 @@ func Run(opts Options) error {
 		}
 		files = setup.AllFiles
 	}
-	logf("INFO", "========== majordomo sa ==========")
-	logf("INFO", "repo %s: %d changed file(s), %d tool(s)", opts.RepoID, len(files), len(cfg.StaticAnalysis))
+	logf(opts.Logger, "INFO", "========== majordomo sa ==========")
+	logf(opts.Logger, "INFO", "repo %s: %d changed file(s), %d tool(s)", opts.RepoID, len(files), len(cfg.StaticAnalysis))
 
 	scriptsDir := opts.ScriptsDir
 	if scriptsDir == "" {
@@ -89,26 +99,33 @@ func Run(opts Options) error {
 
 	runner := opts.Runner
 	if runner == nil {
-		runner = defaultToolRunner
+		runner = func(scriptPath, slug, image, command, repoRoot string, files []string) error {
+			return defaultToolRunner(opts.Context, scriptPath, slug, image, command, repoRoot, files)
+		}
 	}
 
+	var failures []error
 	for _, tool := range cfg.StaticAnalysis {
 		slug := config.ResolveSAToolSlug(tool)
 		matched := filterFiles(files, tool.Glob)
 		if len(matched) == 0 {
-			logf("INFO", "skip %s: no files match %q", slug, tool.Glob)
+			logf(opts.Logger, "INFO", "skip %s: no files match %q", slug, tool.Glob)
 			continue
 		}
 		image := config.ResolveSAImage(tool, opts.ImagePrefix)
 		cmd := strings.TrimSpace(tool.Command)
 		if cmd == "" {
-			logf("WARN", "skip %s: empty command", slug)
+			logf(opts.Logger, "WARN", "skip %s: empty command", slug)
 			continue
 		}
-		logf("INFO", "run %s image=%s files=%d", slug, image, len(matched))
+		logf(opts.Logger, "INFO", "run %s image=%s files=%d", slug, image, len(matched))
 		if err := runner(scriptPath, slug, image, cmd, repoRoot, matched); err != nil {
-			logf("WARN", "%s: %v (continuing)", slug, err)
+			logf(opts.Logger, "WARN", "%s: %v (continuing)", slug, err)
+			failures = append(failures, fmt.Errorf("%s: %w", slug, err))
 		}
+	}
+	if len(failures) > 0 {
+		return errors.Join(failures...)
 	}
 	return nil
 }
@@ -127,13 +144,10 @@ func filterFiles(files []string, glob string) []string {
 	return out
 }
 
-func defaultToolRunner(scriptPath, slug, image, command, repoRoot string, files []string) error {
+func defaultToolRunner(ctx context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error {
 	args := append([]string{slug, image, command, repoRoot}, files...)
-	cmd := exec.Command(scriptPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = repoRoot
-	if err := cmd.Run(); err != nil {
+	_, _, err := executil.Run(ctx, scriptPath, args, os.Environ(), repoRoot)
+	if err != nil {
 		return fmt.Errorf("run-sa-tool.sh %s: %w", slug, err)
 	}
 	return nil
