@@ -218,7 +218,14 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		_, tagStderr, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag failed: %v", tagErr))
+			if tagStderr != "" {
+				lines = append(lines, strings.TrimSpace(tagStderr))
+			}
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
