@@ -10,7 +10,7 @@
 - [x] 3. Error Handling, score 4/10
 - [x] 7. Code Clarity, score 6/10
 - [x] 8. Generation Gates, score 3/10
-- [ ] 4. Architecture, score pending
+- [ ] 4. Architecture, in progress
 - [ ] 5. Robustness, score pending
 - [ ] 6. Testability, score pending
 
@@ -253,6 +253,16 @@ if err := cli.NewRoot().Execute(); err != nil {
 **Status:** fixed in Pass A
 
 ## Open Questions
+
+### Stage 4: Architecture
+
+#### Open Architecture: Process policy seam ownership
+**Location:** `internal/ops/command/command.go:16-56`, `internal/ops/sa/sa.go:137-163`, `internal/ops/satools/satools.go:232-253`, `internal/ops/submodule/git.go:229-251`
+**Observation:** Satools and submodule options accept the concrete `*command.Runner`, while static-analysis execution constructs a new runner inside its default tool runner.
+**Question:** Is the concrete process-policy seam intentionally scoped to the `internal/ops` packages, or should all three operations share one injected interface or factory?
+**Possible outcomes:**
+- If the split is intentional, classify as a non-issue and document the ownership boundary.
+- If one policy surface is preferred, classify as an Architecture finding and plan a follow-up refactor.
 
 ### Pass A verification
 
