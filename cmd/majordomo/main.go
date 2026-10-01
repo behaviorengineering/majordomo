@@ -16,15 +16,20 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+	root := cli.NewRoot()
+	root.SetContext(ctx)
+
 	defer func() {
 		aigateway.ShutdownGlobal()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = observability.Flush(ctx)
-		_ = observability.Shutdown(ctx)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		_ = observability.Flush(shutdownCtx)
+		_ = observability.Shutdown(shutdownCtx)
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)

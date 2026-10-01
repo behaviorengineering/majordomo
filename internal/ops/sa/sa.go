@@ -2,13 +2,14 @@
 package sa
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
@@ -18,6 +19,7 @@ type ToolRunner func(scriptPath, slug, image, command, repoRoot string, files []
 
 // Options configures a majordomo sa run.
 type Options struct {
+	Context     context.Context
 	ConfigDir   string
 	RepoID      string
 	RepoRoot    string
@@ -48,7 +50,7 @@ func Run(opts Options) error {
 		return err
 	}
 	if len(cfg.StaticAnalysis) == 0 {
-		logf("INFO", "no staticAnalysis tools configured for %s — skipping", opts.RepoID)
+		logf("INFO", "no staticAnalysis tools configured for %s - skipping", opts.RepoID)
 		return nil
 	}
 
@@ -89,7 +91,9 @@ func Run(opts Options) error {
 
 	runner := opts.Runner
 	if runner == nil {
-		runner = defaultToolRunner
+		runner = func(scriptPath, slug, image, command, repoRoot string, files []string) error {
+			return defaultToolRunner(opts.Context, scriptPath, slug, image, command, repoRoot, files)
+		}
 	}
 
 	for _, tool := range cfg.StaticAnalysis {
@@ -127,13 +131,9 @@ func filterFiles(files []string, glob string) []string {
 	return out
 }
 
-func defaultToolRunner(scriptPath, slug, image, command, repoRoot string, files []string) error {
+func defaultToolRunner(ctx context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error {
 	args := append([]string{slug, image, command, repoRoot}, files...)
-	cmd := exec.Command(scriptPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = repoRoot
-	if err := cmd.Run(); err != nil {
+	if _, _, err := process.Run(ctx, scriptPath, args, os.Environ(), repoRoot); err != nil {
 		return fmt.Errorf("run-sa-tool.sh %s: %w", slug, err)
 	}
 	return nil
