@@ -4,6 +4,8 @@
 **Target:** `./cmd/...` and `./internal/...` because the scheduled run has no diff against `origin/main`.
 **Selected stages:** Pass A: 1, 2, 3, 7, 8. Pass B: 4, 5, 6.
 **Branch:** `cursor/staged-code-review-process-9ce0`
+**Pass A commit:** `8a73916`
+**Draft pull request:** https://github.com/behaviorengineering/majordomo/pull/72
 
 ## Stages
 
@@ -18,8 +20,8 @@
 
 ## Pass status
 
-- Pass A: in progress, fixing mechanical findings.
-- Pass B: waiting for the Pass A commit and draft pull request.
+- Pass A: complete, committed and pushed.
+- Pass B: ready to begin consultant questions.
 
 ## Findings
 
@@ -231,7 +233,7 @@ type Options struct {
 - Checked CLI writer errors and test fixture setup errors.
 - Verification: `go test ./...`, `go vet ./...`, focused target tests, focused target vet, target formatting, and `golangci-lint v2.14.0` all passed.
 
-Pass A mechanical fixes are complete. The commit and draft pull request are still pending.
+Pass A mechanical fixes are complete. Consultant questions follow in this thread.
 
 ## Open questions
 
