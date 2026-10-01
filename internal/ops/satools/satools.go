@@ -2,29 +2,36 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/command"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
-	// Empty → discover from cwd.
+	// An empty value discovers the root from the current working directory.
 	RepoRoot string
 	// Runner overrides command execution (tests).
 	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
+	// ProcessRunner overrides the context-aware process runner.
+	ProcessRunner *command.Runner
 }
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("satools requires a context")
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
 		return err
@@ -218,7 +225,12 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagOut, tagErr, tagRunErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		lines = append(lines, strings.Split(strings.TrimRight(tagOut+tagErr, "\n"), "\n")...)
+		if tagRunErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag failed: %v", tagRunErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -227,14 +239,17 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	processRunner := opts.ProcessRunner
+	if processRunner == nil {
+		processRunner = command.NewRunner()
+	}
+	return processRunner.Run(opts.Context, command.Request{
+		Name:       name,
+		Args:       args,
+		Dir:        dir,
+		Env:        env,
+		Dependency: name,
+	})
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
