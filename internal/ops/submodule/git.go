@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -35,8 +37,9 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when no parent repository exists.
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
@@ -59,7 +62,10 @@ func Run(opts Options) error {
 			return m.promptOffBranchContext(parentBranch)
 		}
 	}
-	return m.opsMenuLoop()
+	if err := m.opsMenuLoop(); err != nil {
+		return err
+	}
+	return m.outputErr
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -219,24 +225,28 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	out, stderr, err := process.Runner{}.Run(m.opts.Context, process.Spec{
+		Name: "git",
+		Args: args,
+		Dir:  cwd,
+	})
+	out = strings.TrimSpace(out)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
 	}
 	return out, nil
 }
 
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(m.out(), format, args...); err != nil {
+		m.outputErr = fmt.Errorf("write submodule output: %w", err)
+	}
 }
 
 func (m *manager) out() io.Writer {
