@@ -9,7 +9,7 @@
 - [x] 1. Automated Tools — Score: 8/10
 - [x] 2. Type Safety — Score: 10/10
 - [x] 3. Error Handling — Score: 5/10
-- [ ] 4. Architecture
+- [ ] 4. Architecture — in progress
 - [ ] 5. Robustness
 - [ ] 6. Testability
 - [x] 7. Code Clarity — Score: 7/10
@@ -183,6 +183,14 @@ Inject a clock or move timestamping into the shared logger. Do not use a leaf wa
 
 ## Open Questions
 
+#### Open Architecture: CLI root coupling
+**Location:** `internal/ops/cli/root.go:1-840`
+**Observation:** The root command package imports and wires many review, context, forge, SA, and submodule packages. It also owns OTEL configuration resolution in addition to command construction, while individual `RunE` functions mostly delegate to services.
+**Question:** Is keeping this broad command registry and OTEL resolver in one file intentional, or should command families and shared setup be split into smaller CLI modules?
+**Possible outcomes:**
+- If intentional: non-issue, record the root as the explicit CLI composition boundary.
+- If not intentional: record a consultant finding for follow-up decomposition. No Pass B fix will be applied automatically.
+
 ## Resolutions
 
 | Finding | Severity | Location | Outcome |
@@ -205,7 +213,7 @@ Inject a clock or move timestamping into the shared logger. Do not use a leaf wa
 - Pass B: waiting for Pass A commit and push.
 - Scores: Stage 1 8/10, Stage 2 10/10, Stage 3 5/10, Stage 7 7/10, Stage 8 4/10.
 - Counts: critical 0 fixed, medium 1 open and 4 fixed, low 0 open and 4 fixed.
-- Draft PR/MR: pending.
+- Draft PR/MR: https://github.com/behaviorengineering/majordomo/pull/71
 
 ## Verification
 
@@ -214,3 +222,7 @@ Inject a clock or move timestamping into the shared logger. Do not use a leaf wa
 - `gofmt -l cmd internal` reported no files.
 - `go run ./cmd/majordomo version` passed.
 - Bare `go run ./cmd/majordomo` printed help and returned the expected missing-subcommand error.
+
+## Consultant Stage 4: Architecture
+
+**Score so far:** 7/10.
