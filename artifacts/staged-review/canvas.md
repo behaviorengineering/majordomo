@@ -17,10 +17,11 @@ Pass A: mechanical, stages 1, 2, 3, 7, 8.
 Pass B: consultant, stages 4, 5, 6.  
 Counts: critical 0, medium 0, low 1, open 1.
 Pass A fix commit: `3027ca5`.
+Draft PR: [#84](https://github.com/behaviorengineering/majordomo/pull/84).
 
 ## Now
 
-Pass A committed, inspecting consultant stages 4, 5, and 6
+Pass A committed and pushed, inspecting consultant stages 4, 5, and 6
 
 ## Resolutions
 

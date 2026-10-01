@@ -3,6 +3,7 @@
 **Target:** `./cmd/...` and `./internal/...` because this run has no diff against `main`
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8. Pass B: 4, 5, 6.
 **Pass A Fix Commit:** `3027ca5` (`fix mechanical staged review findings`)
+**Draft PR:** [#84](https://github.com/behaviorengineering/majordomo/pull/84)
 
 ## Stages
 - [x] 1. Automated Tools (8/10)
