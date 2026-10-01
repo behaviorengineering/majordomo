@@ -270,6 +270,7 @@ if err := cli.NewRoot().Execute(); err != nil {
 - Mechanical fixes committed in `c2d9e37` (`fix: apply mechanical staged review fixes`).
 - Pass A code is ready to push.
 - The only remaining Pass A item is the environment-level lint tooling gap.
+- Draft PR: https://github.com/behaviorengineering/majordomo/pull/85
 
 ## Resolutions
 

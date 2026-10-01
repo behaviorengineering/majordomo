@@ -17,7 +17,7 @@ Counts: critical 2, medium 11, low 5, open 1.
 
 ## Now
 
-Pass A fixes applied and committed in `c2d9e37`. Push and draft PR creation are next.
+Pass A fixes applied and committed in `c2d9e37`. Draft PR: https://github.com/behaviorengineering/majordomo/pull/85
 
 ## Resolutions
 
