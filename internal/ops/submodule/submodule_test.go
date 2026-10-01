@@ -1,7 +1,6 @@
 package submodule
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -55,9 +54,11 @@ func TestFindParentRepoRootRejectsNonSubmodule(t *testing.T) {
 
 func TestBuildOpsMenu(t *testing.T) {
 	m := &manager{submoduleName: ".majordomo"}
-	menu := m.buildOpsMenu("main")
+	menu, err := m.buildOpsMenu("main")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(menu, "Submodule : .majordomo") || !strings.Contains(menu, "1. Update") {
 		t.Fatalf("menu:\n%s", menu)
 	}
-	_ = filepath.Separator
 }

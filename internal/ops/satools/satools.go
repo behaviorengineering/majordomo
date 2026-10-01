@@ -2,17 +2,20 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	opserrors "github.com/behaviorengineering/majordomo/internal/ops/errors"
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
@@ -20,28 +23,31 @@ type Options struct {
 	// Empty → discover from cwd.
 	RepoRoot string
 	// Runner overrides command execution (tests).
-	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
+	Runner func(ctx context.Context, name string, args []string, env []string, dir string) (stdout, stderr string, err error)
 }
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if !opts.DryRun && opts.Context == nil {
+		return opserrors.New(opserrors.CodeInvalidArgument, "satools.Run", "context is required")
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
-		return err
+		return opserrors.Wrap(err, opserrors.CodeConfiguration, "satools.ResolveRepoRoot", "resolve repository root")
 	}
 	workspace := workspaceRoot(repoRoot)
 	saDir := saToolsDir(repoRoot)
 	dockerfiles, err := discoverDockerfiles(saDir)
 	if err != nil {
-		return err
+		return opserrors.Wrap(err, opserrors.CodeConfiguration, "satools.DiscoverDockerfiles", "discover Dockerfiles")
 	}
 	if len(dockerfiles) == 0 {
-		return fmt.Errorf("no Dockerfiles found in %s", saDir)
+		return opserrors.New(opserrors.CodeConfiguration, "satools.Run", fmt.Sprintf("no Dockerfiles found in %s", saDir))
 	}
 
 	if opts.Corp && !opts.DryRun {
 		if os.Getenv("REGISTRY_USER") == "" || os.Getenv("REGISTRY_TOKEN") == "" || os.Getenv("PACKAGE_REGISTRY_HOST") == "" {
-			return fmt.Errorf("--corp requires PACKAGE_REGISTRY_HOST, REGISTRY_USER, and REGISTRY_TOKEN")
+			return opserrors.New(opserrors.CodeInvalidArgument, "satools.Run", "--corp requires registry settings")
 		}
 	}
 
@@ -65,7 +71,7 @@ func Run(opts Options) error {
 
 	buildSh, err := findBuildScript(repoRoot, workspace)
 	if err != nil {
-		return err
+		return opserrors.Wrap(err, opserrors.CodeConfiguration, "satools.FindBuildScript", "find image build script")
 	}
 
 	results := map[string]bool{}
@@ -96,7 +102,11 @@ func Run(opts Options) error {
 		fmt.Printf("  %s  sa-%s\n", status, n)
 	}
 	if passed < len(names) {
-		return fmt.Errorf("%d/%d SA tool builds failed", len(names)-passed, len(names))
+		return opserrors.New(
+			opserrors.CodeExecution,
+			"satools.Run",
+			fmt.Sprintf("%d/%d SA tool builds failed", len(names)-passed, len(names)),
+		)
 	}
 	return nil
 }
@@ -218,23 +228,24 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		_, tagStderr, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagErr != nil {
+			if tagStderr != "" {
+				lines = append(lines, tagStderr)
+			}
+			lines = append(lines, fmt.Sprintf("docker tag %s failed: %v", full, tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
 
 func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
 	if opts.Runner != nil {
-		return opts.Runner(name, args, env, dir)
+		return opts.Runner(opts.Context, name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	result, err := process.Run(opts.Context, name, args, env, dir, process.Options{})
+	return result.Stdout, result.Stderr, err
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
