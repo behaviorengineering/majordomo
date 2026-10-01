@@ -26,6 +26,9 @@ func (m *manager) opsMenuLoop() error {
 			return err
 		}
 		m.printf("\n%s\n", m.buildOpsMenu(currentBranch))
+		if m.outputErr != nil {
+			return m.outputErr
+		}
 		choice, err := m.readKey("Choice: ")
 		if err != nil {
 			return err
@@ -65,9 +68,12 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 		currentParentBranch, pipelinesBranch, currentParentBranch,
 	)
 	m.printf("\n%s\n\n", warning)
-	m.printf("1. 🔒 Safe  — update '%s' via isolated worktree\n", pipelinesBranch)
-	m.printf("2. ⚡ Direct — I know what I'm doing (operate on '%s')\n", currentParentBranch)
+	m.printf("1. Safe: update '%s' via isolated worktree\n", pipelinesBranch)
+	m.printf("2. Direct: operate on '%s' without isolation\n", currentParentBranch)
 	m.printf("q. Quit\n")
+	if m.outputErr != nil {
+		return m.outputErr
+	}
 	for {
 		choice, err := m.readKey("\nContext: ")
 		if err != nil {
@@ -82,7 +88,7 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 		case "2":
 			return m.opsMenuLoop()
 		default:
-			m.printf("Invalid choice — enter 1, 2, or q.\n")
+			m.printf("Invalid choice: enter 1, 2, or q.\n")
 		}
 	}
 }

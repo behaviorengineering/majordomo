@@ -1,6 +1,7 @@
 package reviewrun
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,6 +50,7 @@ func TestUntilPrepDoesNotPublish(t *testing.T) {
 	cfg := writeConfig(t, dir)
 	var orchUntil string
 	err := Run(Options{
+		Context:    context.Background(),
 		ConfigDir:  cfg,
 		RepoID:     "demo",
 		PRNumber:   "12",
@@ -80,6 +82,7 @@ func TestNoPublishSkipsPublish(t *testing.T) {
 	dir := t.TempDir()
 	cfg := writeConfig(t, dir)
 	err := Run(Options{
+		Context:    context.Background(),
 		ConfigDir:  cfg,
 		RepoID:     "demo",
 		PRNumber:   "12",
@@ -107,6 +110,7 @@ func TestPublishTrueCallsPublish(t *testing.T) {
 	cfg := writeConfig(t, dir)
 	var published string
 	err := Run(Options{
+		Context:    context.Background(),
 		ConfigDir:  cfg,
 		RepoID:     "demo",
 		PRNumber:   "12",
@@ -137,6 +141,7 @@ func TestUntilCloneSkipsOrchestrate(t *testing.T) {
 	dir := t.TempDir()
 	cfg := writeConfig(t, dir)
 	err := Run(Options{
+		Context:    context.Background(),
 		ConfigDir:  cfg,
 		RepoID:     "demo",
 		PRNumber:   "12",
@@ -163,6 +168,7 @@ func TestCloneSkippedWhenWorkdirAtHead(t *testing.T) {
 	repo, sha := initRepo(t)
 	cfg := writeConfig(t, t.TempDir())
 	err := Run(Options{
+		Context:    context.Background(),
 		ConfigDir:  cfg,
 		RepoID:     "demo",
 		PRNumber:   "12",

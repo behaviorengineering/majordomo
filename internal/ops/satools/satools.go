@@ -2,17 +2,20 @@
 package satools
 
 import (
-	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
@@ -25,6 +28,9 @@ type Options struct {
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if !opts.DryRun && opts.Context == nil && opts.Runner == nil {
+		return errors.New("build-sa-tools requires a context")
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
 		return err
@@ -218,7 +224,12 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagStdout, tagStderr, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), workspace)
+		lines = append(lines, tagStdout, tagStderr)
+		if tagErr != nil {
+			lines = append(lines, tagErr.Error())
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -227,14 +238,16 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	result, err := process.Run(opts.Context, process.Options{
+		Name: name,
+		Args: args,
+		Dir:  dir,
+		Env:  env,
+	})
+	if err != nil {
+		return result.Stdout, result.Stderr, err
+	}
+	return result.Stdout, result.Stderr, nil
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {

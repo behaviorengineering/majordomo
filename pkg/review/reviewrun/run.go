@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ import (
 
 // Options configures majordomo run review.
 type Options struct {
+	Context     context.Context
 	ConfigDir   string
 	RepoID      string
 	PRNumber    string
@@ -55,6 +57,9 @@ func logf(level, format string, args ...any) {
 
 // Run executes clone, SA, orchestrate, and optional publish for one PR.
 func Run(opts Options) (err error) {
+	if opts.Context == nil {
+		return fmt.Errorf("run review requires a context")
+	}
 	usage := llmusage.New()
 	llmusage.Push(usage)
 	defer func() {
@@ -102,7 +107,7 @@ func Run(opts Options) (err error) {
 		_ = observability.Shutdown(flushCtx)
 	}()
 
-	ctx, span := observability.StartChainSpan(context.Background(), otelCfg.ServiceName, "majordomo.run.review")
+	ctx, span := observability.StartChainSpan(opts.Context, otelCfg.ServiceName, "majordomo.run.review")
 	defer observability.EndSpanWithStatus(span, &err)
 
 	until, err := ParseUntil(opts.Until)
@@ -191,8 +196,8 @@ func Run(opts Options) (err error) {
 		return nil
 	}
 
-	if err := runSA(opts); err != nil {
-		logf("WARN", "sa: %v (continuing)", err)
+	if err := runSA(opts, ctx); err != nil {
+		return fmt.Errorf("static analysis: %w", err)
 	}
 	if !shouldRun(opts.Until, StagePrep) {
 		logf("INFO", "until=%s: stopping after sa", opts.Until)
@@ -234,14 +239,16 @@ func runClone(opts Options, token, scm, cloneURL string) error {
 	return ensureServedRepo(opts, token, scm, cloneURL, head, opts.BaseBranch)
 }
 
-func runSA(opts Options) error {
+func runSA(opts Options, ctx context.Context) error {
 	if opts.SA != nil {
 		return opts.SA(sa.Options{
+			Context:    ctx,
 			ConfigDir:  opts.ConfigDir,
 			RepoID:     opts.RepoID,
 			RepoRoot:   opts.WorkDir,
 			BaseBranch: opts.BaseBranch,
 			ScriptsDir: opts.ScriptsDir,
+			Logger:     slog.Default(),
 		})
 	}
 	if opts.BaseBranch == "" {
@@ -249,11 +256,13 @@ func runSA(opts Options) error {
 		return nil
 	}
 	return sa.Run(sa.Options{
+		Context:    ctx,
 		ConfigDir:  opts.ConfigDir,
 		RepoID:     opts.RepoID,
 		RepoRoot:   opts.WorkDir,
 		BaseBranch: opts.BaseBranch,
 		ScriptsDir: opts.ScriptsDir,
+		Logger:     slog.Default(),
 	})
 }
 
