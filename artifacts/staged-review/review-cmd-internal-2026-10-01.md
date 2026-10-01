@@ -2,6 +2,7 @@
 **Date:** 2026-10-01
 **Target:** `./cmd/...` and `./internal/...` main packages, because `main...HEAD` has no diff
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8; Pass B: 4, 5, 6
+**Draft PR:** [#79](https://github.com/behaviorengineering/majordomo/pull/79)
 
 ## Stages
 - [x] 1. Automated Tools, score 8/10
@@ -193,6 +194,15 @@ return err
 **Status:** fixed in Pass A
 
 ## Open Questions
+
+### Open Architecture: Submodule manager responsibilities
+**Location:** `internal/ops/submodule/git.go:38-43`
+**Observation:** `manager` owns Git process execution, repository discovery, interactive output, prompts, and state-changing operations, while `menu.go` and `commands.go` add more behavior on the same type.
+**Question:** Is keeping these responsibilities behind one interactive manager intentional, or should Git execution, prompt I/O, and mutation workflows split behind focused seams?
+**Status:** waiting on consultant
+**Possible outcomes:**
+- If intentional: non-issue, document the manager as the interactive boundary.
+- If not intentional: record a Medium architecture finding for a later fix.
 
 ## Resolutions
 

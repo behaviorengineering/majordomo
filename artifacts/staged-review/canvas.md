@@ -19,10 +19,13 @@ Counts: critical 0, medium 0, low 1, open 1.
 
 Pass A fix commit: `c030f15`, pushed to `cursor/staged-code-review-process-2d74`.
 Verification: `go test ./...`, `go vet ./...`, and `gofmt -l cmd internal` passed.
+Draft PR: [#79](https://github.com/behaviorengineering/majordomo/pull/79).
 
 ## Now
 
-Preparing the draft pull request. Consultant Stage 4 starts after it is opened.
+I noticed `internal/ops/submodule/git.go:38-43` keeps Git execution, prompts, output, and mutations on one manager. Is that single interactive boundary intentional?
+
+Why this matters: focused seams reduce test setup and keep repository mutation policy separate from terminal I/O. One manager can be valid when it is the deliberate user-facing workflow boundary.
 
 ## Resolutions
 
@@ -30,3 +33,4 @@ Preparing the draft pull request. Consultant Stage 4 starts after it is opened.
 |---|---|---|---|
 | auto-fixed in Pass A | Medium | Mechanical findings | Output handling, failure propagation, CLI surface, process resilience, and operation context were fixed. |
 | still open | Low | Toolchain | `golangci-lint` is unavailable; `go vet` and `gofmt` passed. |
+| waiting on consultant | Medium | `internal/ops/submodule/git.go:38-43` | Manager responsibility split needs confirmation. |
