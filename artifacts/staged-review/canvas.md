@@ -7,19 +7,19 @@
 | 1. Automated Tools | Done | 8/10 |
 | 2. Type Safety | Done | 10/10 |
 | 3. Error Handling | Done | 5/10 |
-| 4. Architecture | Skipped until Pass B | |
-| 5. Robustness | Skipped until Pass B | |
-| 6. Testability | Skipped until Pass B | |
+| 4. Architecture | In progress | |
+| 5. Robustness | Not started | |
+| 6. Testability | Not started | |
 | 7. Code Clarity | Done | 7/10 |
 | 8. Generation Gates | Done | 4/10 |
 
-Pass A: mechanical review. Pass B: consultant review.
+Pass A: mechanical review complete, commit `343ea8f`. Pass B: consultant review.
 
 Counts: critical 0, medium 0, low 0, open 0.
 
 ## Now
 
-Fixing mechanical findings.
+Inspecting consultant Stage 4.
 
 ## Resolutions
 
