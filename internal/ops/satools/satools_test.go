@@ -9,9 +9,15 @@ import (
 func TestDiscoverDockerfiles(t *testing.T) {
 	dir := t.TempDir()
 	sa := filepath.Join(dir, "dockerfiles", "sa-tools")
-	_ = os.MkdirAll(sa, 0o755)
-	_ = os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(sa, "notes.txt"), []byte("x"), 0o644)
+	if err := os.MkdirAll(sa, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sa, "notes.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	got, err := discoverDockerfiles(sa)
 	if err != nil {
 		t.Fatal(err)
@@ -27,9 +33,15 @@ func TestDiscoverDockerfiles(t *testing.T) {
 func TestDryRun(t *testing.T) {
 	dir := t.TempDir()
 	sa := filepath.Join(dir, "dockerfiles", "sa-tools")
-	_ = os.MkdirAll(sa, 0o755)
-	_ = os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o644)
+	if err := os.MkdirAll(sa, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	err := Run(Options{RepoRoot: dir, DryRun: true})
 	if err != nil {
 		t.Fatal(err)
@@ -39,13 +51,36 @@ func TestDryRun(t *testing.T) {
 func TestCorpRequiresEnv(t *testing.T) {
 	dir := t.TempDir()
 	sa := filepath.Join(dir, "dockerfiles", "sa-tools")
-	_ = os.MkdirAll(sa, 0o755)
-	_ = os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
+	if err := os.MkdirAll(sa, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("REGISTRY_USER", "")
 	t.Setenv("REGISTRY_TOKEN", "")
 	t.Setenv("PACKAGE_REGISTRY_HOST", "")
 	err := Run(Options{RepoRoot: dir, Corp: true})
 	if err == nil {
 		t.Fatal("expected corp env error")
+	}
+}
+
+func TestRunBuildFailsWhenTagFails(t *testing.T) {
+	opts := Options{
+		Runner: func(name string, args []string, env []string, dir string) (string, string, error) {
+			if name == "docker" {
+				return "", "tag failed", os.ErrPermission
+			}
+			return "build complete", "", nil
+		},
+	}
+
+	ok, output := runBuild(opts, "build.sh", "ruff.Dockerfile", t.TempDir(), "sa-ruff:local-test", "ruff")
+	if ok {
+		t.Fatal("expected tag failure to fail the build")
+	}
+	if len(output) == 0 || output[len(output)-1] == "" {
+		t.Fatalf("output=%v", output)
 	}
 }
