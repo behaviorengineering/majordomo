@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -21,6 +22,8 @@ const (
 type Options struct {
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
+	// Context bounds external git commands.
+	Context context.Context
 	// In/Out for prompts (tests).
 	In  io.Reader
 	Out io.Writer
@@ -35,7 +38,7 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when no parent exists.
 	submoduleName string
 }
 
@@ -73,7 +76,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: not inside a git repo: %w", err)
 	}
 	return out, nil
 }
@@ -176,7 +179,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled: local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -219,18 +222,13 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	result, err := process.DefaultRunner().Run(m.opts.Context, "git", "git", args, nil, cwd)
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(result.Stderr))
 	}
 	return out, nil
 }

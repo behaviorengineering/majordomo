@@ -40,6 +40,8 @@ type Options struct {
 	SkipDeep    bool
 	SkipReport  bool
 	Concurrency int
+	// Context bounds external review commands.
+	Context context.Context
 
 	// Injectables for tests.
 	Clone       func() error
@@ -192,7 +194,8 @@ func Run(opts Options) (err error) {
 	}
 
 	if err := runSA(opts); err != nil {
-		logf("WARN", "sa: %v (continuing)", err)
+		logf("WARN", "sa: %v", err)
+		return fmt.Errorf("static analysis: %w", err)
 	}
 	if !shouldRun(opts.Until, StagePrep) {
 		logf("INFO", "until=%s: stopping after sa", opts.Until)
@@ -242,6 +245,7 @@ func runSA(opts Options) error {
 			RepoRoot:   opts.WorkDir,
 			BaseBranch: opts.BaseBranch,
 			ScriptsDir: opts.ScriptsDir,
+			Context:    opts.Context,
 		})
 	}
 	if opts.BaseBranch == "" {
@@ -254,6 +258,7 @@ func runSA(opts Options) error {
 		RepoRoot:   opts.WorkDir,
 		BaseBranch: opts.BaseBranch,
 		ScriptsDir: opts.ScriptsDir,
+		Context:    opts.Context,
 	})
 }
 
