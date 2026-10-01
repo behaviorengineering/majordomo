@@ -1,7 +1,7 @@
 package submodule
 
 import (
-	"path/filepath"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -53,11 +53,27 @@ func TestFindParentRepoRootRejectsNonSubmodule(t *testing.T) {
 	}
 }
 
+func TestFindSubmoduleRootWrapsGitError(t *testing.T) {
+	sentinel := errors.New("git unavailable")
+	m := &manager{
+		opts: Options{
+			StartDir: "/tmp/repo",
+			GitRunner: func(args []string, cwd string, check bool) (string, error) {
+				return "", sentinel
+			},
+		},
+	}
+
+	_, err := m.findSubmoduleRoot()
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("findSubmoduleRoot() error = %v, want wrapped sentinel", err)
+	}
+}
+
 func TestBuildOpsMenu(t *testing.T) {
 	m := &manager{submoduleName: ".majordomo"}
 	menu := m.buildOpsMenu("main")
 	if !strings.Contains(menu, "Submodule : .majordomo") || !strings.Contains(menu, "1. Update") {
 		t.Fatalf("menu:\n%s", menu)
 	}
-	_ = filepath.Separator
 }
