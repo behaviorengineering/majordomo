@@ -65,8 +65,8 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 		currentParentBranch, pipelinesBranch, currentParentBranch,
 	)
 	m.printf("\n%s\n\n", warning)
-	m.printf("1. 🔒 Safe  — update '%s' via isolated worktree\n", pipelinesBranch)
-	m.printf("2. ⚡ Direct — I know what I'm doing (operate on '%s')\n", currentParentBranch)
+	m.printf("1. Safe: update '%s' via isolated worktree\n", pipelinesBranch)
+	m.printf("2. Direct: operate on '%s'\n", currentParentBranch)
 	m.printf("q. Quit\n")
 	for {
 		choice, err := m.readKey("\nContext: ")
@@ -82,7 +82,7 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 		case "2":
 			return m.opsMenuLoop()
 		default:
-			m.printf("Invalid choice — enter 1, 2, or q.\n")
+			m.printf("Invalid choice: enter 1, 2, or q.\n")
 		}
 	}
 }
