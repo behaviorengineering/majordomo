@@ -37,7 +37,7 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty if none.
 	submoduleName string
 }
 
@@ -75,7 +75,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root: not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: not inside a git repo: %w", err)
 	}
 	return out, nil
 }

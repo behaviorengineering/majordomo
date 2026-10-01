@@ -1,6 +1,7 @@
 package submodule
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -49,6 +50,23 @@ func TestFindParentRepoRootRejectsNonSubmodule(t *testing.T) {
 	}
 	if got := m.findParentRepoRoot("/tmp/same"); got != "" {
 		t.Fatalf("expected empty, got %q", got)
+	}
+}
+
+func TestFindSubmoduleRootWrapsGitError(t *testing.T) {
+	sentinel := errors.New("git unavailable")
+	m := &manager{
+		opts: Options{
+			StartDir: "/tmp/repo",
+			GitRunner: func(args []string, cwd string, check bool) (string, error) {
+				return "", sentinel
+			},
+		},
+	}
+
+	_, err := m.findSubmoduleRoot()
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("findSubmoduleRoot() error = %v, want wrapped sentinel", err)
 	}
 }
 

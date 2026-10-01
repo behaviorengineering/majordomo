@@ -19,7 +19,7 @@
 
 ## Progress
 
-Stage 8 is complete. Pass A fixes are applied and verified. Full tests, full vet, formatting, targeted race tests, bare CLI invocation, and version output pass. The lint gate remains blocked by a toolchain incompatibility. Pass B has not started.
+Stage 8 is complete. Pass A fixes are committed as `b15ff34`, pushed, and verified. Full tests, full vet, formatting, targeted race tests, bare CLI invocation, and version output pass. The lint gate remains blocked by a toolchain incompatibility. Pass B Stage 4 is in progress.
 
 ## Findings
 
@@ -80,6 +80,15 @@ RunE: func(cmd *cobra.Command, args []string) error {
 **Recommendation:** Return a wrapped help error when rendering help fails, otherwise return `errSubcommandRequired`.
 **Rationale:** Broken output streams or help templates currently hide the real failure.
 **Status:** Fixed in Pass A.
+
+#### Medium Error Wrapping: Git discovery error dropped its cause
+
+**Location:** `internal/ops/submodule/git.go:76`.
+**Severity:** Medium.
+**Current Code:** `fmt.Errorf("could not determine submodule root: not inside a git repo")`.
+**Recommendation:** Preserve the Git runner cause with `%w`.
+**Rationale:** Callers and tests need `errors.Is` and `errors.As` to distinguish repository state from execution failures.
+**Status:** Fixed in Pass A follow-up.
 
 #### Low CLI Output: Command output write errors are discarded
 
@@ -167,6 +176,17 @@ The Git calls that intentionally use `check=false` are non-fatal probes. The hel
 **Rationale:** The workspace rule forbids U+2014 in chat, code, strings, and documentation.
 **Status:** Fixed in Pass A.
 
+#### Low Documentation: Inline comment lacks terminal punctuation
+
+**Location:** `internal/ops/submodule/git.go:38`.
+**Severity:** Low.
+**Current Code:** `parentRoot string // empty if none`.
+**Recommendation:** End the inline comment with a period.
+**Rationale:** Complete comments satisfy the repository's comment-formatting gate.
+**Status:** Fixed in Pass A follow-up.
+
+The subagent also flagged direct `fmt.Printf` calls in `sa` and `satools`. These are intentional interactive CLI output paths, including progress, dry-run, and result views, rather than service log paths. Recorded as a non-issue.
+
 ### Stage 8: Generation Gates
 
 #### Medium Outbound Resilience: External process execution has no bounded policy
@@ -196,7 +216,15 @@ The same direct execution pattern is used for Docker, Git, and static-analysis s
 
 ## Open Questions
 
-None yet.
+### Open Architecture: CLI root ownership
+
+**Location:** `internal/ops/cli/root.go:39-888`.
+**Observation:** The root command wires the full command surface and also owns OTEL configuration resolution, the agent guide template, and shared process context setup.
+**Question:** Is keeping these cross-cutting concerns in the 888-line Cobra root intentional, or should support concerns move behind smaller helpers or packages while the root remains command wiring?
+**Possible outcomes:**
+
+- If intentional: record as a non-issue with the boundary rationale.
+- If not intentional: record an architecture finding and wait for explicit fix instructions.
 
 ## Resolutions
 
@@ -212,3 +240,10 @@ None yet.
 | Em dash punctuation violated the workspace rule | Low | `internal/ops/*.go` | Replaced with colon punctuation. |
 | Process execution lacked bounded resilience | Medium | `internal/ops/command/command.go` and callers | Added deadline-aware shared runner with classified failsafe retry and circuit breaker. |
 | Bare CLI invocation lacked an agent guide | Medium | `internal/ops/cli/root.go` | Added structured guide and successful no-argument behavior. |
+| Git discovery cause was dropped | Medium | `internal/ops/submodule/git.go` | Preserved the runner error with `%w` and added an `errors.Is` test. |
+| Direct CLI output was flagged as logging | Medium | `internal/ops/sa`, `internal/ops/satools` | Non-issue: output is intentional interactive operator UI. |
+
+## Pass A Delivery
+
+- Commit: `b15ff34 fix mechanical staged review findings`.
+- Draft PR: [#82](https://github.com/behaviorengineering/majordomo/pull/82).
