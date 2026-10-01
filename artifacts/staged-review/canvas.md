@@ -15,11 +15,11 @@
 
 Pass A: mechanical review complete, commit `343ea8f`. Pass B: consultant review.
 
-Counts: critical 0, medium 0, low 0, open 0.
+Counts: critical 0, medium 0, low 0, open 1.
 
 ## Now
 
-Inspecting consultant Stage 4.
+Question: `internal/ops/process/process.go:18-31`. Is one shared subprocess boundary intentional for submodule, static-analysis, and SA-tool operations, or should each operation own a narrower process client?
 
 ## Resolutions
 
@@ -34,3 +34,7 @@ Inspecting consultant Stage 4.
 | Auto-fixed | Low | `internal/ops/cli/root.go`, `internal/ops/submodule`, `internal/ops/sa` | Comments and operator strings use compliant punctuation. |
 | Auto-fixed | Medium | `internal/ops/process` | Outbound commands use deadlines, retries, jitter, and circuit breakers. |
 | Auto-fixed | Low | `Makefile` | Added standard quality and build verbs. |
+
+## Current Consultant Question
+
+Why this matters: A shared boundary keeps retry and deadline behavior consistent, but it can also couple unrelated command types and make circuit-breaker behavior harder to reason about. The answer determines whether this package is a deliberate platform seam or an architecture finding.

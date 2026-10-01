@@ -7,7 +7,7 @@
 - [x] 1. Automated Tools — Score: 8/10
 - [x] 2. Type Safety — Score: 10/10
 - [x] 3. Error Handling — Score: 5/10
-- [ ] 4. Architecture
+- [ ] 4. Architecture — In progress
 - [ ] 5. Robustness
 - [ ] 6. Testability
 - [x] 7. Code Clarity — Score: 7/10
@@ -234,6 +234,14 @@ Add a root Makefile only if this module's operator workflow requires those share
 - `gofmt -l cmd internal` returned no files.
 
 ## Open Questions
+
+#### Open Architecture: Shared subprocess boundary
+**Location:** `internal/ops/process/process.go:18-31`
+**Observation:** The new `process.Executor` is shared by the submodule, static-analysis, and SA-tool operations. It owns context validation, retry classification, and circuit breakers keyed by executable name.
+**Question:** Is this shared subprocess package the intended service boundary for all outbound command execution, or should each operation own a narrower process client?
+**Possible outcomes:**
+- If this shared boundary is intentional: non-issue, record the rationale.
+- If narrower ownership is preferred: record an architecture finding and defer the change until explicitly requested.
 
 ## Resolutions
 
