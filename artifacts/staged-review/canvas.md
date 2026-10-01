@@ -13,7 +13,7 @@
 | 7. Code Clarity | done | 10/10 |
 | 8. Generation Gates | done | 10/10 |
 
-Pass A: mechanical stages 1, 2, 3, 7, 8, complete in commit `2e02dc9`. Pass B: consultant stages 4, 5, 6.
+Pass A: mechanical stages 1, 2, 3, 7, 8, complete in commits `2e02dc9` and `fea5944`. Pass B: consultant stages 4, 5, 6.
 
 Draft PR: https://github.com/behaviorengineering/majordomo/pull/83
 
