@@ -2,13 +2,15 @@
 package sa
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/ops/command"
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
@@ -18,6 +20,7 @@ type ToolRunner func(scriptPath, slug, image, command, repoRoot string, files []
 
 // Options configures a majordomo sa run.
 type Options struct {
+	Context     context.Context
 	ConfigDir   string
 	RepoID      string
 	RepoRoot    string
@@ -89,9 +92,12 @@ func Run(opts Options) error {
 
 	runner := opts.Runner
 	if runner == nil {
-		runner = defaultToolRunner
+		runner = func(scriptPath, slug, image, toolCommand, repoRoot string, files []string) error {
+			return defaultToolRunner(opts.Context, scriptPath, slug, image, toolCommand, repoRoot, files)
+		}
 	}
 
+	var toolErrors []error
 	for _, tool := range cfg.StaticAnalysis {
 		slug := config.ResolveSAToolSlug(tool)
 		matched := filterFiles(files, tool.Glob)
@@ -108,9 +114,10 @@ func Run(opts Options) error {
 		logf("INFO", "run %s image=%s files=%d", slug, image, len(matched))
 		if err := runner(scriptPath, slug, image, cmd, repoRoot, matched); err != nil {
 			logf("WARN", "%s: %v (continuing)", slug, err)
+			toolErrors = append(toolErrors, fmt.Errorf("%s: %w", slug, err))
 		}
 	}
-	return nil
+	return errors.Join(toolErrors...)
 }
 
 func filterFiles(files []string, glob string) []string {
@@ -127,13 +134,16 @@ func filterFiles(files []string, glob string) []string {
 	return out
 }
 
-func defaultToolRunner(scriptPath, slug, image, command, repoRoot string, files []string) error {
-	args := append([]string{slug, image, command, repoRoot}, files...)
-	cmd := exec.Command(scriptPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = repoRoot
-	if err := cmd.Run(); err != nil {
+func defaultToolRunner(ctx context.Context, scriptPath, slug, image, toolCommand, repoRoot string, files []string) error {
+	args := append([]string{slug, image, toolCommand, repoRoot}, files...)
+	stdout, stderr, err := command.Run(ctx, scriptPath, args, nil, repoRoot)
+	if err != nil {
+		if stdout != "" {
+			fmt.Print(stdout)
+		}
+		if stderr != "" {
+			fmt.Fprint(os.Stderr, stderr)
+		}
 		return fmt.Errorf("run-sa-tool.sh %s: %w", slug, err)
 	}
 	return nil
@@ -147,7 +157,10 @@ func resolveScriptsDir(repoRoot string) (string, error) {
 	if v := os.Getenv("MAJORDOMO_SCRIPTS"); v != "" {
 		candidates = append([]string{v}, candidates...)
 	}
-	wd, _ := os.Getwd()
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("get working directory: %w", err)
+	}
 	dir := wd
 	for i := 0; i < 8 && dir != ""; i++ {
 		candidates = append(candidates,
