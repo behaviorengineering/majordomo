@@ -37,3 +37,6 @@ Draft PR: [#84](https://github.com/behaviorengineering/majordomo/pull/84).
 | auto-fixed in Pass A | low | internal/ops/cli/root.go and internal/ops/submodule/*.go | User-facing strings no longer contain em dashes |
 | auto-fixed in Pass A | medium | internal/ops/sa/sa.go, internal/ops/satools/satools.go, internal/ops/submodule/git.go | Process execution uses bounded context and shared resilience seam |
 | auto-fixed in Pass A | medium | internal/ops/cli/root.go | Bare invocation now prints the agent operating guide |
+| auto-fixed follow-up | high | cmd/majordomo/main.go | Exit-code classification now stays behind the CLI package |
+| auto-fixed follow-up | medium | internal/ops/cli/root.go and pkg/review/dispatch/harness.go | Direct dispatch now has bounded context and process tracing |
+| auto-fixed follow-up | low | internal/ops/submodule/menu.go | Menu rendering now uses a typed template |

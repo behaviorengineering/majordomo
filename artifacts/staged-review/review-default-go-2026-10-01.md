@@ -188,6 +188,13 @@ Print the structured agent operating guide on bare invocation and exit successfu
 **Rationale:** Automation receives only a generic usage error and cannot discover safe inspect, dry-run, and mutating command paths from the default view.
 **Status:** fixed in Pass A
 
+#### Follow-up Mechanical Corrections
+The post-fix inspection found three omissions in the first Pass A pass. They are fixed in the follow-up commit:
+
+- `cmd/majordomo/main.go` now delegates exit-code classification to `internal/ops/cli`, so the entrypoint no longer imports the staging leaf package.
+- Direct dispatch now initializes observability, starts a process span, and uses a bounded context. The OpenCode runner now honors that context.
+- The submodule operations menu now uses a typed `text/template` view.
+
 ### Stage 4: Architecture
 
 No findings. The CLI delegates to operation packages, outbound process execution now has a shared seam, and the reviewed packages remain under the existing `internal/ops` domain.
@@ -224,4 +231,7 @@ Should a failed static-analysis run fail the review job, or is continuing to lat
 - Em dash punctuation: fixed in Pass A across the reviewed CLI and submodule messages.
 - Outbound execution: fixed in Pass A with the bounded `execx` seam, context propagation, retry classification, and a shared circuit breaker.
 - Bare invocation: fixed in Pass A with the templated agent operating guide and regression test.
+- Main exit classification: fixed in the follow-up by keeping leaf sentinel mapping inside the CLI package.
+- Direct dispatch tracing and cancellation: fixed in the follow-up with a bounded command context and process span.
+- Submodule menu layout: fixed in the follow-up with a typed template.
 
