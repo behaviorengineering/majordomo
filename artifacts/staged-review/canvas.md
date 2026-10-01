@@ -34,6 +34,7 @@ Question: `internal/ops/process/process.go:18-31`. Is one shared subprocess boun
 | Auto-fixed | Low | `internal/ops/cli/root.go`, `internal/ops/submodule`, `internal/ops/sa` | Comments and operator strings use compliant punctuation. |
 | Auto-fixed | Medium | `internal/ops/process` | Outbound commands use deadlines, retries, jitter, and circuit breakers. |
 | Auto-fixed | Low | `Makefile` | Added standard quality and build verbs. |
+| Auto-fixed | High | `cmd/majordomo/main.go` | Deferred gateway and telemetry cleanup now runs before exit codes are returned to the OS. |
 
 ## Current Consultant Question
 

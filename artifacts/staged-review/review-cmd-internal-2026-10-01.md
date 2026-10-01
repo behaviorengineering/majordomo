@@ -120,6 +120,24 @@ Handle each probe error explicitly, using safe defaults only where the operation
 **Rationale:** Git failures can be mistaken for a clean tree, an untracked submodule, or a missing remote branch.
 **Status:** Fixed in Pass A.
 
+#### High Error Handling: `os.Exit` bypasses deferred cleanup
+**Location:** `cmd/majordomo/main.go:16-35`
+**Severity:** High
+
+**Current Code:**
+```go
+if err := cli.NewRoot().Execute(); err != nil {
+    ...
+    os.Exit(1)
+}
+```
+
+**Recommendation:**
+Move command execution and deferred shutdown into a function that returns an exit code, then call `os.Exit` only from `main` after that function returns.
+
+**Rationale:** `os.Exit` skips deferred functions, so failed commands could leave gateway and telemetry resources unflushed.
+**Status:** Fixed in Pass A.
+
 #### Low Error Handling: Worktree cleanup failure is invisible
 **Location:** `internal/ops/submodule/commands.go:293-298`
 **Severity:** Low
@@ -232,6 +250,7 @@ Add a root Makefile only if this module's operator workflow requires those share
 - `make vet` passed.
 - `make lint` passed with golangci-lint v2.14.0 built using Go 1.27.
 - `gofmt -l cmd internal` returned no files.
+- Follow-up target tests, vet, and golangci-lint passed after the deferred-cleanup fix.
 
 ## Open Questions
 
