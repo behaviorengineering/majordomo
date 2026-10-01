@@ -4,7 +4,7 @@
 - Stage 1: done, score 9/10
 - Stage 2: done, score 10/10
 - Stage 3: done, score 7/10
-- Stage 4: pending consultant
+- Stage 4: in progress, waiting on consultant reply
 - Stage 5: pending consultant
 - Stage 6: pending consultant
 - Stage 7: done, score 8/10
@@ -16,7 +16,9 @@
 - Draft PR/MR: https://github.com/behaviorengineering/majordomo/pull/92
 
 ## Now
-Pass A commit `00a8f46` is complete and pushed. Consultant Stage 4 inspection is next.
+`internal/ops/cli/root.go:39-850`: Is keeping the root command and roughly 15 command constructors in one CLI registry file intentional, or should wiring split by lifecycle or domain?
+
+Why this matters: A single registry can be a clear composition boundary, but it can also become a high-coupling change hotspot. Splitting only wiring can improve review and test focus without moving business logic into the CLI.
 
 ## Resolutions
 | Status | Severity | Location | Outcome |
@@ -30,3 +32,5 @@ Pass A commit `00a8f46` is complete and pushed. Consultant Stage 4 inspection is
 | fixed in Pass A | low | CLI and submodule text | Replaced em dashes and completed comments |
 | fixed in Pass A | medium | `internal/ops/{satools,sa,submodule}` | Added deadline-checked failsafe process execution |
 | fixed in Pass A | medium | `internal/ops/cli/root.go:48` | Added an agent-ready bare invocation guide |
+| fixed in Pass A follow-up | high | `cmd/majordomo/main.go` | Moved exit-code selection behind deferred cleanup |
+| fixed in Pass A follow-up | high | `internal/ops/submodule` | Preserved Git errors and classified expected no-op cases |

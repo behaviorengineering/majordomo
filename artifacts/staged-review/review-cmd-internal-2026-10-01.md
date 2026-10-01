@@ -7,7 +7,7 @@
 - [x] 1. Automated Tools, score 9/10, done
 - [x] 2. Type Safety, score 10/10, done
 - [x] 3. Error Handling, score 7/10, done
-- [ ] 4. Architecture
+- [ ] 4. Architecture, in progress
 - [ ] 5. Robustness
 - [ ] 6. Testability
 - [x] 7. Code Clarity, score 8/10, done
@@ -76,6 +76,33 @@ _, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
 **Recommendation:** Use `RunE` where needed and return output errors, wrapping them with the command operation.
 **Rationale:** Broken pipes and unavailable output writers currently produce a false-success command.
 **Status:** fixed in Pass A
+
+#### High Error Handling: Process exit bypasses deferred cleanup
+**Location:** `cmd/majordomo/main.go:17-39`
+**Severity:** High
+**Current Code:**
+```go
+if err := cli.NewRoot().ExecuteContext(runCtx); err != nil {
+	...
+	os.Exit(1)
+}
+```
+**Recommendation:** Return an exit code from a helper that owns the defers, then call `os.Exit` only after that helper returns.
+**Rationale:** `os.Exit` skips deferred gateway shutdown and observability flush, so failed commands can lose telemetry and cleanup.
+**Status:** fixed in Pass A follow-up
+
+#### High Error Handling: Git command failures were hidden by optional checks
+**Location:** `internal/ops/submodule/git.go:90-239`; `internal/ops/submodule/commands.go:105-319`
+**Severity:** High
+**Current Code:**
+```go
+if !check {
+	return out, nil
+}
+```
+**Recommendation:** Preserve command errors, classify only known detached, missing-reference, and no-op commit cases, and propagate all other failures.
+**Rationale:** A failed status, commit, remote lookup, or parent-gitlink check could previously look like a clean or successful operation.
+**Status:** fixed in Pass A follow-up
 
 #### Low Test Setup: Test filesystem errors are discarded
 **Location:** `internal/ops/satools/satools_test.go:12-14,30-32,42-43`; `internal/ops/sa/sa_test.go:12-14,31-32`; `internal/ops/submodule/submodule_test.go:62`
@@ -148,6 +175,17 @@ RunE: func(cmd *cobra.Command, args []string) error {
 
 ## Open Questions
 
+#### Open Architecture: Single CLI registry file
+**Location:** `internal/ops/cli/root.go:39-850`
+**Observation:** The CLI package keeps the root command and constructors for roughly
+15 commands in one file and imports many service packages, while the individual
+handlers mostly delegate to those packages.
+**Question:** Is keeping this command registry in one file intentional, or should
+the command constructors split by lifecycle or domain?
+**Possible outcomes:**
+- If intentional: non-issue, retain the registry as the CLI composition boundary.
+- If not intentional: Medium architecture finding, split command wiring without moving business logic into the CLI.
+
 ## Resolutions
 
 | Finding | Severity | Location | Outcome |
@@ -161,6 +199,8 @@ RunE: func(cmd *cobra.Command, args []string) error {
 | Em dashes and incomplete comments | Low | CLI and submodule operations | Fixed in Pass A with ASCII punctuation and complete comments. |
 | Unbounded process execution | Medium | `internal/ops/{satools,sa,submodule}` | Fixed in Pass A with deadline-checked `executil`, failsafe-go retry, and circuit-breaker policies. |
 | Bare CLI lacks agent guide | Medium | `internal/ops/cli/root.go` | Fixed in Pass A with a successful bare-invocation operating guide and regression test. |
+| Deferred cleanup bypassed by `os.Exit` | High | `cmd/majordomo/main.go` | Fixed in Pass A follow-up by returning the exit code after cleanup. |
+| Git errors hidden by `check=false` | High | `internal/ops/submodule` | Fixed in Pass A follow-up by preserving errors and classifying expected no-op cases. |
 
 ## Pass A Verification
 
@@ -175,6 +215,8 @@ RunE: func(cmd *cobra.Command, args []string) error {
 ## Pass A Commit
 
 `00a8f46 fix: apply mechanical staged review findings`
+
+Follow-up commit: `18c2eae fix: preserve cleanup and Git errors`
 
 ## Draft Pull Request
 https://github.com/behaviorengineering/majordomo/pull/92
