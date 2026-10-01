@@ -16,16 +16,34 @@ import (
 )
 
 func main() {
+	runCtx, runCancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer runCancel()
+	root := cli.NewRoot()
+	root.SetContext(runCtx)
+
 	defer func() {
 		aigateway.ShutdownGlobal()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_ = observability.Flush(ctx)
-		_ = observability.Shutdown(ctx)
+		if err := observability.Flush(shutdownCtx); err != nil {
+			if _, writeErr := fmt.Fprintf(os.Stderr, "observability flush: %v\n", err); writeErr != nil {
+				return
+			}
+		}
+		if err := observability.Shutdown(shutdownCtx); err != nil {
+			if _, writeErr := fmt.Fprintf(os.Stderr, "observability shutdown: %v\n", err); writeErr != nil {
+				return
+			}
+		}
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := root.ExecuteContext(runCtx); err != nil {
+		if _, writeErr := fmt.Fprintln(os.Stderr, err); writeErr != nil {
+			os.Exit(1)
+		}
+		if _, writeErr := fmt.Fprintln(os.Stderr, root.UsageString()); writeErr != nil {
+			os.Exit(1)
+		}
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)
 		}
