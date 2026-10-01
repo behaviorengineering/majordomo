@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -35,8 +37,9 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty if none.
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
@@ -59,7 +62,11 @@ func Run(opts Options) error {
 			return m.promptOffBranchContext(parentBranch)
 		}
 	}
-	return m.opsMenuLoop()
+	err = m.opsMenuLoop()
+	if m.outputErr != nil {
+		return m.outputErr
+	}
+	return err
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -73,7 +80,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: not inside a git repo")
 	}
 	return out, nil
 }
@@ -176,7 +183,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled: local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -216,27 +223,30 @@ func (m *manager) remoteBranches() ([]string, error) {
 }
 
 func (m *manager) git(args []string, cwd string, check bool) (string, error) {
+	if m.outputErr != nil {
+		return "", m.outputErr
+	}
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	result, err := process.Default().Run(m.opts.Context, "git", args, nil, cwd)
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(result.Stderr))
 	}
 	return out, nil
 }
 
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(m.out(), format, args...); err != nil {
+		m.outputErr = fmt.Errorf("write submodule output: %w", err)
+	}
 }
 
 func (m *manager) out() io.Writer {
@@ -251,6 +261,9 @@ func (m *manager) prompt(p string) (string, error) {
 		return m.opts.Prompt(p)
 	}
 	m.printf("%s", p)
+	if m.outputErr != nil {
+		return "", m.outputErr
+	}
 	in := m.opts.In
 	if in == nil {
 		in = os.Stdin

@@ -1,11 +1,26 @@
 package cli_test
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/behaviorengineering/majordomo/internal/ops/cli"
 )
+
+func TestBareInvocationPrintsAgentGuide(t *testing.T) {
+	var out bytes.Buffer
+	root := cli.NewRoot()
+	root.SetArgs([]string{})
+	root.SetOut(&out)
+
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Agent guide:") {
+		t.Fatalf("bare invocation output:\n%s", out.String())
+	}
+}
 
 func TestPublicCLIOmitsDigestCacheCommands(t *testing.T) {
 	root := cli.NewRoot()
