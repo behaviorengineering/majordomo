@@ -16,6 +16,10 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	defer func() {
 		aigateway.ShutdownGlobal()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -27,8 +31,9 @@ func main() {
 	if err := cli.NewRoot().Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		if errors.Is(err, staging.ErrNothingToReview) {
-			os.Exit(2)
+			return 2
 		}
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
