@@ -1,17 +1,32 @@
 package sa
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
+func mustMkdir(t *testing.T, path string, perm os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(path, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWrite(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunFiltersByGlob(t *testing.T) {
 	dir := t.TempDir()
 	cfgDir := filepath.Join(dir, "cfg")
-	_ = os.MkdirAll(cfgDir, 0o755)
-	_ = os.WriteFile(filepath.Join(cfgDir, "_defaults.yaml"), []byte("{}\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(cfgDir, "demo.yaml"), []byte(`
+	mustMkdir(t, cfgDir, 0o755)
+	mustWrite(t, filepath.Join(cfgDir, "_defaults.yaml"), []byte("{}\n"), 0o644)
+	mustWrite(t, filepath.Join(cfgDir, "demo.yaml"), []byte(`
 scm: github
 repository:
   owner: acme
@@ -28,11 +43,12 @@ staticAnalysis:
 `), 0o644)
 
 	scripts := filepath.Join(dir, "scripts")
-	_ = os.MkdirAll(scripts, 0o755)
-	_ = os.WriteFile(filepath.Join(scripts, "run-sa-tool.sh"), []byte("#!/bin/true\n"), 0o755)
+	mustMkdir(t, scripts, 0o755)
+	mustWrite(t, filepath.Join(scripts, "run-sa-tool.sh"), []byte("#!/bin/true\n"), 0o755)
 
 	var ran []string
 	err := Run(Options{
+		Context:    context.Background(),
 		ConfigDir:  cfgDir,
 		RepoID:     "demo",
 		BaseBranch: "main",
@@ -43,7 +59,7 @@ staticAnalysis:
 			"README.md",
 			"web/app.js",
 		},
-		Runner: func(scriptPath, slug, image, command, repoRoot string, files []string) error {
+		Runner: func(_ context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error {
 			ran = append(ran, slug)
 			switch slug {
 			case "ruff":

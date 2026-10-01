@@ -1,22 +1,42 @@
 package submodule
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
+	"text/template"
 )
 
-func (m *manager) buildOpsMenu(currentBranch string) string {
-	header := fmt.Sprintf(
-		"Submodule Manager\n-----------------\nSubmodule : %s\nBranch    : %s",
-		m.submoduleName, currentBranch,
-	)
-	items := []string{
-		"1. Update to latest (pull current branch)",
-		"2. Switch to a different branch",
-		"3. Pin to current commit",
-		"q. Quit",
+const opsMenuTemplate = `Submodule Manager
+-----------------
+Submodule : {{.Submodule}}
+Branch    : {{.Branch}}
+
+{{range .Items}}{{.}}
+{{end}}`
+
+var parsedOpsMenuTemplate = template.Must(template.New("submodule-operations").Parse(opsMenuTemplate))
+
+func (m *manager) buildOpsMenu(currentBranch string) (string, error) {
+	data := struct {
+		Submodule string
+		Branch    string
+		Items     []string
+	}{
+		Submodule: m.submoduleName,
+		Branch:    currentBranch,
+		Items: []string{
+			"1. Update to latest (pull current branch)",
+			"2. Switch to a different branch",
+			"3. Pin to current commit",
+			"q. Quit",
+		},
 	}
-	return header + "\n\n" + strings.Join(items, "\n")
+	var out bytes.Buffer
+	if err := parsedOpsMenuTemplate.Execute(&out, data); err != nil {
+		return "", fmt.Errorf("render submodule menu: %w", err)
+	}
+	return strings.TrimRight(out.String(), "\n"), nil
 }
 
 func (m *manager) opsMenuLoop() error {
@@ -25,7 +45,11 @@ func (m *manager) opsMenuLoop() error {
 		if err != nil {
 			return err
 		}
-		m.printf("\n%s\n", m.buildOpsMenu(currentBranch))
+		menu, err := m.buildOpsMenu(currentBranch)
+		if err != nil {
+			return err
+		}
+		m.printf("\n%s\n", menu)
 		choice, err := m.readKey("Choice: ")
 		if err != nil {
 			return err
