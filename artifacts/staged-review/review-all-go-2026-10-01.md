@@ -2,6 +2,8 @@
 **Date:** 2026-10-01
 **Target:** `cmd/**/*.go` and `internal/**/*.go` (no diff against `origin/main`)
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8. Pass B: 4, 5, 6.
+**Pass A Commit:** `8b77aa5`
+**Draft PR:** https://github.com/behaviorengineering/majordomo/pull/77
 
 ## Stages
 - [x] 1. Automated Tools — Score: 9/10

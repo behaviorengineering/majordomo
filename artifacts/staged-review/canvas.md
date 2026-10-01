@@ -16,6 +16,7 @@ Pass A: mechanical findings fixed and verified. Pass B: consultant stages
 follow the Pass A commit and draft pull request.
 
 Counts: critical 0, medium 0, low 1, open 0.
+Draft PR: https://github.com/behaviorengineering/majordomo/pull/77
 
 ## Now
 Commit and push the Pass A fixes.
