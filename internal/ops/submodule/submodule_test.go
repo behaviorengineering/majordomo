@@ -1,7 +1,6 @@
 package submodule
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -59,5 +58,4 @@ func TestBuildOpsMenu(t *testing.T) {
 	if !strings.Contains(menu, "Submodule : .majordomo") || !strings.Contains(menu, "1. Update") {
 		t.Fatalf("menu:\n%s", menu)
 	}
-	_ = filepath.Separator
 }
