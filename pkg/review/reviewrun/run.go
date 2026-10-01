@@ -22,6 +22,7 @@ import (
 
 // Options configures majordomo run review.
 type Options struct {
+	Context     context.Context
 	ConfigDir   string
 	RepoID      string
 	PRNumber    string
@@ -237,6 +238,7 @@ func runClone(opts Options, token, scm, cloneURL string) error {
 func runSA(opts Options) error {
 	if opts.SA != nil {
 		return opts.SA(sa.Options{
+			Context:    opts.Context,
 			ConfigDir:  opts.ConfigDir,
 			RepoID:     opts.RepoID,
 			RepoRoot:   opts.WorkDir,
@@ -249,6 +251,7 @@ func runSA(opts Options) error {
 		return nil
 	}
 	return sa.Run(sa.Options{
+		Context:    opts.Context,
 		ConfigDir:  opts.ConfigDir,
 		RepoID:     opts.RepoID,
 		RepoRoot:   opts.WorkDir,

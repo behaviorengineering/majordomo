@@ -2,13 +2,14 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/execx"
 )
 
 // Options configures a local SA tool image build run.
@@ -16,6 +17,7 @@ type Options struct {
 	DryRun  bool
 	Verbose bool
 	Corp    bool
+	Context context.Context
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
 	// Empty → discover from cwd.
 	RepoRoot string
@@ -66,6 +68,12 @@ func Run(opts Options) error {
 	buildSh, err := findBuildScript(repoRoot, workspace)
 	if err != nil {
 		return err
+	}
+	if opts.Context == nil {
+		return fmt.Errorf("build SA tools requires a context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("build SA tools requires a deadline")
 	}
 
 	results := map[string]bool{}
@@ -214,27 +222,29 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 		env = unsetEnv(env, "PACKAGE_REGISTRY_HOST")
 	}
 	args := []string{buildSh, "local", "sa-" + tool, "local-test", dockerfileArg}
-	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace)
+	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace, false)
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagStdout, tagStderr, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), workspace, false)
+		if tagErr != nil {
+			tagOutput := strings.TrimRight(tagStdout+tagStderr, "\n")
+			if tagOutput != "" {
+				lines = append(lines, strings.Split(tagOutput, "\n")...)
+			}
+			lines = append(lines, fmt.Sprintf("docker tag %s failed: %v", tag, tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
 
-func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
+func runCmd(opts Options, name string, args, env []string, dir string, networked bool) (string, string, error) {
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	result, err := execx.Run(opts.Context, name, args, env, dir, networked)
+	return result.Stdout, result.Stderr, err
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
