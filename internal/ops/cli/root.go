@@ -32,9 +32,6 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// errSubcommandRequired is returned when the root is invoked with no subcommand.
-var errSubcommandRequired = fmt.Errorf("subcommand required")
-
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
@@ -44,11 +41,10 @@ func NewRoot() *cobra.Command {
 
 Control-plane CLI for PR/MR review: poll, prep, orchestrate, publish, and cache.
 See docs/PLAN-control-tower-github-go.md.`,
-		SilenceUsage:  true,
+		SilenceUsage:  false,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			return errSubcommandRequired
+			return printAgentGuide(cmd)
 		},
 	}
 
@@ -74,6 +70,33 @@ func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 	if err := cmd.MarkFlagRequired(name); err != nil {
 		panic(fmt.Errorf("mark flag %q required: %w", name, err))
 	}
+}
+
+func printAgentGuide(cmd *cobra.Command) error {
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), `Majordomo %s
+Purpose: repository operations for evolving software.
+
+Role and boundaries:
+  Control-plane CLI for inspection, review orchestration, and forge publication.
+  Review changes before mutating remote state.
+
+Agent guide:
+  Read AGENTS.md and the relevant ai-copilots/ skills before changing code.
+  Use dry-run modes and explicit publish commands for remote mutations.
+
+Lifecycle commands:
+  inspect: poll, prep, status, cache, context, and report.
+  plan: dispatch, orchestrate, run review, and build-sa-tools --dry-run.
+  execute: publish, cache push, and submodule operations.
+  version: print the build identity without config or network access.
+
+Automation rules:
+  Prefer --dry-run and headless flags where available.
+  Keep publish disabled until the review output is verified.
+
+Run "majordomo help" for command syntax.
+`, Version)
+	return err
 }
 
 // resolveOTELConfig loads observability from central-config when available, then applies env overrides.
@@ -109,8 +132,9 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
+			return err
 		},
 	}
 }
@@ -392,6 +416,7 @@ func newSACmd() *cobra.Command {
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return sa.Run(sa.Options{
+				Context:     cmd.Context(),
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
@@ -499,8 +524,8 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			return err
 		},
 	})
 	var pr, sha string
@@ -821,7 +846,12 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			return satools.Run(satools.Options{
+				Context: cmd.Context(),
+				DryRun:  dryRun,
+				Verbose: verbose,
+				Corp:    corp,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -835,7 +865,7 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			return submodule.Run(submodule.Options{Context: cmd.Context()})
 		},
 	}
 }

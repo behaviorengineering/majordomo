@@ -23,12 +23,12 @@ func (m *manager) opsMenuLoop() error {
 	for {
 		currentBranch, err := m.currentBranch(m.submoduleRoot)
 		if err != nil {
-			return err
+			return fmt.Errorf("submodule.currentBranch: %w", err)
 		}
 		m.printf("\n%s\n", m.buildOpsMenu(currentBranch))
 		choice, err := m.readKey("Choice: ")
 		if err != nil {
-			return err
+			return fmt.Errorf("submodule.readKey: %w", err)
 		}
 		var changed bool
 		switch choice {
@@ -45,15 +45,18 @@ func (m *manager) opsMenuLoop() error {
 			continue
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("submodule.operation: %w", err)
 		}
 		if changed && m.parentRoot != "" {
 			raw, err := m.prompt("\nPush to origin and exit? (y/N): ")
 			if err != nil {
-				return err
+				return fmt.Errorf("submodule.pushPrompt: %w", err)
 			}
 			if strings.ToLower(strings.TrimSpace(raw)) == "y" {
-				return m.pushToOrigin()
+				if err := m.pushToOrigin(); err != nil {
+					return fmt.Errorf("submodule.pushToOrigin: %w", err)
+				}
+				return nil
 			}
 		}
 	}
@@ -71,14 +74,17 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 	for {
 		choice, err := m.readKey("\nContext: ")
 		if err != nil {
-			return err
+			return fmt.Errorf("submodule.readKey: %w", err)
 		}
 		switch choice {
 		case "q":
 			return nil
 		case "1":
 			_, err := m.cmdUpdateViaWorktree()
-			return err
+			if err != nil {
+				return fmt.Errorf("submodule.updateViaWorktree: %w", err)
+			}
+			return nil
 		case "2":
 			return m.opsMenuLoop()
 		default:
