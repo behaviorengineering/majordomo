@@ -9,7 +9,7 @@
 - [x] 1. Automated Tools — Score: 9/10
 - [x] 2. Type Safety — Score: 10/10
 - [x] 3. Error Handling — Score: 7/10
-- [ ] 4. Architecture
+- [ ] 4. Architecture — in progress
 - [ ] 5. Robustness
 - [ ] 6. Testability
 - [x] 7. Code Clarity — Score: 9/10
@@ -155,6 +155,18 @@ spurious failure when no mutation was requested.
 **Status:** fixed in Pass A
 
 ## Open Questions
+
+#### Open Architecture: Submodule manager mixes UI, Git, and mutation workflows
+**Location:** `internal/ops/submodule/git.go:37`
+**Observation:** `manager` has 22 methods spanning prompt and output handling,
+Git process execution, repository discovery, branch selection, worktree
+cleanup, and parent pointer commits.
+**Question:** Is keeping these concerns on one interactive facade intentional,
+or should the UI/menu, Git adapter, and mutation workflows split?
+**Why this matters:** Splitting the seams would let Git behavior and mutation
+failures be tested without prompt state. Keeping the facade is simpler if this
+package is intentionally a small, single-use CLI boundary.
+**Status:** waiting on consultant
 
 ## Resolutions
 | Finding | Outcome |
