@@ -4,7 +4,8 @@
 **Selected stages:** Pass A: 1, 2, 3, 7, 8; Pass B: 4, 5, 6
 **Stage mapping:** legacy 7 = current Stage 4 (Code Clarity); legacy 8 = current Stage 5 (Generation Gates); consultant 4 = A, 5 = B, 6 = C
 **Pass A commit:** `2aa433c`
-**Pass A status:** committed; push and draft PR pending
+**Pass A status:** committed and pushed
+**Draft PR:** https://github.com/behaviorengineering/majordomo/pull/90
 
 ## Stages
 

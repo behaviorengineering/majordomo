@@ -13,7 +13,8 @@
 | 5. Robustness | Pass B | pending | - |
 | 6. Testability | Pass B | pending | - |
 
-Pass A mechanical fixes: committed as `2aa433c`, pending push and draft PR.
+Pass A mechanical fixes: committed as `2aa433c` and pushed.
+Draft PR: https://github.com/behaviorengineering/majordomo/pull/90
 Counts: critical 0, medium 1, low 0, open 1.
 
 ## Now
