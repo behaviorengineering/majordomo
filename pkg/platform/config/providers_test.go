@@ -116,6 +116,24 @@ func TestGetAIProviderExpandsEnv(t *testing.T) {
 	}
 }
 
+func TestExpandEnvVarsDefault(t *testing.T) {
+	t.Setenv("POLY_TEST_BASE", "")
+	got := expandEnvVars("${POLY_TEST_BASE:-http://127.0.0.1:1320}/v1")
+	if got != "http://127.0.0.1:1320/v1" {
+		t.Fatalf("empty env default: %q", got)
+	}
+	t.Setenv("POLY_TEST_BASE", "https://polypus.example.ts.net")
+	got = expandEnvVars("${POLY_TEST_BASE:-http://127.0.0.1:1320}/v1")
+	if got != "https://polypus.example.ts.net/v1" {
+		t.Fatalf("set env: %q", got)
+	}
+	t.Setenv("POLY_TEST_PLAIN", "")
+	got = expandEnvVars("${POLY_TEST_PLAIN}")
+	if got != "" {
+		t.Fatalf("plain empty: %q", got)
+	}
+}
+
 func TestGetAIProviderFailsUnresolvedKey(t *testing.T) {
 	t.Setenv("MISSING_PROVIDER_KEY", "")
 	cfg := RepoConfig{
@@ -138,20 +156,23 @@ func TestJobForTask(t *testing.T) {
 	if JobForTask("bootstrap_story") != JobContextDigest {
 		t.Fatal("bootstrap")
 	}
+	if JobForTask("typology_package_inspector") != JobContextDigest {
+		t.Fatal("typology_package_inspector")
+	}
+	if JobForTask("typology_slice_objective_ledger_writer") != JobContextDigest {
+		t.Fatal("typology_slice_objective_ledger_writer")
+	}
+	if JobForTask("typology_slice_merge_proposer") != JobContextDigest {
+		t.Fatal("typology_slice_merge_proposer")
+	}
+	if JobForTask("typology_slice_catalog_assembler") != JobContextDigest {
+		t.Fatal("typology_slice_catalog_assembler")
+	}
+	if JobForTask("typology_slice_merge_challenger") != JobContextDigest {
+		t.Fatal("typology_slice_merge_challenger")
+	}
 	if JobForTask("typology_inspect") != JobContextDigest {
-		t.Fatal("typology_inspect")
-	}
-	if JobForTask("typology_slice_meaning") != JobContextDigest {
-		t.Fatal("typology_slice_meaning")
-	}
-	if JobForTask("typology_slice_grouping") != JobContextDigest {
-		t.Fatal("typology_slice_grouping")
-	}
-	if JobForTask("typology_slice_catalog") != JobContextDigest {
-		t.Fatal("typology_slice_catalog")
-	}
-	if JobForTask("typology_slice_grouping_audit") != JobContextDigest {
-		t.Fatal("typology_slice_grouping_audit")
+		t.Fatal("deprecated typology_inspect alias")
 	}
 	if JobForTask("typology_cluster") != "" {
 		t.Fatal("old typology_cluster must not map")

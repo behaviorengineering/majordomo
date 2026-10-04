@@ -8,6 +8,7 @@ This module is the Majordomo control-plane library and CLI. Humans read [README.
 2. [ai-copilots/skills/majordomo-inference-cache/SKILL.md](ai-copilots/skills/majordomo-inference-cache/SKILL.md)
 3. [ai-copilots/skills/majordomo-local-seed/SKILL.md](ai-copilots/skills/majordomo-local-seed/SKILL.md)
 4. [ai-copilots/skills/majordomo-capability-claims/SKILL.md](ai-copilots/skills/majordomo-capability-claims/SKILL.md)
+5. [ai-copilots/skills/majordomo-operator-config/SKILL.md](ai-copilots/skills/majordomo-operator-config/SKILL.md) when changing XDG operator config, `majordomo init`, or local secret resolution
 
 ## Wire host discovery
 
