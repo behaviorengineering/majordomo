@@ -17,8 +17,10 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 )
 
-const Marker = "<!-- majordomo-review -->"
-const legacyMarker = "<!-- copilot-review -->"
+const (
+	Marker       = "<!-- majordomo-review -->"
+	legacyMarker = "<!-- copilot-review -->"
+)
 
 // Mode is how the summary is published.
 type Mode string
@@ -30,7 +32,7 @@ const (
 )
 
 // CLIRunner executes an external command (tests inject fakes).
-// stdout is captured; stderr is inherited unless the runner redirects it.
+// Stdout is captured; stderr is inherited unless the runner redirects it.
 type CLIRunner func(name string, args []string, env []string) (stdout string, err error)
 
 // Options configures a publish run.

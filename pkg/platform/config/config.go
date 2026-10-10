@@ -164,6 +164,8 @@ func (o *OrderedRouting) UnmarshalYAML(value *yaml.Node) error {
 		key := keyNode.Value
 		var entry PipelineRoutingEntry
 		switch valNode.Kind {
+		case yaml.DocumentNode, yaml.ScalarNode, yaml.AliasNode:
+			continue
 		case yaml.SequenceNode:
 			var globs []string
 			if err := valNode.Decode(&globs); err != nil {

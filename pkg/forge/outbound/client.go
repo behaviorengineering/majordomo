@@ -45,7 +45,7 @@ func Client(timeout time.Duration) *http.Client {
 }
 
 // DoWithRetry performs req with exponential backoff on 429/5xx and transport errors.
-// req.Context() MUST have a deadline; otherwise ErrMissingDeadline is returned
+// Req.Context() MUST have a deadline; otherwise ErrMissingDeadline is returned
 // and no network call is made.
 func DoWithRetry(client *http.Client, req *http.Request, maxAttempts int) (*http.Response, error) {
 	if req == nil {
@@ -88,7 +88,7 @@ func DoWithRetry(client *http.Client, req *http.Request, maxAttempts int) (*http
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if _, err := io.Copy(io.Discard, resp.Body); err != nil {
 				if closeErr := resp.Body.Close(); closeErr != nil {
-					return nil, fmt.Errorf("discard retry response body: %w; close body: %v", err, closeErr)
+					return nil, fmt.Errorf("discard retry response body: %w; close body: %w", err, closeErr)
 				}
 				return nil, fmt.Errorf("discard retry response body: %w", err)
 			}

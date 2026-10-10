@@ -266,7 +266,7 @@ func (rt *Runtime) Evaluate(
 }
 
 // discardEventChannel returns a stream sink so EvaluateWorkflow can emit start/end
-// events without a TUI consumer. stop closes the channel and waits for the drain.
+// events without a TUI consumer. Stop closes the channel and waits for the drain.
 func discardEventChannel() (streaming.EventChannel, func()) {
 	ch := make(streaming.EventChannel, 64)
 	done := make(chan struct{})

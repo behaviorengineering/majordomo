@@ -14,7 +14,7 @@ type groundingPack struct {
 }
 
 // GroundingPaths returns absolute paths to staged grounding files for a batch manifest.
-// skillDir is where the agent reads manifest/SKILL.md (batch dir or batch/<skill>).
+// SkillDir is where the agent reads manifest/SKILL.md (batch dir or batch/<skill>).
 func GroundingPaths(batchDir, skillDir string) ([]string, error) {
 	batchDir = filepath.Clean(batchDir)
 	packs, err := loadGroundingPacks(batchDir)
@@ -58,6 +58,8 @@ func GroundingSkillDir(stagingDir string, mode Mode) (string, error) {
 		return "", nil
 	case ModeTechnicalDeep:
 		return stagingDir, nil
+	case ModeFiles, ModeSummary, ModeTechnical:
+		break
 	}
 	skill, err := manifestSkill(stagingDir)
 	if err != nil {

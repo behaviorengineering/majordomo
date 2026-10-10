@@ -84,7 +84,7 @@ var StoryReadingOrder = []string{
 }
 
 // TypologyReadingOrder is the guided briefing sequence under evidence/typology/.
-// pr_priority.md is optional and is skipped when absent.
+// Pr_priority.md is optional and is skipped when absent.
 // Machine YAML evidence lives in TypologyAppendixFiles (not nav-bannered).
 var TypologyReadingOrder = []string{
 	TypologyReadingIndexPath,

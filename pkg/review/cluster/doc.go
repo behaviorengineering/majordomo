@@ -9,7 +9,10 @@ import (
 	"strings"
 )
 
-const minTermLen = 3
+const (
+	minTermLen  = 3
+	extMarkdown = ".md"
+)
 
 var (
 	inlineLinkRE = regexp.MustCompile(`(!?)\[([^\]]*)\]\(([^)]+)\)`)
@@ -173,7 +176,7 @@ func ClusterDocs(changedFiles []string, repoRoot string) [][]string {
 		if err != nil || info.IsDir() {
 			continue
 		}
-		if strings.ToLower(filepath.Ext(path)) != ".md" {
+		if strings.ToLower(filepath.Ext(path)) != extMarkdown {
 			continue
 		}
 
@@ -271,7 +274,7 @@ func ReverseLinks(changedFiles []string, repoRoot string) map[string][]string {
 			return nil
 		}
 
-		if strings.ToLower(filepath.Ext(path)) != ".md" {
+		if strings.ToLower(filepath.Ext(path)) != extMarkdown {
 			return nil
 		}
 		if docPathExcluded(strings.Split(path, string(filepath.Separator))) {
@@ -313,7 +316,7 @@ func BuildCorpusIndex(repoRoot string) []map[string]any {
 			}
 			return nil
 		}
-		if strings.ToLower(filepath.Ext(path)) != ".md" {
+		if strings.ToLower(filepath.Ext(path)) != extMarkdown {
 			return nil
 		}
 		if docPathExcluded(strings.Split(path, string(filepath.Separator))) {

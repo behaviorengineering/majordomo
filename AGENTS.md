@@ -22,3 +22,12 @@ Resolve the module root when this library is only a Go dependency:
 
 MUST keep host links pointing at this module's `ai-copilots/` tree.
 MUST NOT copy skill bodies into the host unless links fail and the user approves.
+
+## Operator verbs
+
+From the module root (`GOWORK=off`):
+
+```bash
+go tool task --list
+go tool task format lint vet test build hooks-install
+```

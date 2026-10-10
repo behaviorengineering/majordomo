@@ -57,6 +57,8 @@ func ApplyComments(comments []Comment, prefix string) (rejectReason string, done
 	for _, c := range comments {
 		p := ParseComment(c.Body, prefix)
 		switch p.Action {
+		case ActionIgnore:
+			continue
 		case ActionReject:
 			if strings.TrimSpace(p.Payload) != "" {
 				rejectReason = p.Payload

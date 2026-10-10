@@ -25,7 +25,7 @@ var orchestrateRank = map[string]int{
 }
 
 // NormalizeUntil validates --until for orchestrate.
-// Empty and "publish" mean run through report. clone/sa belong to run review.
+// Empty and "publish" mean run through report. Clone/sa belong to run review.
 func NormalizeUntil(s string) (string, error) {
 	s = strings.ToLower(strings.TrimSpace(s))
 	switch s {

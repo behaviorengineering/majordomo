@@ -151,7 +151,7 @@ func (c RepoConfig) GetModuleProvider(job, module string) (AIProviderConfig, err
 }
 
 // ResolveTaskProvider returns the configured provider for a generator task.
-// ok is false when the task has no job_configs entry (caller may use gateway fallback).
+// Ok is false when the task has no job_configs entry (caller may use gateway fallback).
 func (c RepoConfig) ResolveTaskProvider(task string) (AIProviderConfig, bool, error) {
 	task = strings.TrimSpace(task)
 	job := JobForTask(task)

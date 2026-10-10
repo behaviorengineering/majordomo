@@ -270,6 +270,8 @@ func statusCodeString(code codes.Code) string {
 		return "OK"
 	case codes.Error:
 		return "ERROR"
+	case codes.Unset:
+		return "UNSET"
 	default:
 		return "UNSET"
 	}

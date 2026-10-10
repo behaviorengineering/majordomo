@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const extPython = ".py"
+
 var (
 	jsExts = map[string]struct{}{
 		".js": {}, ".jsx": {}, ".ts": {}, ".tsx": {}, ".mjs": {}, ".cjs": {},
@@ -204,7 +206,7 @@ func ClusterFiles(changedFiles []string, repoRoot string) [][]string {
 		suffix := strings.ToLower(filepath.Ext(path))
 		var neighbours map[string]struct{}
 		switch {
-		case suffix == ".py":
+		case suffix == extPython:
 			neighbours = parsePythonImports(path, repoRoot, changed)
 		case isJSExt(suffix):
 			neighbours = parseJSImports(path, repoRoot, changed)

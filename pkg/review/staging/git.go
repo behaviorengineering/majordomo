@@ -3,6 +3,7 @@ package staging
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -63,7 +64,8 @@ func (g *GitRunner) runAllowFail(args ...string) (string, int) {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
+		ee := &exec.ExitError{}
+		if errors.As(err, &ee) {
 			return stdout.String(), ee.ExitCode()
 		}
 		return stdout.String(), 1

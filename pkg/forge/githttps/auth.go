@@ -3,7 +3,7 @@ package githttps
 
 import forgeauth "github.com/behaviorengineering/gitvalet/pkg/auth"
 
-// ExtraHeaderArgs returns git -c http.extraHeader=... args for forge HTTPS auth.
+// ExtraHeaderArgs returns git -c http.extraHeader=... Args for forge HTTPS auth.
 func ExtraHeaderArgs(token, scm string) []string {
 	return forgeauth.GitConfigArgs(forgeauth.Credential{Token: token, SCM: scm})
 }

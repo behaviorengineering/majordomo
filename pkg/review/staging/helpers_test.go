@@ -2,6 +2,7 @@ package staging
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,7 +83,8 @@ func TestResolveRoutingPersonasMissingFileExits(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if _, ok := err.(*ErrFatal); !ok {
+	var errFatal *ErrFatal
+	if !errors.As(err, &errFatal) {
 		t.Fatalf("expected ErrFatal, got %T: %v", err, err)
 	}
 }
