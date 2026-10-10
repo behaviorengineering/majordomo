@@ -4,7 +4,7 @@ go 1.27.0
 
 require (
 	github.com/XiaoConstantine/dspy-go v0.89.0
-	github.com/behaviorengineering/gitvalet v0.1.2
+	github.com/behaviorengineering/gitvalet v0.1.3
 	github.com/behaviorengineering/operatorconfig v0.1.1
 	github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740
 	github.com/maximhq/bifrost/core v1.7.0
@@ -220,7 +220,7 @@ require (
 	github.com/hashicorp/go-secure-stdlib/parseutil v0.2.0 // indirect
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.7 // indirect
-	github.com/hashicorp/go-version v1.8.0 // indirect
+	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
 	github.com/hashicorp/vault/api v1.23.0 // indirect
