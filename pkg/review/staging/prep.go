@@ -181,7 +181,8 @@ func stageReviewableFiles(
 		}
 		staged, err := StageFile(g, file, refspec, stagingDir, repoRoot, agent, saDir, status)
 		if err != nil {
-			if _, ok := err.(*GitError); ok {
+			gitError := &GitError{}
+			if errors.As(err, &gitError) {
 				logf("WARN", "  git error staging %s: %v", file, err)
 				continue
 			}

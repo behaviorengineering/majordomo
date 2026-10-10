@@ -1,0 +1,53 @@
+version: "2"
+
+run:
+  go: "1.26.0"
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - errorlint
+    - exhaustive
+    - goconst
+    - gocognit
+    - gosec
+    - godot
+  settings:
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+    exhaustive:
+      default-signifies-exhaustive: false
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+      ignore-tests: true
+    gocognit:
+      # Raised for first C11 pass; lower in a follow-up debt PR.
+      min-complexity: 80
+    gosec:
+      # First C11 pass: CLI and review tooling use fixed paths and subprocess git.
+      excludes:
+        - G101
+        - G104
+        - G122
+        - G204
+        - G301
+        - G302
+        - G306
+        - G304
+        - G402
+        - G404
+        - G601
+        - G702
+        - G703
+        - G704
+    godot:
+      period: true
+      capital: true
+
+formatters:
+  enable:
+    - gofumpt

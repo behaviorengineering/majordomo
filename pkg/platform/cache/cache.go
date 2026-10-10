@@ -11,8 +11,10 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/forge/githttps"
 )
 
-var inferenceCacheBranchRE = regexp.MustCompile(`^majordomo-inference-cache/[a-z0-9][a-z0-9._/-]*$`)
-var pollBranchRE = regexp.MustCompile(`(?i)^majordomo-poll-cache/[a-z0-9][a-z0-9._/-]*$`)
+var (
+	inferenceCacheBranchRE = regexp.MustCompile(`^majordomo-inference-cache/[a-z0-9][a-z0-9._/-]*$`)
+	pollBranchRE           = regexp.MustCompile(`(?i)^majordomo-poll-cache/[a-z0-9][a-z0-9._/-]*$`)
+)
 
 // Path prefixes under majordomo-inference-cache/<repo-id>.
 const (
@@ -93,7 +95,7 @@ func Push(opts PushOptions) error {
 	err = run("push", opts.Remote, "HEAD:"+opts.Branch)
 	if err != nil {
 		if ferr := run("fetch", opts.Remote, opts.Branch); ferr != nil {
-			return fmt.Errorf("cache push failed (%v); refetch also failed: %w", err, ferr)
+			return fmt.Errorf("cache push failed (%w); refetch also failed: %w", err, ferr)
 		}
 		err = run("push", opts.Remote, "HEAD:"+opts.Branch)
 		if err != nil {

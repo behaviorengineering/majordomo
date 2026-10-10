@@ -22,7 +22,7 @@ type route struct {
 }
 
 func defaultModelFor(p schemas.ModelProvider) string {
-	switch p {
+	switch p { //nolint:exhaustive // only core providers have env defaults today
 	case schemas.Anthropic:
 		return envOr("MAJORDOMO_ANTHROPIC_MODEL", defaultAnthropicModel)
 	case schemas.OpenAI:

@@ -54,7 +54,7 @@ func ResolveConfig(outputDir string, fromFile ...Settings) Config {
 		enabled = *file.Enabled
 	}
 	if v := strings.TrimSpace(os.Getenv("MAJORDOMO_OTEL_ENABLED")); v != "" {
-		enabled = !(v == "0" || strings.EqualFold(v, "false"))
+		enabled = v != "0" && !strings.EqualFold(v, "false")
 	}
 
 	endpoint := strings.TrimSpace(file.Endpoint)
@@ -84,7 +84,7 @@ func ResolveConfig(outputDir string, fromFile ...Settings) Config {
 		insecure = *file.Insecure
 	}
 	if v := strings.TrimSpace(os.Getenv("MAJORDOMO_OTEL_INSECURE")); v != "" {
-		insecure = !(v == "0" || strings.EqualFold(v, "false"))
+		insecure = v != "0" && !strings.EqualFold(v, "false")
 	}
 
 	dumpDir := strings.TrimSpace(os.Getenv("MAJORDOMO_INFERENCE_DUMP_DIR"))
@@ -93,7 +93,7 @@ func ResolveConfig(outputDir string, fromFile ...Settings) Config {
 			dumpDir = outputDir + "/logs/inference-failures"
 		} else {
 			// Cwd-relative scratch when no output dir; keep out of the repo tree.
-			dumpDir = "tmp/logs/inference-failures"
+			dumpDir = defaultFailureDumpDir
 		}
 	}
 
@@ -121,9 +121,11 @@ func otlpInsecureDefault(endpoint string) bool {
 	return host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
-var globalTP *sdktrace.TracerProvider
-var globalInit sync.Once
-var globalInitErr error
+var (
+	globalTP      *sdktrace.TracerProvider
+	globalInit    sync.Once
+	globalInitErr error
+)
 
 // Init installs the global tracer provider once per process.
 func Init(cfg Config) (*sdktrace.TracerProvider, error) {

@@ -23,7 +23,7 @@ func LoadSnapshotFromDir(dir, repoID string, required bool) (*Snapshot, error) {
 	info, err := os.Stat(dir)
 	if err != nil {
 		if required {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidContextTree, err)
+			return nil, fmt.Errorf("%w: %w", ErrInvalidContextTree, err)
 		}
 		return nil, ErrNoContext
 	}
@@ -35,20 +35,20 @@ func LoadSnapshotFromDir(dir, repoID string, required bool) (*Snapshot, error) {
 	}
 	if err := contextstore.ValidateTree(dir); err != nil {
 		if required {
-			return nil, fmt.Errorf("%w: %v", ErrInvalidContextTree, err)
+			return nil, fmt.Errorf("%w: %w", ErrInvalidContextTree, err)
 		}
 		return nil, ErrNoContext
 	}
 	idx, err := agenting.LoadIndex(dir)
 	if err != nil {
 		if required {
-			return nil, fmt.Errorf("%w: agenting index: %v", ErrInvalidContextTree, err)
+			return nil, fmt.Errorf("%w: agenting index: %w", ErrInvalidContextTree, err)
 		}
 		return nil, ErrNoContext
 	}
 	prov, err := provenanceFromMeta(dir, repoID)
 	if err != nil && required {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidContextTree, err)
+		return nil, fmt.Errorf("%w: %w", ErrInvalidContextTree, err)
 	}
 	return &Snapshot{RootDir: dir, Index: idx, Provenance: prov}, nil
 }

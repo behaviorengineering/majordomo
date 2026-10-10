@@ -65,8 +65,8 @@ func WritePollCursor(path string, c *PollCursor) error {
 }
 
 // ShouldReview reports whether a PR/MR should be queued.
-// continuous false: review only if this PR number is absent from the cursor (one-shot).
-// continuous true: also re-queue when head_sha differs from the cursor.
+// Continuous false: review only if this PR number is absent from the cursor (one-shot).
+// Continuous true: also re-queue when head_sha differs from the cursor.
 func ShouldReview(c *PollCursor, prNumber, headSHA string, continuous bool) bool {
 	if c == nil || c.Heads == nil {
 		return true

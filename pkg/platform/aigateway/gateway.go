@@ -377,8 +377,8 @@ func writeOpenAIChatResponse(w http.ResponseWriter, resp *schemas.BifrostChatRes
 		if c.FinishReason != nil {
 			finish = string(*c.FinishReason)
 		}
-		if c.ChatNonStreamResponseChoice != nil && c.ChatNonStreamResponseChoice.Message != nil {
-			m := c.ChatNonStreamResponseChoice.Message
+		if c.ChatNonStreamResponseChoice != nil && c.Message != nil {
+			m := c.Message
 			if m.Role != "" {
 				msg.Role = string(m.Role)
 			}

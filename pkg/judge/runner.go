@@ -18,7 +18,7 @@ func RegisterPacks(r *criteria.CriterionRegistry) {
 }
 
 // NewJobRunner builds a strop JobRunner. Call RegisterPacks before EvaluateWorkflow
-// uses product rubrics. learning and formatter may be nil.
+// uses product rubrics. Learning and formatter may be nil.
 func NewJobRunner(
 	reg *registry.ModuleRegistry,
 	learning runner.LearningServiceForGeneration,

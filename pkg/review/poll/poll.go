@@ -14,6 +14,11 @@ import (
 	"github.com/behaviorengineering/majordomo/pkg/platform/config"
 )
 
+const (
+	scmGitHub = "github"
+	scmGitLab = "gitlab"
+)
+
 // PendingReview is one PR/MR that needs a review run.
 type PendingReview struct {
 	RepoID      string `json:"repo_id"`
@@ -115,7 +120,7 @@ func Run(opts Options) error {
 	for _, cfg := range cfgs {
 		scm := strings.ToLower(cfg.SCM)
 		if scm == "" {
-			scm = "github"
+			scm = scmGitHub
 		}
 
 		owner, name := cfg.Repository.Owner, cfg.Repository.Name
@@ -305,7 +310,7 @@ func defaultCloneURL(scm, apiBase, owner, name string) string {
 		return ""
 	}
 	host := "github.com"
-	if scm == "gitlab" {
+	if scm == scmGitLab {
 		host = "gitlab.com"
 	}
 	if apiBase != "" {

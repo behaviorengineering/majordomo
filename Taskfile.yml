@@ -1,0 +1,44 @@
+version: "3"
+
+vars:
+  BIN: majordomo{{exeExt}}
+
+env:
+  GOWORK: "off"
+
+tasks:
+  default:
+    desc: List local-dev tasks
+    cmds:
+      - go tool task --list
+
+  format:
+    desc: Format with gofumpt
+    cmds:
+      - go tool gofumpt -w ./cmd ./internal ./pkg
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - go tool golangci-lint run --timeout 5m ./cmd/... ./internal/... ./pkg/...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./cmd/... ./internal/... ./pkg/...
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - go test ./...
+
+  build:
+    desc: Build majordomo CLI
+    cmds:
+      - go build -o {{.BIN}} ./cmd/majordomo
+
+  hooks-install:
+    desc: Install Lefthook from cursor-packs
+    cmds:
+      - git submodule update --init .cursor/packs/shared
+      - lefthook install
