@@ -217,6 +217,8 @@ type Observability struct {
 
 // RepoConfig is one file under majordomo-central-config/<repo-id>.yaml.
 type RepoConfig struct {
+	// Enabled parks the whole served repo when false. Nil (omitted) means enabled.
+	Enabled        *bool                       `yaml:"enabled,omitempty"`
 	SCM            string                      `yaml:"scm"` // github | gitlab | bitbucket | generic
 	Repository     Repository                  `yaml:"repository"`
 	SCMAPI         SCMAPI                      `yaml:"scmApi"`
@@ -231,6 +233,14 @@ type RepoConfig struct {
 	AIProviders    map[string]AIProviderConfig `yaml:"ai_providers,omitempty"`
 	JobConfigs     map[string]JobConfig        `yaml:"job_configs,omitempty"`
 	Observability  Observability               `yaml:"observability,omitempty"`
+}
+
+// RepoEnabled reports whether the served repo is enrolled (default true).
+func (c RepoConfig) RepoEnabled() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
 }
 
 // EffectivePublishMode returns review.publishMode, else top-level publishMode, else "auto".

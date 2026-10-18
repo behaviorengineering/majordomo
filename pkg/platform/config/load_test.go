@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -108,6 +109,69 @@ observability:
 	}
 	if exp.Endpoint != "phoenix.example:4317" {
 		t.Fatalf("expanded endpoint=%q", exp.Endpoint)
+	}
+}
+
+func TestLoadAllOmitsDisabledRepos(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "_defaults.yaml"), []byte("{}\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "active.yaml"), []byte(`
+scm: github
+repository:
+  owner: acme
+  name: active
+`), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "parked.yaml"), []byte(`
+enabled: false
+scm: github
+repository:
+  owner: acme
+  name: parked
+`), 0o644)
+	all, err := LoadAll(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 || all[0].Repository.ID != "active" {
+		t.Fatalf("got %#v", all)
+	}
+	if !all[0].RepoEnabled() {
+		t.Fatal("expected omitted enabled to default true")
+	}
+}
+
+func TestLoadMergedFailsClosedWhenDisabled(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "_defaults.yaml"), []byte("{}\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "parked.yaml"), []byte(`
+enabled: false
+scm: github
+repository:
+  owner: acme
+  name: parked
+`), 0o644)
+	_, err := LoadMerged(dir, "parked")
+	if err == nil || !strings.Contains(err.Error(), `repo "parked" is disabled`) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestEnabledMergeOverride(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.WriteFile(filepath.Join(dir, "_defaults.yaml"), []byte("enabled: false\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "demo.yaml"), []byte(`
+enabled: true
+scm: github
+repository:
+  owner: acme
+  name: demo
+`), 0o644)
+	cfg, err := LoadMerged(dir, "demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.RepoEnabled() {
+		t.Fatal("expected per-repo enabled: true to override defaults")
 	}
 }
 
