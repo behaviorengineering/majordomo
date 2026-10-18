@@ -90,6 +90,9 @@ func LoadAll(configDir string) ([]RepoConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+		if !c.RepoEnabled() {
+			continue
+		}
 		out = append(out, c)
 	}
 	return out, nil
@@ -97,6 +100,9 @@ func LoadAll(configDir string) ([]RepoConfig, error) {
 
 func mergeConfig(base, over RepoConfig) RepoConfig {
 	out := base
+	if over.Enabled != nil {
+		out.Enabled = over.Enabled
+	}
 	if over.SCM != "" {
 		out.SCM = over.SCM
 	}
@@ -314,7 +320,14 @@ func LoadMerged(configDir, repoID string) (RepoConfig, error) {
 	if err != nil {
 		return RepoConfig{}, err
 	}
-	return LoadRepoFile(configDir, repoID, defaults)
+	cfg, err := LoadRepoFile(configDir, repoID, defaults)
+	if err != nil {
+		return RepoConfig{}, err
+	}
+	if !cfg.RepoEnabled() {
+		return RepoConfig{}, fmt.Errorf("repo %q is disabled in central config", repoID)
+	}
+	return cfg, nil
 }
 
 // secretKeySuffix uppercases s and maps non-alnum runes to _.

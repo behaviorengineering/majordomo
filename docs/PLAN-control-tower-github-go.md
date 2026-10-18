@@ -320,6 +320,9 @@ Includes SCM, trigger, review, cache, **pipelines**, and **staticAnalysis**.
 ```yaml
 # majordomo-central-config/payments-api.yaml
 
+# enabled: false   # park the repo: skip poll and context digest; CLI --repo-id fails closed
+# omitted or true: enrolled (default)
+
 scm: gitlab   # github | gitlab | bitbucket | generic
 
 repository:

@@ -120,6 +120,52 @@ trigger:
 	}
 }
 
+func TestRunSkipsDisabledRepos(t *testing.T) {
+	dir := t.TempDir()
+	cfgDir := filepath.Join(dir, "cfg")
+	_ = os.MkdirAll(cfgDir, 0o755)
+	_ = os.WriteFile(filepath.Join(cfgDir, "_defaults.yaml"), []byte("trigger:\n  poll: true\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(cfgDir, "demo.yaml"), []byte(`
+scm: github
+repository:
+  id: demo
+  owner: acme
+  name: demo
+  cloneUrl: https://github.com/acme/demo.git
+`), 0o644)
+	_ = os.WriteFile(filepath.Join(cfgDir, "parked.yaml"), []byte(`
+enabled: false
+scm: github
+repository:
+  id: parked
+  owner: acme
+  name: parked
+  cloneUrl: https://github.com/acme/parked.git
+`), 0o644)
+
+	var listed []string
+	out := filepath.Join(dir, "pending.json")
+	err := Run(Options{
+		ConfigDir: cfgDir,
+		CursorDir: filepath.Join(dir, "cursors"),
+		OutPath:   out,
+		ListPRs: func(ctx context.Context, cfg config.RepoConfig, token string) ([]openPR, error) {
+			listed = append(listed, cfg.Repository.ID)
+			return []openPR{{Number: 3, HeadSHA: "abc1234deadbeef", BaseBranch: "main"}}, nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0] != "demo" {
+		t.Fatalf("listed=%v", listed)
+	}
+	data, _ := os.ReadFile(out)
+	if strings.Contains(string(data), "parked") {
+		t.Fatalf("disabled repo leaked into pending: %s", data)
+	}
+}
+
 func TestRunFailsWhenListErrors(t *testing.T) {
 	dir := t.TempDir()
 	cfgDir := filepath.Join(dir, "cfg")

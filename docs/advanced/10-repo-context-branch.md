@@ -157,7 +157,7 @@ For Go or Python served repos (Go: `go.mod` / `go.work`; Python: `pyproject.toml
 
 ## Digest trigger (v1)
 
-Tower cron (same interval family as poll, e.g. every 5m). The digest job runs for a repo only when the context cursor is **behind** default `HEAD`. If caught up, exit no-op unless an open update PR has a pending `@majordomo reject` (gate regen). Story updates, agenting materialization, and compaction run during catch-up. LLM provider keys (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) are required on the digest cron job when story generation is enabled.
+Tower cron (same interval family as poll, e.g. every 5m). Digest targets are served repos in central config that are **enabled** (omitted `enabled` defaults true), have a real clone URL, and are not placeholders. Set `enabled: false` on a per-repo YAML to park the whole repo: it drops out of `majordomo-context repos` and `majordomo poll`, and explicit `--repo-id` jobs fail closed. The digest job then runs for an enrolled repo only when the context cursor is **behind** default `HEAD`. If caught up, exit no-op unless an open update PR has a pending `@majordomo reject` (gate regen). Story updates, agenting materialization, and compaction run during catch-up. LLM provider keys (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) are required on the digest cron job when story generation is enabled.
 
 At the end of every digest (and review / standalone orchestrate) run, Majordomo logs an **itemized LLM usage summary** plus a grand total (prompt / completion / total tokens and call counts per task such as `typology_slice_catalog` and `typology_slice_meaning`). Counts come from provider-reported usage on the dspy-go call path, not from local tiktoken estimates. Digest `--out` JSON also includes `llm_usage`.
 
