@@ -4,6 +4,9 @@
 **Trigger:** Scheduled review; no Go diff against `origin/main`
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8; Pass B: 4, 5, 6
 **Hooks:** none discovered
+**Pass A Commit:** `b19f91d`
+**Pass A Branch:** `cursor/staged-review-process-f0ec`
+**Draft PR:** https://github.com/behaviorengineering/majordomo/pull/115
 
 ## Stages
 - [x] 1. Automated Tools
@@ -201,6 +204,7 @@ golangci-lint v2 configuration, but the gates cannot complete safely.
 - `go tool task test`: passed for all packages.
 - `go tool gofumpt -l ./cmd ./internal`: passed.
 - `git diff --check`: passed.
+- Pass A commit `b19f91d` was pushed before consultant review.
 
 ## Resolutions
 - Stage 1 checksum: finding → fixed in Pass A after validating the public
