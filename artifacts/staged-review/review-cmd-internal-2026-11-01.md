@@ -5,6 +5,7 @@
 **Selection:** Pass A mechanical stages 1, 2, 3, 7, 8; Pass B consultant stages 4, 5, 6
 **Hooks:** none discovered
 **Pack mount commit:** `7e825ae`
+**Pass A fix commit:** `5ac3c38`
 
 ## Stages
 
@@ -193,6 +194,7 @@ None recorded yet.
 - `go tool task build`: passed.
 - `go tool gofumpt -l ./cmd ./internal ./pkg`: passed with no files listed.
 - CLI smoke checks: bare root and `version` exit 0; unknown commands exit non-zero with usage.
+- Pass A is committed. Pass B consultant stages 4, 5, and 6 are next.
 
 ## Resolutions
 
