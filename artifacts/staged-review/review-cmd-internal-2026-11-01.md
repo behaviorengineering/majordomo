@@ -3,6 +3,8 @@
 **Target:** `./cmd/...` and `./internal/...` Go files (no product diff versus `origin/main`)
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8; Pass B: 4, 5, 6
 **Hooks:** none found
+**Pass A commit:** `9a3c97c`
+**Draft PR:** [#104](https://github.com/behaviorengineering/majordomo/pull/104)
 
 ## Stages
 - [x] 1. Automated Tools
@@ -217,6 +219,8 @@ return dispatch.Dispatch(opts)
 **Status:** fixed in Pass A. Dispatch now initializes observability and wraps the operation in a chain span.
 
 ## Open Questions
+
+Pass B begins after the pushed Pass A commit. No consultant question has been asked yet.
 
 ## Resolutions
 
