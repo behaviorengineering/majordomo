@@ -16,6 +16,8 @@ import (
 )
 
 func main() {
+	commandCtx, cancelCommand := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancelCommand()
 	defer func() {
 		aigateway.ShutdownGlobal()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -24,7 +26,7 @@ func main() {
 		_ = observability.Shutdown(ctx)
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	if err := cli.NewRoot().ExecuteContext(commandCtx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)
