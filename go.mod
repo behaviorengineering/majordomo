@@ -7,6 +7,7 @@ require (
 	github.com/behaviorengineering/gitvalet v0.1.3
 	github.com/behaviorengineering/operatorconfig v0.1.1
 	github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740
+	github.com/failsafe-go/failsafe-go v0.9.8
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13
@@ -53,6 +54,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.5.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.7.2 // indirect
+	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Djarvur/go-err113 v0.1.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.34.0 // indirect
