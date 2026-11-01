@@ -1,4 +1,4 @@
-// Package outbound provides a shared retrying HTTP client for forge/SCM APIs.
+// Package outbound provides shared retrying HTTP and process execution for forge and SCM operations.
 package outbound
 
 import (
