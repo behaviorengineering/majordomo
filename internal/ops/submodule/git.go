@@ -4,12 +4,14 @@ package submodule
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/executil"
 )
 
 const (
@@ -19,13 +21,16 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
 	In  io.Reader
 	Out io.Writer
-	// GitRunner overrides git execution (tests). nil → real git.
-	GitRunner func(args []string, cwd string, check bool) (string, error)
+	// GitRunner overrides git execution (tests). Nil means real git.
+	GitRunner func(ctx context.Context, args []string, cwd string, check bool) (string, error)
+	// CommandRunner executes real git commands.
+	CommandRunner *executil.Runner
 	// Prompt reads a line after printing prompt (tests). nil → stdin.
 	Prompt func(prompt string) (string, error)
 	// ReadKey reads a single choice character (tests). nil → line-based fallback.
@@ -35,12 +40,18 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when none.
 	submoduleName string
 }
 
 // Run launches the interactive submodule manager.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("submodule requires a context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("submodule requires a context deadline")
+	}
 	m := &manager{opts: opts}
 	root, err := m.findSubmoduleRoot()
 	if err != nil {
@@ -73,7 +84,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: not inside a git repo")
 	}
 	return out, nil
 }
@@ -176,7 +187,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled: local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -217,20 +228,25 @@ func (m *manager) remoteBranches() ([]string, error) {
 
 func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
-		return m.opts.GitRunner(args, cwd, check)
+		return m.opts.GitRunner(m.opts.Context, args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
+	if m.opts.CommandRunner == nil {
+		return "", fmt.Errorf("submodule requires a command runner")
+	}
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := m.opts.CommandRunner.Run(m.opts.Context, executil.Request{
+		Name:   "git",
+		Args:   args,
+		Dir:    cwd,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
 	out := strings.TrimSpace(stdout.String())
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, err
 	}
 	return out, nil
 }
