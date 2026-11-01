@@ -8,7 +8,7 @@
 - [x] 1. Automated Tools, score 3/10, done
 - [x] 2. Type Safety, score 10/10, done
 - [x] 3. Error Handling, score 4/10, done
-- [ ] 4. Architecture
+- [ ] 4. Architecture, in progress
 - [ ] 5. Robustness
 - [ ] 6. Testability
 - [x] 7. Code Clarity, score 10/10, done
@@ -160,6 +160,17 @@ RunE: func(cmd *cobra.Command, args []string) error {
 **Rationale:** Agents and operators receive an error instead of a stable guide, and a bare invocation cannot safely explain the command lifecycle.
 **Status:** fixed in Pass A
 
+### Stage 4: Architecture
+
+#### Open Architecture: Submodule manager combines unrelated responsibilities
+**Location:** `internal/ops/submodule/git.go:35-290`, `internal/ops/submodule/commands.go:11-340`
+**Observation:** `manager` owns repository discovery, Git process execution, output and prompt I/O, branch switching, recovery, worktree management, commits, and pushes.
+**Question:** Is this single interactive facade intentional, or should Git execution, interactive presentation, and submodule workflows split into independently testable components?
+**Possible outcomes:**
+- If intentional: non-issue with the facade boundary documented.
+- If not intentional: architecture finding for separation in a follow-up.
+**Status:** waiting on consultant
+
 #### High Generation Gates: External process hops lack context and resilience policy
 **Location:** `internal/ops/sa/sa.go:132-137`, `internal/ops/satools/satools.go:230-237`, `internal/ops/submodule/git.go:218-234`
 **Severity:** High
@@ -203,6 +214,8 @@ tasks:
 **Status:** fixed in Pass A
 
 ## Open Questions
+
+- Stage 4: Is the multi-responsibility `submodule.manager` facade intentional, or should its Git execution, UI, and workflow concerns split?
 
 ## Resolutions
 
