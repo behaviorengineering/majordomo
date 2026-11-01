@@ -2,17 +2,19 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/execx"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
@@ -216,25 +218,24 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	args := []string{buildSh, "local", "sa-" + tool, "local-test", dockerfileArg}
 	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace)
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
-	if err == nil {
-		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+	if err != nil {
+		return false, lines
 	}
-	return err == nil, lines
+	full := "local/sa-" + tool + ":local-test"
+	tagStdout, tagStderr, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), workspace)
+	if tagErr != nil {
+		tagLines := strings.Split(strings.TrimRight(tagStdout+tagStderr, "\n"), "\n")
+		lines = append(lines, tagLines...)
+		return false, lines
+	}
+	return true, lines
 }
 
 func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	return execx.Run(opts.Context, "sa-tools", name, args, env, dir)
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {

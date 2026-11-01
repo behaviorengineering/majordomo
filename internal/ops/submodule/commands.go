@@ -102,7 +102,10 @@ func (m *manager) cmdUpdate() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	remoteSHA := m.remoteTrackingSHA(current)
+	remoteSHA, err := m.remoteTrackingSHA(current)
+	if err != nil {
+		return false, err
+	}
 	if remoteSHA != "" && localSHA != remoteSHA {
 		msg := fmt.Sprintf(
 			"Warning: local HEAD (%s) does not match origin/%s (%s).\n"+
@@ -140,7 +143,7 @@ func (m *manager) cmdUpdate() (bool, error) {
 				return false, fmt.Errorf("git add submodule failed: %w", err)
 			}
 			commitMsg := fmt.Sprintf("Update %s submodule to latest '%s'", m.submoduleName, current)
-			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
+			commitOut, err := m.gitCommit([]string{"commit", "-m", commitMsg}, m.parentRoot)
 			if err != nil {
 				return false, fmt.Errorf("git commit submodule update failed: %w", err)
 			}
@@ -205,7 +208,7 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 				return false, fmt.Errorf("git add submodule metadata failed: %w", err)
 			}
 			commitMsg := fmt.Sprintf("Pin %s submodule to branch '%s'", m.submoduleName, selected)
-			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
+			commitOut, err := m.gitCommit([]string{"commit", "-m", commitMsg}, m.parentRoot)
 			if err != nil {
 				return false, fmt.Errorf("git commit submodule branch failed: %w", err)
 			}
@@ -241,7 +244,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 		return false, fmt.Errorf("git add submodule failed: %w", err)
 	}
 	commitMsg := fmt.Sprintf("Pin %s submodule to commit %s", m.submoduleName, sha)
-	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
+	commitOut, err := m.gitCommit([]string{"commit", "-m", commitMsg}, m.parentRoot)
 	if err != nil {
 		return false, fmt.Errorf("git commit submodule pin failed: %w", err)
 	}
@@ -299,7 +302,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 		return false, err
 	}
 	commitMsg := fmt.Sprintf("Update %s to %s (branch: %s)", m.submoduleName, shortSHA, branch)
-	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, worktreePath, false)
+	commitOut, err := m.gitCommit([]string{"commit", "-m", commitMsg}, worktreePath)
 	if err != nil {
 		return false, fmt.Errorf("git commit worktree update failed: %w", err)
 	}
