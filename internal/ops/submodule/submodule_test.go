@@ -1,6 +1,8 @@
 package submodule
 
 import (
+	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -60,4 +62,21 @@ func TestBuildOpsMenu(t *testing.T) {
 		t.Fatalf("menu:\n%s", menu)
 	}
 	_ = filepath.Separator
+}
+
+func TestRemoteGitRequiresDeadline(t *testing.T) {
+	m := &manager{opts: Options{Context: context.Background()}}
+	_, err := m.git([]string{"fetch", "origin"}, "/tmp", true)
+	if err == nil || !strings.Contains(err.Error(), "deadline is required") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestRetryableGitErrorClassification(t *testing.T) {
+	if !retryableGitError(fmt.Errorf("fatal: unable to access: connection timed out")) {
+		t.Fatal("expected timeout to be retryable")
+	}
+	if retryableGitError(fmt.Errorf("fatal: Authentication failed")) {
+		t.Fatal("expected authentication failure not to be retryable")
+	}
 }

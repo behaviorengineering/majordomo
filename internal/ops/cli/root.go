@@ -2,8 +2,11 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -32,15 +35,12 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// errSubcommandRequired is returned when the root is invoked with no subcommand.
-var errSubcommandRequired = fmt.Errorf("subcommand required")
-
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "majordomo",
 		Short: "Repository operations for evolving software",
-		Long: `Majordomo — repository operations for evolving software.
+		Long: `Majordomo: repository operations for evolving software.
 
 Control-plane CLI for PR/MR review: poll, prep, orchestrate, publish, and cache.
 
@@ -48,11 +48,13 @@ Local operator overlay: majordomo init writes ~/.config/majordomo/config.yaml (o
 Control tower YAML stays under --config-dir (default majordomo-central-config).
 
 See docs/PLAN-control-tower-github-go.md.`,
-		SilenceUsage:  true,
+		SilenceUsage:  false,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			return errSubcommandRequired
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := printAgentGuide(cmd.OutOrStdout()); err != nil {
+				return fmt.Errorf("print agent guide: %w", err)
+			}
+			return nil
 		},
 	}
 
@@ -80,6 +82,37 @@ func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 	if err := cmd.MarkFlagRequired(name); err != nil {
 		panic(fmt.Errorf("mark flag %q required: %w", name, err))
 	}
+}
+
+func printAgentGuide(w io.Writer) error {
+	for _, line := range []string{
+		"majordomo " + Version,
+		"Role",
+		"  Control-plane CLI for repository review and context operations.",
+		"",
+		"Agent guide",
+		"  Read AGENTS.md and ai-copilots/README.md before changing this module.",
+		"  Operator skills live under ai-copilots/skills/.",
+		"",
+		"Lifecycle commands",
+		"  version     Print the build identity.",
+		"  help        Show the complete command and flag catalog.",
+		"  poll        Inspect pending review work.",
+		"  prep        Prepare review inputs.",
+		"  orchestrate Run review waves and synthesis.",
+		"",
+		"Automation rules",
+		"  Use --dry-run where available before mutating state.",
+		"  Use --yes or an equivalent headless confirmation when supported.",
+		"  Keep publish and push commands explicit.",
+		"",
+		"Run majordomo help for the full command catalog.",
+	} {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolveOTELConfig loads observability from central-config when available, then applies env overrides.
@@ -115,8 +148,9 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
+			return err
 		},
 	}
 }
@@ -201,7 +235,17 @@ func newDispatchCmd() *cobra.Command {
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
 		Short: "Run one Judge batch (in-process strop; --opencode for harness)",
 		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			otelCfg := observability.ResolveConfig(args[2], observability.Settings{})
+			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
+				return fmt.Errorf("otel init: %w", otelErr)
+			}
+			const dispatchTimeout = 8 * time.Minute
+			ctx, cancel := context.WithTimeout(cmd.Context(), dispatchTimeout)
+			defer cancel()
+			ctx, span := observability.StartChainSpan(ctx, otelCfg.ServiceName, "majordomo.dispatch")
+			defer observability.EndSpanWithStatus(span, &err)
+
 			mode := dispatch.ModeFiles
 			switch {
 			case finalize:
@@ -220,12 +264,13 @@ func newDispatchCmd() *cobra.Command {
 				mode = dispatch.ModeTechnicalDeep
 			}
 			opts := dispatch.DispatchOptions{
-				Context:    cmd.Context(),
+				Context:    ctx,
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],
 				Mode:       mode,
 				ScriptsDir: scriptsDir,
+				Timeout:    dispatchTimeout,
 			}
 			if useOpenCode {
 				return dispatch.RunOpenCode(opts)
@@ -409,6 +454,7 @@ func newSACmd() *cobra.Command {
 				BaseBranch:  baseBranch,
 				ScriptsDir:  scriptsDir,
 				ImagePrefix: imagePrefix,
+				Logger:      slog.Default(),
 			})
 		},
 	}
@@ -510,8 +556,8 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			return err
 		},
 	})
 	var pr, sha string
@@ -846,7 +892,9 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
+			defer cancel()
+			return submodule.Run(submodule.Options{Context: ctx})
 		},
 	}
 }
