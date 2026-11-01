@@ -5,6 +5,8 @@
 **Stage mapping:** User-selected 7 = current Code Clarity stage 4; user-selected 8 = current Generation Gates stage 5. User-selected 4, 5, 6 = current consultant stages A, B, C.
 **Hooks:** none discovered in `ai-copilots/review-hooks.yaml`
 **Baseline:** Pack mount committed separately as `0796e60`.
+**Pass A Fix Commit:** `9e72086`
+**Pass A Status:** complete; ready to push before consultant dialogue.
 
 ## Stages
 - [x] 1. Automated Tools — 4/10
