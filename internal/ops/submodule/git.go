@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 type Options struct {
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
+	Context  context.Context
 	// In/Out for prompts (tests).
 	In  io.Reader
 	Out io.Writer
@@ -30,6 +32,7 @@ type Options struct {
 	Prompt func(prompt string) (string, error)
 	// ReadKey reads a single choice character (tests). nil → line-based fallback.
 	ReadKey func(prompt string) (string, error)
+	Process process.CommandRunner
 }
 
 type manager struct {
@@ -219,18 +222,17 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	runner := m.opts.Process
+	if runner == nil {
+		runner = process.DefaultRunner()
+	}
+	result, err := runner.Run(m.opts.Context, process.Command{Name: "git", Args: args, Dir: cwd})
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(result.Stderr))
 	}
 	return out, nil
 }
