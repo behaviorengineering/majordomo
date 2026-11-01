@@ -4,6 +4,7 @@
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8; Pass B: 4, 5, 6
 **Base:** `origin/main`
 **Hooks:** none found
+**Pass A fix commit:** `a048e96`
 
 ## Stages
 - [x] 1. Automated Tools
@@ -199,3 +200,10 @@ err := cmd.Run()
 | CLI agent guide | High | Auto-fixed in Pass A, bare invocation prints a structured guide and exits successfully. |
 | Remote git resilience | Medium | Auto-fixed in Pass A, commands use context deadlines and `gitexec` resilience. |
 | Comment punctuation | Low | Auto-fixed in Pass A. |
+
+## Pass A Verification
+- Focused tests pass: `go test ./internal/ops/sa ./internal/ops/satools ./internal/ops/submodule`.
+- Focused vet passes for the touched operation packages.
+- Focused golangci-lint passes with 0 issues.
+- Full `go tool task test` and `go tool task vet` remain blocked by the `operatorconfig v0.1.1` checksum mismatch.
+- Full `go tool task lint` remains blocked during package loading while the module graph cannot load.
