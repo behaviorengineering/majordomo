@@ -3,13 +3,15 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/pkg/forge/outbound"
 )
 
 const (
@@ -19,6 +21,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -35,7 +38,7 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // empty if none.
 	submoduleName string
 }
 
@@ -219,18 +222,16 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	result, err := outbound.RunCommand(m.opts.Context, "git", args, nil, cwd)
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
+		if errors.Is(err, outbound.ErrMissingDeadline) {
+			return "", err
+		}
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, err
 	}
 	return out, nil
 }

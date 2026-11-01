@@ -2,13 +2,14 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/pkg/forge/outbound"
 )
 
 // Options configures a local SA tool image build run.
@@ -16,6 +17,7 @@ type Options struct {
 	DryRun  bool
 	Verbose bool
 	Corp    bool
+	Context context.Context
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
 	// Empty → discover from cwd.
 	RepoRoot string
@@ -215,26 +217,36 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	}
 	args := []string{buildSh, "local", "sa-" + tool, "local-test", dockerfileArg}
 	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace)
-	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
-	if err == nil {
-		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+	lines := commandOutputLines(stdout, stderr)
+	if err != nil {
+		return false, lines
 	}
-	return err == nil, lines
+	full := "local/sa-" + tool + ":local-test"
+	tagStdout, tagStderr, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), workspace)
+	lines = append(lines, commandOutputLines(tagStdout, tagStderr)...)
+	if tagErr != nil {
+		return false, append(lines, tagErr.Error())
+	}
+	return true, lines
 }
 
 func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	if opts.Context == nil {
+		return "", "", fmt.Errorf("run %s: context is required", name)
+	}
+	result, err := outbound.RunCommand(opts.Context, name, args, env, dir)
+	return result.Stdout, result.Stderr, err
+}
+
+func commandOutputLines(stdout, stderr string) []string {
+	output := strings.TrimRight(stdout+stderr, "\n")
+	if output == "" {
+		return nil
+	}
+	return strings.Split(output, "\n")
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {

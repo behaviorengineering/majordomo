@@ -1,6 +1,7 @@
 package sa
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,7 +44,7 @@ staticAnalysis:
 			"README.md",
 			"web/app.js",
 		},
-		Runner: func(scriptPath, slug, image, command, repoRoot string, files []string) error {
+		Runner: func(_ context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error {
 			ran = append(ran, slug)
 			switch slug {
 			case "ruff":
