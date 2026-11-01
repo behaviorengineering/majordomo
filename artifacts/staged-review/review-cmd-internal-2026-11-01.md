@@ -220,7 +220,15 @@ return dispatch.Dispatch(opts)
 
 ## Open Questions
 
-Pass B begins after the pushed Pass A commit. No consultant question has been asked yet.
+### Stage 4: Architecture
+
+#### Open Architecture: Root command wiring has broad feature coupling
+**Location:** `internal/ops/cli/root.go:37-896`
+**Observation:** One 896-line file constructs 15 command families and imports 16 internal or package-level feature dependencies.
+**Question:** Should feature command constructors move into domain-specific CLI files or packages, leaving `root.go` responsible only for root configuration and command registration?
+**Possible outcomes:**
+- If the breadth is intentional as the stable CLI composition root: non-issue, record the rationale.
+- If the file should stay bounded: record an architecture finding and defer the refactor until explicitly requested.
 
 ## Resolutions
 
