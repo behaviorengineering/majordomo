@@ -1,6 +1,7 @@
 package sa
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,6 +39,7 @@ staticAnalysis:
 		BaseBranch: "main",
 		RepoRoot:   dir,
 		ScriptsDir: scripts,
+		Logger:     slog.Default(),
 		ChangedFiles: []string{
 			"src/a.py",
 			"README.md",

@@ -14,31 +14,37 @@ tasks:
 
   format:
     desc: Format with gofumpt
+    summary: Format Go sources under cmd, internal, and pkg with the pinned gofumpt tool.
     cmds:
       - go tool gofumpt -w ./cmd ./internal ./pkg
 
   lint:
     desc: Run golangci-lint
+    summary: Run the pinned golangci-lint configuration across cmd, internal, and pkg.
     cmds:
       - go tool golangci-lint run --timeout 5m ./cmd/... ./internal/... ./pkg/...
 
   vet:
     desc: Run go vet
+    summary: Run go vet across cmd, internal, and pkg.
     cmds:
       - go vet ./cmd/... ./internal/... ./pkg/...
 
   test:
     desc: Run unit tests
+    summary: Run all Go unit tests in the module.
     cmds:
       - go test ./...
 
   build:
     desc: Build majordomo CLI
+    summary: Build the majordomo command binary.
     cmds:
       - go build -o {{.BIN}} ./cmd/majordomo
 
   hooks-install:
     desc: Install Lefthook from cursor-packs
+    summary: Initialize the shared cursor-packs submodule and install Lefthook hooks.
     cmds:
       - git submodule update --init .cursor/packs/shared
       - lefthook install

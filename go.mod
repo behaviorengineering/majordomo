@@ -7,6 +7,7 @@ require (
 	github.com/behaviorengineering/gitvalet v0.1.3
 	github.com/behaviorengineering/operatorconfig v0.1.1
 	github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740
+	github.com/failsafe-go/failsafe-go v0.9.8
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/yuin/goldmark v1.7.13
@@ -101,6 +102,7 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bits-and-blooms/bitset v1.29.0 // indirect
 	github.com/bkielbasa/cyclop v1.2.3 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/blizzy78/varnamelen v0.8.0 // indirect

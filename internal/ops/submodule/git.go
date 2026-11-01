@@ -4,12 +4,19 @@ package submodule
 import (
 	"bufio"
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
+
+	"github.com/failsafe-go/failsafe-go"
+	"github.com/failsafe-go/failsafe-go/circuitbreaker"
+	"github.com/failsafe-go/failsafe-go/retrypolicy"
 )
 
 const (
@@ -17,10 +24,56 @@ const (
 	worktreeDir     = ".pipelines-worktree"
 )
 
+var (
+	gitRetryPolicy = retrypolicy.NewBuilder[struct{}]().
+			HandleIf(func(_ struct{}, err error) bool {
+			return retryableGitError(err)
+		}).
+		WithMaxRetries(2).
+		WithBackoff(250*time.Millisecond, 2*time.Second).
+		WithJitter(100 * time.Millisecond).
+		ReturnLastFailure().
+		Build()
+	gitCircuitBreaker = circuitbreaker.NewBuilder[struct{}]().
+				HandleIf(func(_ struct{}, err error) bool {
+			return retryableGitError(err)
+		}).
+		WithFailureThreshold(3).
+		WithDelay(30 * time.Second).
+		Build()
+)
+
+func retryableGitError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"could not resolve host",
+		"connection timed out",
+		"connection reset",
+		"network is unreachable",
+		"remote end hung up",
+		"tls handshake timeout",
+		"temporarily unavailable",
+		" 429 ",
+		" 502 ",
+		" 503 ",
+		" 504 ",
+	} {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // Options configures the interactive submodule manager.
 type Options struct {
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
+	// Context bounds remote Git operations.
+	Context context.Context
 	// In/Out for prompts (tests).
 	In  io.Reader
 	Out io.Writer
@@ -73,7 +126,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root: not inside a git repo")
 	}
 	return out, nil
 }
@@ -176,7 +229,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled: local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -219,7 +272,44 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
+	ctx := m.opts.Context
+	if isRemoteGitCommand(args) {
+		if ctx == nil {
+			return "", errors.New("remote git operation: context is required")
+		}
+		if _, ok := ctx.Deadline(); !ok {
+			return "", errors.New("remote git operation: deadline is required")
+		}
+		var output string
+		err := failsafe.With(gitCircuitBreaker, gitRetryPolicy).
+			WithContext(ctx).
+			Run(func() error {
+				var err error
+				output, err = m.runGit(ctx, args, cwd, check)
+				return err
+			})
+		return output, err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return m.runGit(ctx, args, cwd, check)
+}
+
+func isRemoteGitCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "fetch", "pull", "push":
+		return true
+	default:
+		return false
+	}
+}
+
+func (m *manager) runGit(ctx context.Context, args []string, cwd string, check bool) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = cwd
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
