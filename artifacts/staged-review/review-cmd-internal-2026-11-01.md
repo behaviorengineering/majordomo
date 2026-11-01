@@ -5,6 +5,7 @@
 **Base:** `origin/main`
 **Hooks:** none found
 **Pass A fix commit:** `a048e96`
+**Draft PR:** [#105](https://github.com/behaviorengineering/majordomo/pull/105)
 
 ## Stages
 - [x] 1. Automated Tools
@@ -186,6 +187,16 @@ err := cmd.Run()
 
 ### Dependency integrity
 - `operatorconfig v0.1.1` still downloads with a checksum different from the trusted `go.sum` and `sum.golang.org` entry. The mismatch was not auto-resolved.
+
+### Stage 4: Architecture
+
+#### Open Architecture: Submodule manager spans multiple responsibilities
+**Location:** `internal/ops/submodule/git.go:35-42`, with methods across `git.go`, `commands.go`, and `menu.go`
+**Observation:** `manager` owns repository discovery, prompt and output handling, git command execution, branch selection, worktree mutation, commit creation, and push behavior.
+**Question:** Is this single manager intentionally the submodule operation boundary, or should interactive UI, git execution, and repository mutation be split?
+**Possible outcomes:**
+- If intentional: non-issue, record the facade boundary and rationale.
+- If not intentional: finding, split the responsibilities in a follow-up; do not auto-fix in this pass.
 
 ## Resolutions
 
