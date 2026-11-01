@@ -29,9 +29,12 @@ func persistentOperatorBootstrap(cmd *cobra.Command, _ []string) error {
 func skipOperatorBootstrap(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "init", "version", "context":
+		case "init", "version", "context", "help":
 			return true
 		}
+	}
+	if cmd == cmd.Root() {
+		return true
 	}
 	return false
 }
@@ -54,11 +57,18 @@ Refreshes config.yaml.example on every run. Use --force to overwrite an existing
 				return err
 			}
 			if written {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path); err != nil {
+					return fmt.Errorf("write init result: %w", err)
+				}
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path); err != nil {
+					return fmt.Errorf("write init result: %w", err)
+				}
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example"))
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example"))
+			if err != nil {
+				return fmt.Errorf("write init example result: %w", err)
+			}
 			return nil
 		},
 	}
