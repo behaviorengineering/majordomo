@@ -1,6 +1,7 @@
 package sa
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,9 +10,9 @@ import (
 func TestRunFiltersByGlob(t *testing.T) {
 	dir := t.TempDir()
 	cfgDir := filepath.Join(dir, "cfg")
-	_ = os.MkdirAll(cfgDir, 0o755)
-	_ = os.WriteFile(filepath.Join(cfgDir, "_defaults.yaml"), []byte("{}\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(cfgDir, "demo.yaml"), []byte(`
+	mustMkdirAll(t, cfgDir)
+	mustWriteFile(t, filepath.Join(cfgDir, "_defaults.yaml"), []byte("{}\n"), 0o644)
+	mustWriteFile(t, filepath.Join(cfgDir, "demo.yaml"), []byte(`
 scm: github
 repository:
   owner: acme
@@ -28,8 +29,8 @@ staticAnalysis:
 `), 0o644)
 
 	scripts := filepath.Join(dir, "scripts")
-	_ = os.MkdirAll(scripts, 0o755)
-	_ = os.WriteFile(filepath.Join(scripts, "run-sa-tool.sh"), []byte("#!/bin/true\n"), 0o755)
+	mustMkdirAll(t, scripts)
+	mustWriteFile(t, filepath.Join(scripts, "run-sa-tool.sh"), []byte("#!/bin/true\n"), 0o755)
 
 	var ran []string
 	err := Run(Options{
@@ -43,7 +44,7 @@ staticAnalysis:
 			"README.md",
 			"web/app.js",
 		},
-		Runner: func(scriptPath, slug, image, command, repoRoot string, files []string) error {
+		Runner: func(_ context.Context, scriptPath, slug, image, command, repoRoot string, files []string) error {
 			ran = append(ran, slug)
 			switch slug {
 			case "ruff":
@@ -65,5 +66,19 @@ staticAnalysis:
 	}
 	if len(ran) != 2 {
 		t.Fatalf("ran=%v", ran)
+	}
+}
+
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
 	}
 }
