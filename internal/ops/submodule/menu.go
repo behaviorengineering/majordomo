@@ -1,22 +1,33 @@
 package submodule
 
 import (
-	"fmt"
+	"bytes"
 	"strings"
+	"text/template"
 )
 
-func (m *manager) buildOpsMenu(currentBranch string) string {
-	header := fmt.Sprintf(
-		"Submodule Manager\n-----------------\nSubmodule : %s\nBranch    : %s",
-		m.submoduleName, currentBranch,
-	)
-	items := []string{
-		"1. Update to latest (pull current branch)",
-		"2. Switch to a different branch",
-		"3. Pin to current commit",
-		"q. Quit",
+func (m *manager) buildOpsMenu(currentBranch string) (string, error) {
+	const report = `Submodule Manager
+-----------------
+Submodule : {{.Submodule}}
+Branch    : {{.Branch}}
+
+1. Update to latest (pull current branch)
+2. Switch to a different branch
+3. Pin to current commit
+q. Quit`
+	tpl, err := template.New("submodule-menu").Parse(report)
+	if err != nil {
+		return "", err
 	}
-	return header + "\n\n" + strings.Join(items, "\n")
+	var out bytes.Buffer
+	if err := tpl.Execute(&out, map[string]string{
+		"Submodule": m.submoduleName,
+		"Branch":    currentBranch,
+	}); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 
 func (m *manager) opsMenuLoop() error {
@@ -25,7 +36,11 @@ func (m *manager) opsMenuLoop() error {
 		if err != nil {
 			return err
 		}
-		m.printf("\n%s\n", m.buildOpsMenu(currentBranch))
+		menu, err := m.buildOpsMenu(currentBranch)
+		if err != nil {
+			return err
+		}
+		m.printf("\n%s\n", menu)
 		choice, err := m.readKey("Choice: ")
 		if err != nil {
 			return err
@@ -60,10 +75,21 @@ func (m *manager) opsMenuLoop() error {
 }
 
 func (m *manager) promptOffBranchContext(currentParentBranch string) error {
-	warning := fmt.Sprintf(
-		"⚠️  OFF-BRANCH WARNING  ⚠️\nParent repo is on '%s', not '%s'.\nAny direct commits will land on '%s'.",
-		currentParentBranch, pipelinesBranch, currentParentBranch,
-	)
+	const warningTemplate = `⚠️  OFF-BRANCH WARNING  ⚠️
+Parent repo is on '{{.Current}}', not '{{.Pipelines}}'.
+Any direct commits will land on '{{.Current}}'.`
+	tpl, err := template.New("off-branch-warning").Parse(warningTemplate)
+	if err != nil {
+		return err
+	}
+	var warningOut bytes.Buffer
+	if err := tpl.Execute(&warningOut, map[string]string{
+		"Current":   currentParentBranch,
+		"Pipelines": pipelinesBranch,
+	}); err != nil {
+		return err
+	}
+	warning := warningOut.String()
 	m.printf("\n%s\n\n", warning)
 	m.printf("1. 🔒 Safe  — update '%s' via isolated worktree\n", pipelinesBranch)
 	m.printf("2. ⚡ Direct — I know what I'm doing (operate on '%s')\n", currentParentBranch)
