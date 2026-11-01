@@ -1,17 +1,19 @@
 package satools
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDiscoverDockerfiles(t *testing.T) {
 	dir := t.TempDir()
 	sa := filepath.Join(dir, "dockerfiles", "sa-tools")
-	_ = os.MkdirAll(sa, 0o755)
-	_ = os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(sa, "notes.txt"), []byte("x"), 0o644)
+	mustMkdir(t, sa)
+	mustWrite(t, filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
+	mustWrite(t, filepath.Join(sa, "notes.txt"), []byte("x"), 0o644)
 	got, err := discoverDockerfiles(sa)
 	if err != nil {
 		t.Fatal(err)
@@ -27,10 +29,10 @@ func TestDiscoverDockerfiles(t *testing.T) {
 func TestDryRun(t *testing.T) {
 	dir := t.TempDir()
 	sa := filepath.Join(dir, "dockerfiles", "sa-tools")
-	_ = os.MkdirAll(sa, 0o755)
-	_ = os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
-	_ = os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o644)
-	err := Run(Options{RepoRoot: dir, DryRun: true})
+	mustMkdir(t, sa)
+	mustWrite(t, filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
+	mustWrite(t, filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o644)
+	err := Run(Options{Context: testContext(t), RepoRoot: dir, DryRun: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,13 +41,34 @@ func TestDryRun(t *testing.T) {
 func TestCorpRequiresEnv(t *testing.T) {
 	dir := t.TempDir()
 	sa := filepath.Join(dir, "dockerfiles", "sa-tools")
-	_ = os.MkdirAll(sa, 0o755)
-	_ = os.WriteFile(filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
+	mustMkdir(t, sa)
+	mustWrite(t, filepath.Join(sa, "ruff.Dockerfile"), []byte("FROM scratch\n"), 0o644)
 	t.Setenv("REGISTRY_USER", "")
 	t.Setenv("REGISTRY_TOKEN", "")
 	t.Setenv("PACKAGE_REGISTRY_HOST", "")
-	err := Run(Options{RepoRoot: dir, Corp: true})
+	err := Run(Options{Context: testContext(t), RepoRoot: dir, Corp: true})
 	if err == nil {
 		t.Fatal("expected corp env error")
 	}
+}
+
+func mustMkdir(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWrite(t *testing.T, path string, data []byte, mode os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testContext(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	t.Cleanup(cancel)
+	return ctx
 }

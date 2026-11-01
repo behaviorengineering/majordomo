@@ -3,13 +3,15 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	operrors "github.com/behaviorengineering/majordomo/internal/ops/errors"
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -21,22 +23,25 @@ const (
 type Options struct {
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
+	// Context carries the caller deadline for Git operations.
+	Context context.Context
 	// In/Out for prompts (tests).
 	In  io.Reader
 	Out io.Writer
-	// GitRunner overrides git execution (tests). nil → real git.
+	// GitRunner overrides git execution (tests). Nil means real git.
 	GitRunner func(args []string, cwd string, check bool) (string, error)
-	// Prompt reads a line after printing prompt (tests). nil → stdin.
+	// Prompt reads a line after printing prompt (tests). Nil means stdin.
 	Prompt func(prompt string) (string, error)
-	// ReadKey reads a single choice character (tests). nil → line-based fallback.
+	// ReadKey reads a single choice character (tests). Nil means line-based fallback.
 	ReadKey func(prompt string) (string, error)
 }
 
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty if none.
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
@@ -44,7 +49,7 @@ func Run(opts Options) error {
 	m := &manager{opts: opts}
 	root, err := m.findSubmoduleRoot()
 	if err != nil {
-		return err
+		return operrors.Wrap(err, operrors.CodeInvalidArgument, "submodule.Run", "find submodule root")
 	}
 	m.submoduleRoot = root
 	m.parentRoot = m.findParentRepoRoot(root)
@@ -53,13 +58,25 @@ func Run(opts Options) error {
 	if m.parentRoot != "" {
 		parentBranch, err := m.currentBranch(m.parentRoot)
 		if err != nil {
-			return err
+			return operrors.Wrap(err, operrors.CodeInternal, "submodule.Run", "resolve parent branch")
 		}
 		if parentBranch != pipelinesBranch {
-			return m.promptOffBranchContext(parentBranch)
+			if err := m.promptOffBranchContext(parentBranch); err != nil {
+				return operrors.Wrap(err, operrors.CodeInternal, "submodule.Run", "handle off-branch context")
+			}
+			if err := m.outputError(); err != nil {
+				return err
+			}
+			return nil
 		}
 	}
-	return m.opsMenuLoop()
+	if err := m.opsMenuLoop(); err != nil {
+		return operrors.Wrap(err, operrors.CodeInternal, "submodule.Run", "run submodule manager")
+	}
+	if err := m.outputError(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -68,12 +85,12 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 		var err error
 		start, err = os.Getwd()
 		if err != nil {
-			return "", err
+			return "", operrors.Wrap(err, operrors.CodeInternal, "submodule.findSubmoduleRoot", "get current directory")
 		}
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", operrors.Wrap(err, operrors.CodeInvalidArgument, "submodule.findSubmoduleRoot", "not inside a git repository")
 	}
 	return out, nil
 }
@@ -142,15 +159,18 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 	return m.git([]string{"rev-parse", "--short", "HEAD"}, repoRoot, true)
 }
 
-func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
-	return strings.TrimSpace(out) != ""
+func (m *manager) isDirty(repoRoot string) (bool, error) {
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, true)
+	if err != nil {
+		return false, operrors.Wrap(err, operrors.CodeInternal, "submodule.isDirty", "git status failed")
+	}
+	return strings.TrimSpace(out) != "", nil
 }
 
 func (m *manager) gitDir(repoRoot string) (string, error) {
 	gitDir, err := m.git([]string{"rev-parse", "--git-dir"}, repoRoot, true)
 	if err != nil {
-		return "", err
+		return "", operrors.Wrap(err, operrors.CodeInternal, "submodule.gitDir", "resolve Git directory")
 	}
 	if filepath.IsAbs(gitDir) {
 		return gitDir, nil
@@ -160,14 +180,20 @@ func (m *manager) gitDir(repoRoot string) (string, error) {
 
 func (m *manager) resetWorkingTree(repoRoot string) error {
 	if _, err := m.git([]string{"reset", "--hard", "HEAD"}, repoRoot, true); err != nil {
-		return fmt.Errorf("git reset failed: %w", err)
+		return operrors.Wrap(err, operrors.CodeInternal, "submodule.resetWorkingTree", "git reset failed")
 	}
-	_, err := m.git([]string{"clean", "-fd"}, repoRoot, true)
-	return err
+	if _, err := m.git([]string{"clean", "-fd"}, repoRoot, true); err != nil {
+		return operrors.Wrap(err, operrors.CodeInternal, "submodule.resetWorkingTree", "git clean failed")
+	}
+	return nil
 }
 
 func (m *manager) confirmAndReset() (bool, error) {
-	if !m.isDirty(m.submoduleRoot) {
+	dirty, err := m.isDirty(m.submoduleRoot)
+	if err != nil {
+		return false, err
+	}
+	if !dirty {
 		return true, nil
 	}
 	m.printf("Warning: submodule has local modifications (possibly from a force push).\n")
@@ -176,7 +202,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled, local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -185,9 +211,12 @@ func (m *manager) confirmAndReset() (bool, error) {
 	return true, nil
 }
 
-func (m *manager) remoteTrackingSHA(branch string) string {
-	out, _ := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
-	return out
+func (m *manager) remoteTrackingSHA(branch string) (string, error) {
+	out, err := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, true)
+	if err != nil {
+		return "", operrors.Wrap(err, operrors.CodeNotFound, "submodule.remoteTrackingSHA", "resolve remote tracking branch")
+	}
+	return out, nil
 }
 
 func (m *manager) remoteBranches() ([]string, error) {
@@ -219,24 +248,53 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	if m.opts.Context == nil {
+		return "", operrors.New(operrors.CodeInvalidArgument, "submodule.git", "context is required")
+	}
+	stdout, stderr, err := process.Run(m.opts.Context, process.Options{
+		Name:      "git",
+		Args:      args,
+		Dir:       cwd,
+		Retryable: retryableGitCommand(args),
+	})
+	out := strings.TrimSpace(stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		message := "Git command failed"
+		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
+			message += ": " + trimmed
+		}
+		return out, operrors.Wrap(err, operrors.CodeInternal, "submodule.git", message)
 	}
 	return out, nil
 }
 
+func retryableGitCommand(args []string) func(error) bool {
+	if len(args) == 0 {
+		return nil
+	}
+	switch args[0] {
+	case "fetch", "push":
+		return process.RetryableProcessError
+	default:
+		return nil
+	}
+}
+
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	_, m.outputErr = fmt.Fprintf(m.out(), format, args...)
+}
+
+func (m *manager) outputError() error {
+	if m.outputErr == nil {
+		return nil
+	}
+	return operrors.Wrap(m.outputErr, operrors.CodeInternal, "submodule.output", "write operator output")
 }
 
 func (m *manager) out() io.Writer {
@@ -251,6 +309,9 @@ func (m *manager) prompt(p string) (string, error) {
 		return m.opts.Prompt(p)
 	}
 	m.printf("%s", p)
+	if err := m.outputError(); err != nil {
+		return "", err
+	}
 	in := m.opts.In
 	if in == nil {
 		in = os.Stdin

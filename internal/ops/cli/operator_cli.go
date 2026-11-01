@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	operrors "github.com/behaviorengineering/majordomo/internal/ops/errors"
 	"github.com/behaviorengineering/majordomo/pkg/platform/operatorcfg"
 	"github.com/spf13/cobra"
 )
@@ -54,11 +55,17 @@ Refreshes config.yaml.example on every run. Use --force to overwrite an existing
 				return err
 			}
 			if written {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path); err != nil {
+					return operrors.Wrap(err, operrors.CodeInternal, "cli.init", "write init result")
+				}
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path); err != nil {
+					return operrors.Wrap(err, operrors.CodeInternal, "cli.init", "write init result")
+				}
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example"))
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example")); err != nil {
+				return operrors.Wrap(err, operrors.CodeInternal, "cli.init", "write init result")
+			}
 			return nil
 		},
 	}
