@@ -9,6 +9,9 @@ env:
 tasks:
   default:
     desc: List local-dev tasks
+    summary: |
+      Lists local development tasks.
+      Pass arguments after -- only for tasks that document them.
     cmds:
       - go tool task --list
 

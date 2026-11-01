@@ -32,9 +32,6 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// errSubcommandRequired is returned when the root is invoked with no subcommand.
-var errSubcommandRequired = fmt.Errorf("subcommand required")
-
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
@@ -51,8 +48,7 @@ See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			return errSubcommandRequired
+			return writeAgentGuide(cmd)
 		},
 	}
 
@@ -76,6 +72,37 @@ See docs/PLAN-control-tower-github-go.md.`,
 	return root
 }
 
+func writeAgentGuide(cmd *cobra.Command) error {
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), `Majordomo
+
+Role
+  Control-plane CLI for repository review, publishing, cache, context, and operator workflows.
+
+Agent guide
+  Read AGENTS.md and ai-copilots/README.md before changing this module.
+  Load the relevant skill under ai-copilots/skills/ before operating a workflow.
+
+Inspect and plan
+  majordomo version
+  majordomo help
+  majordomo status ...
+  majordomo cache ...
+
+Execute and mutate
+  majordomo prep ...
+  majordomo dispatch ...
+  majordomo run review ...
+  majordomo publish ...
+
+Automation rules
+  Prefer --dry-run where available.
+  Keep publish disabled unless the workflow explicitly requires it.
+  Use --yes or an equivalent headless confirmation when a command provides one.
+
+Run majordomo help for the complete command and flag catalog.`)
+	return err
+}
+
 func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 	if err := cmd.MarkFlagRequired(name); err != nil {
 		panic(fmt.Errorf("mark flag %q required: %w", name, err))
@@ -83,7 +110,7 @@ func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 }
 
 // resolveOTELConfig loads observability from central-config when available, then applies env overrides.
-func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config {
+func resolveOTELConfig(outputDir, configDir, repoID string) (observability.Config, error) {
 	var settings observability.Settings
 	configDir = strings.TrimSpace(configDir)
 	repoID = strings.TrimSpace(repoID)
@@ -96,7 +123,7 @@ func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config
 			cfg, err = config.LoadDefaults(configDir)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "otel config load: %v\n", err)
+			return observability.Config{}, fmt.Errorf("load OTEL config: %w", err)
 		} else {
 			obs := cfg.Observability.Expand()
 			settings = observability.Settings{
@@ -108,15 +135,16 @@ func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config
 			}
 		}
 	}
-	return observability.ResolveConfig(outputDir, settings)
+	return observability.ResolveConfig(outputDir, settings), nil
 }
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), Version)
+			return err
 		},
 	}
 }
@@ -201,7 +229,17 @@ func newDispatchCmd() *cobra.Command {
 		Use:   "dispatch <pr-number> <staging-dir> <output-dir>",
 		Short: "Run one Judge batch (in-process strop; --opencode for harness)",
 		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			otelCfg, err := resolveOTELConfig(args[2], "", "")
+			if err != nil {
+				return err
+			}
+			if _, err := observability.Init(otelCfg); err != nil {
+				return fmt.Errorf("otel init: %w", err)
+			}
+			ctx, span := observability.StartChainSpan(cmd.Context(), otelCfg.ServiceName, "majordomo.dispatch")
+			defer observability.EndSpanWithStatus(span, &err)
+
 			mode := dispatch.ModeFiles
 			switch {
 			case finalize:
@@ -220,7 +258,7 @@ func newDispatchCmd() *cobra.Command {
 				mode = dispatch.ModeTechnicalDeep
 			}
 			opts := dispatch.DispatchOptions{
-				Context:    cmd.Context(),
+				Context:    ctx,
 				PRNumber:   args[0],
 				StagingDir: args[1],
 				OutputDir:  args[2],
@@ -270,7 +308,10 @@ func newOrchestrateCmd() *cobra.Command {
 			if timeoutMin > 0 {
 				timeout = time.Duration(timeoutMin) * time.Minute
 			}
-			otelCfg := resolveOTELConfig(outputDir, configDir, repoID)
+			otelCfg, err := resolveOTELConfig(outputDir, configDir, repoID)
+			if err != nil {
+				return err
+			}
 			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
 				return fmt.Errorf("otel init: %w", otelErr)
 			}
@@ -403,6 +444,7 @@ func newSACmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configDir = towerConfigDir(configDir)
 			return sa.Run(sa.Options{
+				Context:     cmd.Context(),
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
@@ -510,8 +552,8 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			return err
 		},
 	})
 	var pr, sha string
@@ -832,7 +874,12 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			return satools.Run(satools.Options{
+				Context: cmd.Context(),
+				DryRun:  dryRun,
+				Verbose: verbose,
+				Corp:    corp,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -846,7 +893,7 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			return submodule.Run(submodule.Options{Context: cmd.Context()})
 		},
 	}
 }
