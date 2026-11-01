@@ -20,8 +20,10 @@
 - Fix status: all actionable mechanical findings applied.
 - Pack mount commit: `0f17c12`.
 - Pass A fix commit: `49bdcad`, pushed to `cursor/staged-review-process-ddc6`.
+- Pass A follow-up commit: `b5ecffa`, pushed to `cursor/staged-review-process-ddc6`.
 - Draft PR: https://github.com/behaviorengineering/majordomo/pull/110
 - Focused tests: `go test ./internal/ops/process ./internal/ops/sa ./internal/ops/satools ./internal/ops/submodule` passed.
+- Follow-up verification: focused tests and vet passed; CLI tests passed with the same temporary checksum diagnostic.
 - CLI tests: passed with a temporary checksum diagnostic that did not replace the committed public checksum.
 - Full `go tool task vet`, `lint`, and `test`: blocked by the `operatorconfig@v0.1.1` checksum mismatch recorded below.
 
