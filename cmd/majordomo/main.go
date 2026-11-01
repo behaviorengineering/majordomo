@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/behaviorengineering/majordomo/internal/ops/cli"
@@ -16,16 +17,24 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
 	defer func() {
 		aigateway.ShutdownGlobal()
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = observability.Flush(ctx)
-		_ = observability.Shutdown(ctx)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		_ = observability.Flush(shutdownCtx)
+		_ = observability.Shutdown(shutdownCtx)
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	root := cli.NewRoot()
+	if err := root.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		if strings.HasPrefix(err.Error(), "unknown command") {
+			if helpErr := root.Help(); helpErr != nil {
+				fmt.Fprintln(os.Stderr, helpErr)
+			}
+		}
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)
 		}
