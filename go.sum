@@ -239,6 +239,8 @@ github.com/behaviorengineering/gitvalet v0.1.3 h1:SDQPJALoW+KyU4O6qqpmgqSqjXTFBp
 github.com/behaviorengineering/gitvalet v0.1.3/go.mod h1:zhBwPksTY2cnUFiA+34B1mSRV2/slHelmt5suC4jlxY=
 github.com/behaviorengineering/operatorconfig v0.1.1 h1:VYCyg9/sMiIjmcjcQzaU2xDQ1NBzixwb2JkaJOlUmb8=
 github.com/behaviorengineering/operatorconfig v0.1.1/go.mod h1:YK48fp+pItReAvi+CubwdtVMFdVM9DivhIuo0fVb1/Y=
+github.com/behaviorengineering/operatorconfig v0.2.0 h1:3X9FHkD3LRANEw3fmCab5QQL+A3TfLjRAvNpR18TlSc=
+github.com/behaviorengineering/operatorconfig v0.2.0/go.mod h1:YK48fp+pItReAvi+CubwdtVMFdVM9DivhIuo0fVb1/Y=
 github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740 h1:Ipg5LRj0nKS4Gs5IWFwXAODjZ7brmzYs8SGfVfloJqA=
 github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740/go.mod h1:9q5ityg3GeKtip5HMoq6G4h9ar5U2tID13UAXBM2Guw=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=

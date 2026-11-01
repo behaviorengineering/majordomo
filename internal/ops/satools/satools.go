@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
 )
 
 // Options configures a local SA tool image build run.
@@ -17,11 +18,15 @@ type Options struct {
 	Verbose bool
 	Corp    bool
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
-	// Empty → discover from cwd.
+	// Empty means discover from the current working directory.
 	RepoRoot string
 	// Runner overrides command execution (tests).
 	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
 }
+
+var toolSummaryTemplate = template.Must(template.New("sa-tool-summary").Parse(
+	"SA Tool Image Builder\nMode:      {{.Mode}}\nContext:   {{.Workspace}}\nTools:     {{.Tools}}\nDry-run:   {{.DryRun}}\n\n",
+))
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
@@ -53,8 +58,14 @@ func Run(opts Options) error {
 	for _, df := range dockerfiles {
 		tools = append(tools, toolName(df))
 	}
-	fmt.Printf("SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
-		mode, workspace, strings.Join(tools, ", "), opts.DryRun)
+	if err := toolSummaryTemplate.Execute(os.Stdout, struct {
+		Mode      string
+		Workspace string
+		Tools     string
+		DryRun    bool
+	}{mode, workspace, strings.Join(tools, ", "), opts.DryRun}); err != nil {
+		return fmt.Errorf("write SA tool summary: %w", err)
+	}
 
 	if opts.DryRun {
 		for _, df := range dockerfiles {
@@ -218,7 +229,11 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagOut, tagErrOut, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagErr != nil {
+			lines = append(lines, tagOut, tagErrOut, fmt.Sprintf("docker tag failed: %v", tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -238,13 +253,11 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {
-	marker := "✗"
 	status := "FAIL"
 	if success {
-		marker = "✓"
 		status = "PASS"
 	}
-	fmt.Printf("  %s sa-%s: %s\n", marker, tool, status)
+	fmt.Printf("  %s sa-%s\n", status, tool)
 	if !success || verbose {
 		for _, line := range output {
 			fmt.Printf("      %s\n", line)
