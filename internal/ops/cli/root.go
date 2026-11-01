@@ -2,8 +2,10 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -51,7 +53,9 @@ See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
+			if err := cmd.Help(); err != nil {
+				return fmt.Errorf("show help: %w", err)
+			}
 			return errSubcommandRequired
 		},
 	}
@@ -115,8 +119,11 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), Version); err != nil {
+				return fmt.Errorf("write version: %w", err)
+			}
+			return nil
 		},
 	}
 }
@@ -350,7 +357,11 @@ Publish is off unless --publish (CI sets it). --until stops after a stage:
 clone, sa, prep, waves, finalize, prose, synth, report, publish.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configDir = towerConfigDir(configDir)
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
 			return reviewrun.Run(reviewrun.Options{
+				Context:     ctx,
+				Logger:      slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil)),
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				PRNumber:    pr,
@@ -402,13 +413,17 @@ func newSACmd() *cobra.Command {
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configDir = towerConfigDir(configDir)
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
 			return sa.Run(sa.Options{
+				Context:     ctx,
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
 				BaseBranch:  baseBranch,
 				ScriptsDir:  scriptsDir,
 				ImagePrefix: imagePrefix,
+				Logger:      slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil)),
 			})
 		},
 	}
@@ -510,7 +525,9 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads); err != nil {
+				return fmt.Errorf("write poll cursor: %w", err)
+			}
 			return nil
 		},
 	})
@@ -832,7 +849,15 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
+			return satools.Run(satools.Options{
+				Context: ctx,
+				Out:     cmd.OutOrStdout(),
+				DryRun:  dryRun,
+				Verbose: verbose,
+				Corp:    corp,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -846,7 +871,9 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
+			return submodule.Run(submodule.Options{Context: ctx})
 		},
 	}
 }
