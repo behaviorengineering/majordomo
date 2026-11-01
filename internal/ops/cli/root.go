@@ -4,11 +4,15 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 	"github.com/behaviorengineering/majordomo/internal/ops/sa"
 	"github.com/behaviorengineering/majordomo/internal/ops/satools"
 	"github.com/behaviorengineering/majordomo/internal/ops/submodule"
@@ -32,9 +36,6 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// errSubcommandRequired is returned when the root is invoked with no subcommand.
-var errSubcommandRequired = fmt.Errorf("subcommand required")
-
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
@@ -50,9 +51,8 @@ Control tower YAML stays under --config-dir (default majordomo-central-config).
 See docs/PLAN-control-tower-github-go.md.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			return errSubcommandRequired
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return writeAgentGuide(cmd.OutOrStdout())
 		},
 	}
 
@@ -83,7 +83,7 @@ func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 }
 
 // resolveOTELConfig loads observability from central-config when available, then applies env overrides.
-func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config {
+func resolveOTELConfig(outputDir, configDir, repoID string) (observability.Config, error) {
 	var settings observability.Settings
 	configDir = strings.TrimSpace(configDir)
 	repoID = strings.TrimSpace(repoID)
@@ -96,27 +96,26 @@ func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config
 			cfg, err = config.LoadDefaults(configDir)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "otel config load: %v\n", err)
-		} else {
-			obs := cfg.Observability.Expand()
-			settings = observability.Settings{
-				Enabled:     obs.Enabled,
-				Endpoint:    obs.Endpoint,
-				APIKey:      obs.APIKey,
-				ServiceName: obs.ServiceName,
-				Insecure:    obs.Insecure,
-			}
+			return observability.Config{}, fmt.Errorf("load OTEL config: %w", err)
+		}
+		obs := cfg.Observability.Expand()
+		settings = observability.Settings{
+			Enabled:     obs.Enabled,
+			Endpoint:    obs.Endpoint,
+			APIKey:      obs.APIKey,
+			ServiceName: obs.ServiceName,
+			Insecure:    obs.Insecure,
 		}
 	}
-	return observability.ResolveConfig(outputDir, settings)
+	return observability.ResolveConfig(outputDir, settings), nil
 }
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return writeOutput(cmd.OutOrStdout(), "%s\n", Version)
 		},
 	}
 }
@@ -270,7 +269,10 @@ func newOrchestrateCmd() *cobra.Command {
 			if timeoutMin > 0 {
 				timeout = time.Duration(timeoutMin) * time.Minute
 			}
-			otelCfg := resolveOTELConfig(outputDir, configDir, repoID)
+			otelCfg, err := resolveOTELConfig(outputDir, configDir, repoID)
+			if err != nil {
+				return err
+			}
 			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
 				return fmt.Errorf("otel init: %w", otelErr)
 			}
@@ -403,12 +405,14 @@ func newSACmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configDir = towerConfigDir(configDir)
 			return sa.Run(sa.Options{
+				Context:     cmd.Context(),
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
 				BaseBranch:  baseBranch,
 				ScriptsDir:  scriptsDir,
 				ImagePrefix: imagePrefix,
+				Logger:      slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil)),
 			})
 		},
 	}
@@ -510,8 +514,7 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			return writeOutput(cmd.OutOrStdout(), "%v\n", c.Heads)
 		},
 	})
 	var pr, sha string
@@ -832,7 +835,12 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			return satools.Run(satools.Options{
+				Context: cmd.Context(),
+				DryRun:  dryRun,
+				Verbose: verbose,
+				Corp:    corp,
+			})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -846,7 +854,50 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			return submodule.Run(submodule.Options{
+				Context: cmd.Context(),
+				Process: process.NewRunner(),
+			})
 		},
 	}
+}
+
+const agentGuideTemplate = `Majordomo {{.Version}}
+
+Purpose
+  Repository operations for evolving software.
+
+Role and boundaries
+  Control-plane CLI for review, context, cache, and submodule operations.
+  Configuration is read from the operator overlay and control tower files.
+
+Agent operating guide
+  Read AGENTS.md and ai-copilots/README.md before changing this module.
+
+Inspect and plan
+  majordomo version
+  majordomo help
+  majordomo status --help
+
+Execute and mutate
+  Use command-specific --dry-run and --yes options where available.
+  Review paths before publishing or pushing changes.
+
+Automation rules
+  Keep publish disabled unless explicitly requested.
+  Use structured output commands when an automation consumer needs JSON.
+
+Full command catalog
+  Run majordomo help for flags and subcommands.
+`
+
+func writeAgentGuide(w io.Writer) error {
+	tmpl, err := template.New("agent-guide").Parse(agentGuideTemplate)
+	if err != nil {
+		return fmt.Errorf("parse agent guide: %w", err)
+	}
+	if err := tmpl.Execute(w, struct{ Version string }{Version: Version}); err != nil {
+		return fmt.Errorf("write agent guide: %w", err)
+	}
+	return nil
 }

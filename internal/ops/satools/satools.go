@@ -3,28 +3,58 @@ package satools
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
+	Context context.Context
 	DryRun  bool
 	Verbose bool
 	Corp    bool
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
 	// Empty → discover from cwd.
 	RepoRoot string
+	Process  *process.Runner
 	// Runner overrides command execution (tests).
-	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
+	Runner func(ctx context.Context, name string, args []string, env []string, dir string) (stdout, stderr string, err error)
+}
+
+const summaryTemplate = `SA Tool Image Builder
+Mode:      {{.Mode}}
+Context:   {{.Context}}
+Tools:     {{.Tools}}
+Dry-run:   {{.DryRun}}
+
+`
+
+type summaryData struct {
+	Mode    string
+	Context string
+	Tools   string
+	DryRun  bool
 }
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("satools requires context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("satools requires a context deadline")
+	}
+	if opts.Process == nil {
+		opts.Process = process.NewRunner()
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
 		return err
@@ -53,8 +83,14 @@ func Run(opts Options) error {
 	for _, df := range dockerfiles {
 		tools = append(tools, toolName(df))
 	}
-	fmt.Printf("SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
-		mode, workspace, strings.Join(tools, ", "), opts.DryRun)
+	if err := renderSummary(os.Stdout, summaryData{
+		Mode:    mode,
+		Context: workspace,
+		Tools:   strings.Join(tools, ", "),
+		DryRun:  opts.DryRun,
+	}); err != nil {
+		return fmt.Errorf("render SA tool summary: %w", err)
+	}
 
 	if opts.DryRun {
 		for _, df := range dockerfiles {
@@ -75,7 +111,7 @@ func Run(opts Options) error {
 		names = append(names, tool)
 		tag := imageTag(tool)
 		fmt.Printf("Building %s (%s) ...\n", tag, mode)
-		ok, output := runBuild(opts, buildSh, df, workspace, tag, tool)
+		ok, output := runBuild(opts, opts.Context, buildSh, df, workspace, tag, tool)
 		results[tool] = ok
 		printResult(tool, ok, output, opts.Verbose)
 	}
@@ -198,7 +234,7 @@ func findBuildScript(repoRoot, workspace string) (string, error) {
 	return "", fmt.Errorf("build-copilot-image.sh not found (searched under %s)", repoRoot)
 }
 
-func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (bool, []string) {
+func runBuild(opts Options, ctx context.Context, buildSh, dockerfile, workspace, tag, tool string) (bool, []string) {
 	dockerfileArg := dockerfile
 	if rel, err := filepath.Rel(workspace, dockerfile); err == nil {
 		dockerfileArg = rel
@@ -214,27 +250,48 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 		env = unsetEnv(env, "PACKAGE_REGISTRY_HOST")
 	}
 	args := []string{buildSh, "local", "sa-" + tool, "local-test", dockerfileArg}
-	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace)
+	stdout, stderr, err := runCmd(opts, ctx, "bash", args, env, workspace)
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagStdout, tagStderr, tagErr := runCmd(opts, ctx, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		lines = appendCommandOutput(lines, tagStdout, tagStderr)
+		if tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag: %v", tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
 
-func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
+func runCmd(opts Options, ctx context.Context, name string, args, env []string, dir string) (string, string, error) {
 	if opts.Runner != nil {
-		return opts.Runner(name, args, env, dir)
+		return opts.Runner(ctx, name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	if opts.Process == nil {
+		opts.Process = process.NewRunner()
+	}
+	err := opts.Process.Run(ctx, "sa-tool-builder", name, args, env, dir, &stdout, &stderr)
 	return stdout.String(), stderr.String(), err
+}
+
+func appendCommandOutput(lines []string, outputs ...string) []string {
+	for _, output := range outputs {
+		output = strings.TrimRight(output, "\n")
+		if output != "" {
+			lines = append(lines, strings.Split(output, "\n")...)
+		}
+	}
+	return lines
+}
+
+func renderSummary(w io.Writer, data summaryData) error {
+	tmpl, err := template.New("summary").Parse(summaryTemplate)
+	if err != nil {
+		return err
+	}
+	return tmpl.Execute(w, data)
 }
 
 func printResult(tool string, success bool, output []string, verbose bool) {

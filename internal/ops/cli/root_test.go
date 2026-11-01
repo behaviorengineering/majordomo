@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -31,6 +32,35 @@ func TestPublicCLIOmitsDigestCacheCommands(t *testing.T) {
 		if !names[name] {
 			t.Fatalf("expected review/poll cache command %s", name)
 		}
+	}
+}
+
+func TestRootBareInvocationPrintsAgentGuide(t *testing.T) {
+	root := cli.NewRoot()
+	root.SetArgs([]string{})
+	var output bytes.Buffer
+	root.SetOut(&output)
+	root.SetErr(&output)
+
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Agent operating guide") {
+		t.Fatalf("output=%q", output.String())
+	}
+}
+
+func TestVersionDoesNotRequireOperatorConfig(t *testing.T) {
+	root := cli.NewRoot()
+	root.SetArgs([]string{"version"})
+	var output bytes.Buffer
+	root.SetOut(&output)
+
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(output.String()) == "" {
+		t.Fatal("version output is empty")
 	}
 }
 

@@ -4,12 +4,14 @@ package submodule
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -19,6 +21,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -30,17 +33,28 @@ type Options struct {
 	Prompt func(prompt string) (string, error)
 	// ReadKey reads a single choice character (tests). nil → line-based fallback.
 	ReadKey func(prompt string) (string, error)
+	// Process runs real Git commands.
+	Process *process.Runner
 }
 
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when no parent repository exists.
 	submoduleName string
 }
 
 // Run launches the interactive submodule manager.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("submodule requires context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("submodule requires a context deadline")
+	}
+	if opts.Process == nil {
+		opts.Process = process.NewRunner()
+	}
 	m := &manager{opts: opts}
 	root, err := m.findSubmoduleRoot()
 	if err != nil {
@@ -93,11 +107,14 @@ func (m *manager) findParentRepoRoot(submoduleRoot string) string {
 		return ""
 	}
 	rel = filepath.ToSlash(rel)
-	indexEntry, _ := m.git([]string{"ls-files", "--stage", rel}, parent, false)
-	if strings.HasPrefix(indexEntry, "160000") {
+	indexEntry, indexErr := m.git([]string{"ls-files", "--stage", rel}, parent, false)
+	if indexErr == nil && strings.HasPrefix(indexEntry, "160000") {
 		return parent
 	}
-	gitDirRaw, _ := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
+	gitDirRaw, gitDirErr := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
+	if gitDirErr != nil {
+		return ""
+	}
 	if gitDirRaw == "" {
 		return ""
 	}
@@ -126,8 +143,8 @@ func (m *manager) isGitlinkInIndex(submoduleName string) bool {
 	if m.parentRoot == "" {
 		return false
 	}
-	entry, _ := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
-	return strings.HasPrefix(entry, "160000")
+	entry, err := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
+	return err == nil && strings.HasPrefix(entry, "160000")
 }
 
 func (m *manager) currentBranch(repoRoot string) (string, error) {
@@ -143,7 +160,10 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 }
 
 func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, false)
+	if err != nil {
+		return true
+	}
 	return strings.TrimSpace(out) != ""
 }
 
@@ -186,7 +206,10 @@ func (m *manager) confirmAndReset() (bool, error) {
 }
 
 func (m *manager) remoteTrackingSHA(branch string) string {
-	out, _ := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
+	out, err := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
+	if err != nil {
+		return ""
+	}
 	return out
 }
 
@@ -219,12 +242,17 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := m.opts.Process.Run(
+		m.opts.Context,
+		"git",
+		"git",
+		args,
+		nil,
+		cwd,
+		&stdout,
+		&stderr,
+	)
 	out := strings.TrimSpace(stdout.String())
 	if err != nil {
 		if !check {
