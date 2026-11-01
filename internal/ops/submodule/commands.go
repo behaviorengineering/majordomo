@@ -253,7 +253,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 	return true, nil
 }
 
-func (m *manager) cmdUpdateViaWorktree() (bool, error) {
+func (m *manager) cmdUpdateViaWorktree() (committed bool, err error) {
 	sha, err := m.git([]string{"rev-parse", "HEAD"}, m.submoduleRoot, true)
 	if err != nil {
 		return false, err
@@ -289,10 +289,14 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	if _, err := m.git([]string{"worktree", "add", "--detach", worktreePath, "origin/" + pipelinesBranch}, m.parentRoot, true); err != nil {
 		return false, fmt.Errorf("git worktree add failed: %w", err)
 	}
-	committed := false
 	defer func() {
 		m.printf("Cleaning up worktree...\n")
-		_, _ = m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false)
+		if _, cleanupErr := m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, true); cleanupErr != nil {
+			m.printf("Warning: worktree cleanup failed for %s: %v\n", worktreePath, cleanupErr)
+			if err == nil {
+				err = fmt.Errorf("clean up worktree %s: %w", worktreePath, cleanupErr)
+			}
+		}
 	}()
 	cacheInfo := fmt.Sprintf("160000,%s,%s", sha, m.submoduleName)
 	if _, err := m.git([]string{"update-index", "--cacheinfo", cacheInfo}, worktreePath, true); err != nil {

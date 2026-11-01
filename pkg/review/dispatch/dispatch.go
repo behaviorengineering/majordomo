@@ -105,6 +105,9 @@ func Dispatch(opts DispatchOptions) error {
 	if ctx == nil {
 		return fmt.Errorf("dispatch: context is required")
 	}
+	if _, ok := ctx.Deadline(); !ok {
+		return fmt.Errorf("dispatch: context deadline is required")
+	}
 	if opts.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, opts.Timeout)
