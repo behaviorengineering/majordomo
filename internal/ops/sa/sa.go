@@ -2,6 +2,7 @@
 package sa
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,7 +27,7 @@ type Options struct {
 	ImagePrefix string
 	// Runner overrides script execution (tests).
 	Runner ToolRunner
-	// ChangedFiles injectable for tests; empty → git diff via staging.SetupGit.
+	// ChangedFiles is injectable for tests; empty means use git diff via staging.SetupGit.
 	ChangedFiles []string
 }
 
@@ -48,7 +49,7 @@ func Run(opts Options) error {
 		return err
 	}
 	if len(cfg.StaticAnalysis) == 0 {
-		logf("INFO", "no staticAnalysis tools configured for %s — skipping", opts.RepoID)
+		logf("INFO", "no staticAnalysis tools configured for %s, skipping", opts.RepoID)
 		return nil
 	}
 
@@ -92,6 +93,7 @@ func Run(opts Options) error {
 		runner = defaultToolRunner
 	}
 
+	var runErr error
 	for _, tool := range cfg.StaticAnalysis {
 		slug := config.ResolveSAToolSlug(tool)
 		matched := filterFiles(files, tool.Glob)
@@ -108,9 +110,10 @@ func Run(opts Options) error {
 		logf("INFO", "run %s image=%s files=%d", slug, image, len(matched))
 		if err := runner(scriptPath, slug, image, cmd, repoRoot, matched); err != nil {
 			logf("WARN", "%s: %v (continuing)", slug, err)
+			runErr = errors.Join(runErr, fmt.Errorf("%s: %w", slug, err))
 		}
 	}
-	return nil
+	return runErr
 }
 
 func filterFiles(files []string, glob string) []string {

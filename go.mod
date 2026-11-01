@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/XiaoConstantine/dspy-go v0.89.0
 	github.com/behaviorengineering/gitvalet v0.1.3
-	github.com/behaviorengineering/operatorconfig v0.1.1
+	github.com/behaviorengineering/operatorconfig v0.2.0
 	github.com/behaviorengineering/strop v0.5.9-0.20260929164922-5bf8c4c77740
 	github.com/maximhq/bifrost/core v1.7.0
 	github.com/spf13/cobra v1.10.2
