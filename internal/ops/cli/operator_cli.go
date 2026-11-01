@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 
 	"github.com/behaviorengineering/majordomo/pkg/platform/operatorcfg"
@@ -54,14 +55,25 @@ Refreshes config.yaml.example on every run. Use --force to overwrite an existing
 				return err
 			}
 			if written {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path)
+				if err := writeOutput(cmd.OutOrStdout(), "Wrote %s\n", path); err != nil {
+					return fmt.Errorf("write init output: %w", err)
+				}
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path)
+				if err := writeOutput(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path); err != nil {
+					return fmt.Errorf("write init output: %w", err)
+				}
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example"))
+			if err := writeOutput(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example")); err != nil {
+				return fmt.Errorf("write init output: %w", err)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing config.yaml")
 	return cmd
+}
+
+func writeOutput(w io.Writer, format string, args ...any) error {
+	_, err := fmt.Fprintf(w, format, args...)
+	return err
 }
