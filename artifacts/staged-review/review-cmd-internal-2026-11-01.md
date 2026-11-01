@@ -219,3 +219,9 @@ tasks:
 - Stage 8 logging: fixed in Pass A. Static-analysis logs now use injected structured `slog`.
 - Stage 8 Task summaries: fixed in Pass A. Listed tasks now expose concise summaries.
 
+## Pass A Commit
+
+- Commit: `6fb9f3b fix: apply mechanical staged-review findings`
+- Verification: `go tool task vet`, `go tool task lint`, `go tool gofumpt -l ./cmd ./internal ./pkg`, and `go test ./...` all passed.
+- State: ready to push before Pass B consultant dialogue.
+
