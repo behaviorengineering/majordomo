@@ -223,5 +223,6 @@ tasks:
 
 - Commit: `6fb9f3b fix: apply mechanical staged-review findings`
 - Verification: `go tool task vet`, `go tool task lint`, `go tool gofumpt -l ./cmd ./internal ./pkg`, and `go test ./...` all passed.
-- State: ready to push before Pass B consultant dialogue.
+- Draft PR: https://github.com/behaviorengineering/majordomo/pull/109
+- State: Pass A pushed; Pass B consultant dialogue follows in this thread.
 
