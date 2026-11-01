@@ -2,13 +2,15 @@
 package satools
 
 import (
-	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/executil"
 )
 
 // Options configures a local SA tool image build run.
@@ -16,8 +18,10 @@ type Options struct {
 	DryRun  bool
 	Verbose bool
 	Corp    bool
+	Context context.Context
+	Output  io.Writer
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
-	// Empty → discover from cwd.
+	// Empty values are discovered from the current working directory.
 	RepoRoot string
 	// Runner overrides command execution (tests).
 	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
@@ -25,15 +29,24 @@ type Options struct {
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("sa tools requires context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("sa tools requires a context deadline")
+	}
+	if opts.Output == nil {
+		return fmt.Errorf("sa tools requires output")
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve SA tools repository root: %w", err)
 	}
 	workspace := workspaceRoot(repoRoot)
 	saDir := saToolsDir(repoRoot)
 	dockerfiles, err := discoverDockerfiles(saDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("discover SA tool Dockerfiles: %w", err)
 	}
 	if len(dockerfiles) == 0 {
 		return fmt.Errorf("no Dockerfiles found in %s", saDir)
@@ -53,19 +66,23 @@ func Run(opts Options) error {
 	for _, df := range dockerfiles {
 		tools = append(tools, toolName(df))
 	}
-	fmt.Printf("SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
-		mode, workspace, strings.Join(tools, ", "), opts.DryRun)
+	if _, err := fmt.Fprintf(opts.Output, "SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
+		mode, workspace, strings.Join(tools, ", "), opts.DryRun); err != nil {
+		return fmt.Errorf("write SA tool header: %w", err)
+	}
 
 	if opts.DryRun {
 		for _, df := range dockerfiles {
-			fmt.Printf("  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df)
+			if _, err := fmt.Fprintf(opts.Output, "  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df); err != nil {
+				return fmt.Errorf("write SA tool dry-run output: %w", err)
+			}
 		}
 		return nil
 	}
 
 	buildSh, err := findBuildScript(repoRoot, workspace)
 	if err != nil {
-		return err
+		return fmt.Errorf("find SA tool build script: %w", err)
 	}
 
 	results := map[string]bool{}
@@ -74,10 +91,14 @@ func Run(opts Options) error {
 		tool := toolName(df)
 		names = append(names, tool)
 		tag := imageTag(tool)
-		fmt.Printf("Building %s (%s) ...\n", tag, mode)
+		if _, err := fmt.Fprintf(opts.Output, "Building %s (%s) ...\n", tag, mode); err != nil {
+			return fmt.Errorf("write SA tool build output: %w", err)
+		}
 		ok, output := runBuild(opts, buildSh, df, workspace, tag, tool)
 		results[tool] = ok
-		printResult(tool, ok, output, opts.Verbose)
+		if err := printResult(opts.Output, tool, ok, output, opts.Verbose); err != nil {
+			return err
+		}
 	}
 
 	sort.Strings(names)
@@ -87,13 +108,17 @@ func Run(opts Options) error {
 			passed++
 		}
 	}
-	fmt.Printf("\nResults: %d/%d passed\n", passed, len(names))
+	if _, err := fmt.Fprintf(opts.Output, "\nResults: %d/%d passed\n", passed, len(names)); err != nil {
+		return fmt.Errorf("write SA tool results: %w", err)
+	}
 	for _, n := range names {
 		status := "FAIL"
 		if results[n] {
 			status = "PASS"
 		}
-		fmt.Printf("  %s  sa-%s\n", status, n)
+		if _, err := fmt.Fprintf(opts.Output, "  %s  sa-%s\n", status, n); err != nil {
+			return fmt.Errorf("write SA tool status: %w", err)
+		}
 	}
 	if passed < len(names) {
 		return fmt.Errorf("%d/%d SA tool builds failed", len(names)-passed, len(names))
@@ -107,7 +132,7 @@ func resolveRepoRoot(explicit string) (string, error) {
 	}
 	wd, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get current directory: %w", err)
 	}
 	dir := wd
 	for {
@@ -159,7 +184,7 @@ func discoverDockerfiles(saDir string) ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read SA tool directory: %w", err)
 	}
 	var out []string
 	for _, e := range entries {
@@ -214,42 +239,51 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 		env = unsetEnv(env, "PACKAGE_REGISTRY_HOST")
 	}
 	args := []string{buildSh, "local", "sa-" + tool, "local-test", dockerfileArg}
-	stdout, stderr, err := runCmd(opts, "bash", args, env, workspace)
+	stdout, stderr, err := runExternalCommand(opts, "bash", args, env, workspace, true)
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		tagStdout, tagStderr, tagErr := runExternalCommand(opts, "docker", []string{"tag", full, tag}, os.Environ(), "", false)
+		lines = append(lines, strings.Split(strings.TrimRight(tagStdout+tagStderr, "\n"), "\n")...)
+		if tagErr != nil {
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
 
-func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
+func runExternalCommand(opts Options, name string, args, env []string, dir string, networked bool) (string, string, error) {
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stdout.String(), stderr.String(), err
+	return executil.Run(executil.Options{
+		Context:   opts.Context,
+		Name:      name,
+		Args:      args,
+		Env:       env,
+		Dir:       dir,
+		Networked: networked,
+	})
 }
 
-func printResult(tool string, success bool, output []string, verbose bool) {
+func printResult(outputWriter io.Writer, tool string, success bool, output []string, verbose bool) error {
 	marker := "✗"
 	status := "FAIL"
 	if success {
 		marker = "✓"
 		status = "PASS"
 	}
-	fmt.Printf("  %s sa-%s: %s\n", marker, tool, status)
+	if _, err := fmt.Fprintf(outputWriter, "  %s sa-%s: %s\n", marker, tool, status); err != nil {
+		return fmt.Errorf("write SA tool result: %w", err)
+	}
 	if !success || verbose {
 		for _, line := range output {
-			fmt.Printf("      %s\n", line)
+			if _, err := fmt.Fprintf(outputWriter, "      %s\n", line); err != nil {
+				return fmt.Errorf("write SA tool detail: %w", err)
+			}
 		}
 	}
+	return nil
 }
 
 func setEnv(env []string, key, value string) []string {
