@@ -3,6 +3,8 @@
 **Target:** `./cmd/...` and `./internal/...`
 **Selected Stages:** Pass A: 1, 2, 3, 7, 8; Pass B: 4, 5, 6
 **Hooks:** none discovered
+**Pass A Commit:** `cbb9d1f`
+**Draft PR:** [Mechanical staged-review fixes](https://github.com/behaviorengineering/majordomo/pull/101)
 
 ## Stages
 - [x] 1. Automated Tools — Score: 3/10
