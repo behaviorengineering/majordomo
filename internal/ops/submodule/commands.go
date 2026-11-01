@@ -292,7 +292,9 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	committed := false
 	defer func() {
 		m.printf("Cleaning up worktree...\n")
-		_, _ = m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false)
+		if _, err := m.git([]string{"worktree", "remove", "--force", worktreePath}, m.parentRoot, false); err != nil {
+			m.printf("Warning: failed to clean up worktree: %v\n", err)
+		}
 	}()
 	cacheInfo := fmt.Sprintf("160000,%s,%s", sha, m.submoduleName)
 	if _, err := m.git([]string{"update-index", "--cacheinfo", cacheInfo}, worktreePath, true); err != nil {

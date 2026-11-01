@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,9 +33,6 @@ import (
 // Version is set at build time via -ldflags.
 var Version = "dev"
 
-// errSubcommandRequired is returned when the root is invoked with no subcommand.
-var errSubcommandRequired = fmt.Errorf("subcommand required")
-
 // NewRoot returns the root majordomo command.
 func NewRoot() *cobra.Command {
 	root := &cobra.Command{
@@ -48,11 +46,32 @@ Local operator overlay: majordomo init writes ~/.config/majordomo/config.yaml (o
 Control tower YAML stays under --config-dir (default majordomo-central-config).
 
 See docs/PLAN-control-tower-github-go.md.`,
-		SilenceUsage:  true,
+		SilenceUsage:  false,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = cmd.Help()
-			return errSubcommandRequired
+			return writeOutput(cmd, `majordomo %s
+
+Purpose
+  Repository operations for evolving software.
+
+Agent docs
+  AGENTS.md
+  ai-copilots/README.md
+
+Inspect
+  version, status, help
+
+Plan or dry-run
+  prep, orchestrate --skip-deep, build-sa-tools --dry-run
+
+Execute
+  poll, dispatch, publish, context, sa, submodule
+
+Automation rules
+  Use --dry-run before mutations and --yes for headless confirmation where supported.
+
+Run "majordomo help" for the complete command and flag catalog.
+`, Version)
 		},
 	}
 
@@ -82,8 +101,15 @@ func mustMarkFlagRequired(cmd *cobra.Command, name string) {
 	}
 }
 
+func writeOutput(cmd *cobra.Command, format string, args ...any) error {
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), format, args...); err != nil {
+		return fmt.Errorf("write command output: %w", err)
+	}
+	return nil
+}
+
 // resolveOTELConfig loads observability from central-config when available, then applies env overrides.
-func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config {
+func resolveOTELConfig(outputDir, configDir, repoID string) (observability.Config, error) {
 	var settings observability.Settings
 	configDir = strings.TrimSpace(configDir)
 	repoID = strings.TrimSpace(repoID)
@@ -96,27 +122,26 @@ func resolveOTELConfig(outputDir, configDir, repoID string) observability.Config
 			cfg, err = config.LoadDefaults(configDir)
 		}
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "otel config load: %v\n", err)
-		} else {
-			obs := cfg.Observability.Expand()
-			settings = observability.Settings{
-				Enabled:     obs.Enabled,
-				Endpoint:    obs.Endpoint,
-				APIKey:      obs.APIKey,
-				ServiceName: obs.ServiceName,
-				Insecure:    obs.Insecure,
-			}
+			return observability.Config{}, fmt.Errorf("otel config load: %w", err)
+		}
+		obs := cfg.Observability.Expand()
+		settings = observability.Settings{
+			Enabled:     obs.Enabled,
+			Endpoint:    obs.Endpoint,
+			APIKey:      obs.APIKey,
+			ServiceName: obs.ServiceName,
+			Insecure:    obs.Insecure,
 		}
 	}
-	return observability.ResolveConfig(outputDir, settings)
+	return observability.ResolveConfig(outputDir, settings), nil
 }
 
 func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print majordomo version",
-		Run: func(cmd *cobra.Command, args []string) {
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), Version)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return writeOutput(cmd, "%s\n", Version)
 		},
 	}
 }
@@ -270,7 +295,10 @@ func newOrchestrateCmd() *cobra.Command {
 			if timeoutMin > 0 {
 				timeout = time.Duration(timeoutMin) * time.Minute
 			}
-			otelCfg := resolveOTELConfig(outputDir, configDir, repoID)
+			otelCfg, otelConfigErr := resolveOTELConfig(outputDir, configDir, repoID)
+			if otelConfigErr != nil {
+				return otelConfigErr
+			}
 			if _, otelErr := observability.Init(otelCfg); otelErr != nil {
 				return fmt.Errorf("otel init: %w", otelErr)
 			}
@@ -402,7 +430,10 @@ func newSACmd() *cobra.Command {
 		Short: "Run staticAnalysis tools from central config into .sa/",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configDir = towerConfigDir(configDir)
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
 			return sa.Run(sa.Options{
+				Context:     ctx,
 				ConfigDir:   configDir,
 				RepoID:      repoID,
 				RepoRoot:    repoRoot,
@@ -510,8 +541,7 @@ func newCacheCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%v\n", c.Heads)
-			return nil
+			return writeOutput(cmd, "%v\n", c.Heads)
 		},
 	})
 	var pr, sha string
@@ -832,7 +862,9 @@ func newBuildSAToolsCmd() *cobra.Command {
 		Use:   "build-sa-tools",
 		Short: "Build local SA tool Docker images to validate Dockerfiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return satools.Run(satools.Options{DryRun: dryRun, Verbose: verbose, Corp: corp})
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
+			return satools.Run(satools.Options{Context: ctx, DryRun: dryRun, Verbose: verbose, Corp: corp})
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "list tools without building")
@@ -846,7 +878,9 @@ func newSubmoduleCmd() *cobra.Command {
 		Use:   "submodule",
 		Short: "Interactive manager for a vendored .majordomo submodule",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return submodule.Run(submodule.Options{})
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Minute)
+			defer cancel()
+			return submodule.Run(submodule.Options{Context: ctx})
 		},
 	}
 }
