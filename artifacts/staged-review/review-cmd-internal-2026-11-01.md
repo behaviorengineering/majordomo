@@ -7,6 +7,7 @@
 **Baseline:** Pack mount committed separately as `0796e60`.
 **Pass A Fix Commit:** `9e72086`
 **Pass A Status:** complete; ready to push before consultant dialogue.
+**Draft PR:** https://github.com/behaviorengineering/majordomo/pull/111
 
 ## Stages
 - [x] 1. Automated Tools — 4/10
@@ -273,6 +274,14 @@ fmt.Printf("[%s] [%s] %s\n", ts, level, ...)
 **Status:** fixed in Pass A
 
 ## Open Questions
+
+#### Open Architecture: Shared process seam ownership
+**Location:** `internal/ops/process/process.go:1-110`
+**Observation:** SA, SA-tool, and submodule operations now share a context-aware process package under `internal/ops`, including retry and circuit-breaker policy.
+**Question:** Is `internal/ops` the intended long-term owner for this shared process boundary, or should it move to a more general platform/domain package before more command paths depend on it?
+**Possible outcomes:**
+- If `internal/ops` is intentional: non-issue; retain the focused package.
+- If it is not intentional: record an architecture finding and move the seam in a follow-up.
 
 ## Resolutions
 
