@@ -33,7 +33,7 @@ func skipOperatorBootstrap(cmd *cobra.Command) bool {
 			return true
 		}
 	}
-	return false
+	return cmd.Parent() == nil
 }
 
 func towerConfigDir(flagValue string) string {
@@ -54,12 +54,16 @@ Refreshes config.yaml.example on every run. Use --force to overwrite an existing
 				return err
 			}
 			if written {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Wrote %s\n", path); err != nil {
+					return fmt.Errorf("print config path: %w", err)
+				}
 			} else {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path)
+				if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Config already exists at %s (use --force to overwrite)\n", path); err != nil {
+					return fmt.Errorf("print config status: %w", err)
+				}
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example"))
-			return nil
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Updated %s\n", filepath.Join(filepath.Dir(path), "config.yaml.example"))
+			return err
 		},
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing config.yaml")

@@ -1,6 +1,7 @@
 package cli_test
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -31,6 +32,20 @@ func TestPublicCLIOmitsDigestCacheCommands(t *testing.T) {
 		if !names[name] {
 			t.Fatalf("expected review/poll cache command %s", name)
 		}
+	}
+}
+
+func TestBareRootPrintsAgentGuide(t *testing.T) {
+	root := cli.NewRoot()
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetArgs([]string{})
+
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Agent guide") {
+		t.Fatalf("bare root output=%q", out.String())
 	}
 }
 
