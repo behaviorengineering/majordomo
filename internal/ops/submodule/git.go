@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/commandexec"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -41,6 +43,9 @@ type manager struct {
 
 // Run launches the interactive submodule manager.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("submodule manager requires a context")
+	}
 	m := &manager{opts: opts}
 	root, err := m.findSubmoduleRoot()
 	if err != nil {
@@ -73,7 +78,7 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	}
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, start, true)
 	if err != nil {
-		return "", fmt.Errorf("could not determine submodule root — not inside a git repo")
+		return "", fmt.Errorf("could not determine submodule root - not inside a git repo")
 	}
 	return out, nil
 }
@@ -176,7 +181,7 @@ func (m *manager) confirmAndReset() (bool, error) {
 		return false, err
 	}
 	if strings.ToLower(strings.TrimSpace(raw)) != "y" {
-		m.printf("Cancelled — local changes preserved.\n")
+		m.printf("Cancelled - local changes preserved.\n")
 		return false, nil
 	}
 	if err := m.resetWorkingTree(m.submoduleRoot); err != nil {
@@ -219,20 +224,65 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	result, err := commandexec.Run(m.opts.Context, commandexec.Request{
+		Name:        "git",
+		Args:        args,
+		Dir:         cwd,
+		Retry:       isRemoteGitCommand(args),
+		IsRetryable: isRetryableGitFailure,
+	})
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
 		if !check {
 			return out, nil
 		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(result.Stderr))
 	}
 	return out, nil
+}
+
+func isRemoteGitCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "clone", "fetch", "pull", "push":
+		return true
+	default:
+		return false
+	}
+}
+
+func isRetryableGitFailure(result commandexec.Result, _ error) bool {
+	message := strings.ToLower(result.Stderr)
+	for _, permanent := range []string{
+		"authentication",
+		"permission denied",
+		"could not read username",
+		"repository not found",
+	} {
+		if strings.Contains(message, permanent) {
+			return false
+		}
+	}
+	for _, transient := range []string{
+		"connection",
+		"could not resolve host",
+		"early eof",
+		"network is unreachable",
+		"timed out",
+		"timeout",
+		"temporarily unavailable",
+		"remote end hung up",
+		"502",
+		"503",
+		"504",
+	} {
+		if strings.Contains(message, transient) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *manager) printf(format string, args ...any) {
