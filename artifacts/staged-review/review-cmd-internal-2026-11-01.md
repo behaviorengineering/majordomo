@@ -19,6 +19,8 @@
 - Mechanical findings: 0 recorded before Stage 1.
 - Fix status: all actionable mechanical findings applied.
 - Pack mount commit: `0f17c12`.
+- Pass A fix commit: `49bdcad`, pushed to `cursor/staged-review-process-ddc6`.
+- Draft PR: https://github.com/behaviorengineering/majordomo/pull/110
 - Focused tests: `go test ./internal/ops/process ./internal/ops/sa ./internal/ops/satools ./internal/ops/submodule` passed.
 - CLI tests: passed with a temporary checksum diagnostic that did not replace the committed public checksum.
 - Full `go tool task vet`, `lint`, and `test`: blocked by the `operatorconfig@v0.1.1` checksum mismatch recorded below.
@@ -146,6 +148,23 @@ Fail the test immediately when fixture creation fails.
 **Rationale:** A fixture can be incomplete while the test continues and fails later with a misleading product assertion.
 **Status:** fixed in Pass A
 
+#### High Error Handling: Git probe failures are collapsed into no-op results
+**Location:** `internal/ops/submodule/git.go:218-234`, `internal/ops/submodule/commands.go:276-318`
+**Severity:** High
+
+**Current Code:**
+```go
+if !check {
+    return out, nil
+}
+```
+
+**Recommendation:**
+Preserve Git errors and handle expected missing references explicitly at the probe call sites.
+
+**Rationale:** Failed commits, remote lookups, or cleanup commands can be misreported as missing branches or successful no-ops.
+**Status:** fixed in Pass A follow-up
+
 ### Stage 7: Code Clarity
 
 #### Low Clarity: Inline field comment is missing terminal punctuation
@@ -162,6 +181,21 @@ End the comment with a period and state the condition directly.
 
 **Rationale:** Consistent comments satisfy the configured `godot` gate and make the field contract clearer.
 **Status:** fixed in Pass A
+
+#### Medium Clarity: SA tool progress bypasses injected output
+**Location:** `internal/ops/satools/satools.go:56-131,244-260`
+**Severity:** Medium
+
+**Current Code:**
+```go
+fmt.Printf("Building %s (%s) ...\n", tag, mode)
+```
+
+**Recommendation:**
+Inject the operator output writer and return write failures from progress and result rendering.
+
+**Rationale:** Direct process-global output is difficult to test and can bypass Cobra output redirection.
+**Status:** fixed in Pass A follow-up
 
 ### Stage 8: Generation Gates
 
@@ -247,6 +281,7 @@ Add concise summaries for quality tasks, including scope and any `--` argument b
 
 ## Open Questions
 - Dependency integrity remains unresolved: the module proxy/downloaded `operatorconfig@v0.1.1` hash differs from the public checksum database and committed `go.sum`. No checksum was replaced.
+- Stage 4 Architecture: `internal/ops/cli/root.go` owns the Cobra root and all command constructors in one large file. Is that centralized command wiring intentional, or should command constructors move into domain-focused files?
 
 ## Resolutions
 | Finding | Severity | Location | Outcome |
@@ -263,3 +298,5 @@ Add concise summaries for quality tasks, including scope and any `--` argument b
 | SA summary formatting | Low | `internal/ops/satools/satools.go` | Fixed in Pass A with `text/template`. |
 | Task summaries | Low | `Taskfile.yml` | Fixed in Pass A. |
 | Dependency checksum | Medium | `go.sum` | Still open; retained the public checksum and did not accept the mismatched download. |
+| Git probe failures | High | `internal/ops/submodule` | Fixed in Pass A follow-up; expected no-ops are handled at call sites and cleanup errors propagate. |
+| SA tool output | Medium | `internal/ops/satools` | Fixed in Pass A follow-up; output is injected and write errors return. |

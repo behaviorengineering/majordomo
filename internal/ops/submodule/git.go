@@ -5,9 +5,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -148,9 +150,13 @@ func (m *manager) isGitlinkInIndex(submoduleName string) bool {
 }
 
 func (m *manager) currentBranch(repoRoot string) (string, error) {
-	out, err := m.git([]string{"symbolic-ref", "--short", "HEAD"}, repoRoot, true)
+	out, err := m.git([]string{"symbolic-ref", "--short", "HEAD"}, repoRoot, false)
 	if err != nil {
-		return "(detached HEAD)", nil
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return "(detached HEAD)", nil
+		}
+		return "", fmt.Errorf("determine current branch: %w", err)
 	}
 	return out, nil
 }
@@ -255,9 +261,6 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	)
 	out := strings.TrimSpace(stdout.String())
 	if err != nil {
-		if !check {
-			return out, nil
-		}
 		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return out, nil

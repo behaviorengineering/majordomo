@@ -840,6 +840,7 @@ func newBuildSAToolsCmd() *cobra.Command {
 				DryRun:  dryRun,
 				Verbose: verbose,
 				Corp:    corp,
+				Output:  cmd.OutOrStdout(),
 			})
 		},
 	}
