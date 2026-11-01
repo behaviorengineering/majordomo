@@ -22,6 +22,7 @@ import (
 
 // Options configures majordomo run review.
 type Options struct {
+	Context     context.Context
 	ConfigDir   string
 	RepoID      string
 	PRNumber    string
@@ -55,6 +56,11 @@ func logf(level, format string, args ...any) {
 
 // Run executes clone, SA, orchestrate, and optional publish for one PR.
 func Run(opts Options) (err error) {
+	if opts.Context == nil {
+		var cancel context.CancelFunc
+		opts.Context, cancel = context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+	}
 	usage := llmusage.New()
 	llmusage.Push(usage)
 	defer func() {
@@ -102,7 +108,7 @@ func Run(opts Options) (err error) {
 		_ = observability.Shutdown(flushCtx)
 	}()
 
-	ctx, span := observability.StartChainSpan(context.Background(), otelCfg.ServiceName, "majordomo.run.review")
+	ctx, span := observability.StartChainSpan(opts.Context, otelCfg.ServiceName, "majordomo.run.review")
 	defer observability.EndSpanWithStatus(span, &err)
 
 	until, err := ParseUntil(opts.Until)
@@ -192,7 +198,7 @@ func Run(opts Options) (err error) {
 	}
 
 	if err := runSA(opts); err != nil {
-		logf("WARN", "sa: %v (continuing)", err)
+		return fmt.Errorf("sa: %w", err)
 	}
 	if !shouldRun(opts.Until, StagePrep) {
 		logf("INFO", "until=%s: stopping after sa", opts.Until)
@@ -237,6 +243,7 @@ func runClone(opts Options, token, scm, cloneURL string) error {
 func runSA(opts Options) error {
 	if opts.SA != nil {
 		return opts.SA(sa.Options{
+			Context:    opts.Context,
 			ConfigDir:  opts.ConfigDir,
 			RepoID:     opts.RepoID,
 			RepoRoot:   opts.WorkDir,
@@ -249,6 +256,7 @@ func runSA(opts Options) error {
 		return nil
 	}
 	return sa.Run(sa.Options{
+		Context:    opts.Context,
 		ConfigDir:  opts.ConfigDir,
 		RepoID:     opts.RepoID,
 		RepoRoot:   opts.WorkDir,
