@@ -252,7 +252,13 @@ All Pass A findings, including Low findings, are marked fixed in the post-fix tr
 
 ## Open Questions
 
-No consultant questions yet. Pass A is complete; Pass B has not started.
+#### Open Architecture: Centralized Cobra root wiring
+**Location:** `internal/ops/cli/root.go:1-850`
+**Observation:** The CLI root package imports 13 domain packages and defines every root and nested command constructor in one file.
+**Question:** Is this centralized Cobra facade intentional, or should command constructors be split by lifecycle or domain while keeping the root as wiring?
+**Possible outcomes:**
+- If intentional: record a non-issue with the facade rationale.
+- If it has become a maintenance bottleneck: record an Architecture finding and wait for instructions before changing it.
 
 ## Resolutions
 
