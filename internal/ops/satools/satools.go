@@ -3,28 +3,38 @@ package satools
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/executil"
 )
 
 // Options configures a local SA tool image build run.
 type Options struct {
-	DryRun  bool
-	Verbose bool
-	Corp    bool
+	Context       context.Context
+	DryRun        bool
+	Verbose       bool
+	Corp          bool
+	CommandRunner *executil.Runner
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
 	// Empty → discover from cwd.
 	RepoRoot string
 	// Runner overrides command execution (tests).
-	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
+	Runner func(ctx context.Context, name string, args []string, env []string, dir string) (stdout, stderr string, err error)
 }
 
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("sa tools requires a context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("sa tools requires a context deadline")
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
 		return err
@@ -218,22 +228,31 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		_, _, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag failed: %v", tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
 
 func runCmd(opts Options, name string, args, env []string, dir string) (string, string, error) {
 	if opts.Runner != nil {
-		return opts.Runner(name, args, env, dir)
+		return opts.Runner(opts.Context, name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
+	if opts.CommandRunner == nil {
+		return "", "", fmt.Errorf("sa tools requires a command runner")
+	}
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := opts.CommandRunner.Run(opts.Context, executil.Request{
+		Name:   name,
+		Args:   args,
+		Dir:    dir,
+		Env:    env,
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
 	return stdout.String(), stderr.String(), err
 }
 

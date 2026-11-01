@@ -1,7 +1,7 @@
 package submodule
 
 import (
-	"path/filepath"
+	"context"
 	"strings"
 	"testing"
 )
@@ -10,7 +10,7 @@ func TestFindParentRepoRootViaGitlink(t *testing.T) {
 	calls := 0
 	m := &manager{
 		opts: Options{
-			GitRunner: func(args []string, cwd string, check bool) (string, error) {
+			GitRunner: func(_ context.Context, args []string, cwd string, check bool) (string, error) {
 				calls++
 				joined := strings.Join(args, " ")
 				switch {
@@ -39,7 +39,7 @@ func TestFindParentRepoRootViaGitlink(t *testing.T) {
 func TestFindParentRepoRootRejectsNonSubmodule(t *testing.T) {
 	m := &manager{
 		opts: Options{
-			GitRunner: func(args []string, cwd string, check bool) (string, error) {
+			GitRunner: func(_ context.Context, args []string, cwd string, check bool) (string, error) {
 				joined := strings.Join(args, " ")
 				if joined == "rev-parse --show-toplevel" {
 					return "/tmp/same", nil
@@ -59,5 +59,4 @@ func TestBuildOpsMenu(t *testing.T) {
 	if !strings.Contains(menu, "Submodule : .majordomo") || !strings.Contains(menu, "1. Update") {
 		t.Fatalf("menu:\n%s", menu)
 	}
-	_ = filepath.Separator
 }
