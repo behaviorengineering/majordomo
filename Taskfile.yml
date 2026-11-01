@@ -9,36 +9,43 @@ env:
 tasks:
   default:
     desc: List local-dev tasks
+    summary: Lists the local development tasks and their one-line descriptions.
     cmds:
       - go tool task --list
 
   format:
     desc: Format with gofumpt
+    summary: Formats Go files under cmd, internal, and pkg.
     cmds:
       - go tool gofumpt -w ./cmd ./internal ./pkg
 
   lint:
     desc: Run golangci-lint
+    summary: Runs the pinned golangci-lint configuration across the Go packages.
     cmds:
       - go tool golangci-lint run --timeout 5m ./cmd/... ./internal/... ./pkg/...
 
   vet:
     desc: Run go vet
+    summary: Runs go vet across the Go packages.
     cmds:
       - go vet ./cmd/... ./internal/... ./pkg/...
 
   test:
     desc: Run unit tests
+    summary: Runs the Go unit test suite.
     cmds:
       - go test ./...
 
   build:
     desc: Build majordomo CLI
+    summary: Builds the majordomo command binary.
     cmds:
       - go build -o {{.BIN}} ./cmd/majordomo
 
   hooks-install:
     desc: Install Lefthook from cursor-packs
+    summary: Initializes the shared pack and installs repository hooks.
     cmds:
       - git submodule update --init .cursor/packs/shared
       - lefthook install

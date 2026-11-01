@@ -1,7 +1,6 @@
 package submodule
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -25,7 +24,10 @@ func TestFindParentRepoRootViaGitlink(t *testing.T) {
 		},
 		submoduleRoot: "/tmp/parent/.majordomo",
 	}
-	got := m.findParentRepoRoot("/tmp/parent/.majordomo")
+	got, err := m.findParentRepoRoot("/tmp/parent/.majordomo")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got != "/tmp/parent" {
 		t.Fatalf("got %q calls=%d", got, calls)
 	}
@@ -48,7 +50,11 @@ func TestFindParentRepoRootRejectsNonSubmodule(t *testing.T) {
 			},
 		},
 	}
-	if got := m.findParentRepoRoot("/tmp/same"); got != "" {
+	got, err := m.findParentRepoRoot("/tmp/same")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
 		t.Fatalf("expected empty, got %q", got)
 	}
 }
@@ -59,5 +65,4 @@ func TestBuildOpsMenu(t *testing.T) {
 	if !strings.Contains(menu, "Submodule : .majordomo") || !strings.Contains(menu, "1. Update") {
 		t.Fatalf("menu:\n%s", menu)
 	}
-	_ = filepath.Separator
 }
