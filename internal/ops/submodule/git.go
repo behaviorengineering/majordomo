@@ -3,13 +3,14 @@ package submodule
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/command"
 )
 
 const (
@@ -19,6 +20,7 @@ const (
 
 // Options configures the interactive submodule manager.
 type Options struct {
+	Context context.Context
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
 	// In/Out for prompts (tests).
@@ -37,17 +39,27 @@ type manager struct {
 	submoduleRoot string
 	parentRoot    string // empty if none
 	submoduleName string
+	outputErr     error
 }
 
 // Run launches the interactive submodule manager.
 func Run(opts Options) error {
+	if opts.Context == nil {
+		return fmt.Errorf("submodule requires a context")
+	}
+	if _, ok := opts.Context.Deadline(); !ok {
+		return fmt.Errorf("submodule requires a context deadline")
+	}
 	m := &manager{opts: opts}
 	root, err := m.findSubmoduleRoot()
 	if err != nil {
 		return err
 	}
 	m.submoduleRoot = root
-	m.parentRoot = m.findParentRepoRoot(root)
+	m.parentRoot, err = m.findParentRepoRoot(root)
+	if err != nil {
+		return err
+	}
 	m.submoduleName = m.getSubmoduleName()
 
 	if m.parentRoot != "" {
@@ -59,7 +71,10 @@ func Run(opts Options) error {
 			return m.promptOffBranchContext(parentBranch)
 		}
 	}
-	return m.opsMenuLoop()
+	if err := m.opsMenuLoop(); err != nil {
+		return err
+	}
+	return m.outputErr
 }
 
 func (m *manager) findSubmoduleRoot() (string, error) {
@@ -78,37 +93,48 @@ func (m *manager) findSubmoduleRoot() (string, error) {
 	return out, nil
 }
 
-func (m *manager) findParentRepoRoot(submoduleRoot string) string {
+func (m *manager) findParentRepoRoot(submoduleRoot string) (string, error) {
 	parentCand := filepath.Dir(submoduleRoot)
 	out, err := m.git([]string{"rev-parse", "--show-toplevel"}, parentCand, true)
 	if err != nil {
-		return ""
+		if isNotGitRepoError(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("find parent repository: %w", err)
 	}
 	parent := out
 	if parent == submoduleRoot {
-		return ""
+		return "", nil
 	}
 	rel, err := filepath.Rel(parent, submoduleRoot)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("resolve submodule path: %w", err)
 	}
 	rel = filepath.ToSlash(rel)
-	indexEntry, _ := m.git([]string{"ls-files", "--stage", rel}, parent, false)
-	if strings.HasPrefix(indexEntry, "160000") {
-		return parent
+	indexEntry, err := m.git([]string{"ls-files", "--stage", rel}, parent, true)
+	if err != nil {
+		return "", fmt.Errorf("inspect parent gitlink: %w", err)
 	}
-	gitDirRaw, _ := m.git([]string{"rev-parse", "--git-dir"}, parent, false)
-	if gitDirRaw == "" {
-		return ""
+	if strings.HasPrefix(indexEntry, "160000") {
+		return parent, nil
+	}
+	gitDirRaw, err := m.git([]string{"rev-parse", "--git-dir"}, parent, true)
+	if err != nil {
+		return "", fmt.Errorf("find parent git directory: %w", err)
 	}
 	gitDir := gitDirRaw
 	if !filepath.IsAbs(gitDir) {
 		gitDir = filepath.Join(parent, gitDirRaw)
 	}
-	if st, err := os.Stat(filepath.Join(gitDir, "modules", rel)); err == nil && st.IsDir() {
-		return parent
+	modulePath := filepath.Join(gitDir, "modules", rel)
+	if st, err := os.Stat(modulePath); err == nil {
+		if st.IsDir() {
+			return parent, nil
+		}
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect parent submodule metadata: %w", err)
 	}
-	return ""
+	return "", nil
 }
 
 func (m *manager) getSubmoduleName() string {
@@ -122,12 +148,15 @@ func (m *manager) getSubmoduleName() string {
 	return filepath.ToSlash(rel)
 }
 
-func (m *manager) isGitlinkInIndex(submoduleName string) bool {
+func (m *manager) isGitlinkInIndex(submoduleName string) (bool, error) {
 	if m.parentRoot == "" {
-		return false
+		return false, nil
 	}
-	entry, _ := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, false)
-	return strings.HasPrefix(entry, "160000")
+	entry, err := m.git([]string{"ls-files", "--stage", submoduleName}, m.parentRoot, true)
+	if err != nil {
+		return false, fmt.Errorf("inspect parent gitlink: %w", err)
+	}
+	return strings.HasPrefix(entry, "160000"), nil
 }
 
 func (m *manager) currentBranch(repoRoot string) (string, error) {
@@ -142,9 +171,12 @@ func (m *manager) currentSHA(repoRoot string) (string, error) {
 	return m.git([]string{"rev-parse", "--short", "HEAD"}, repoRoot, true)
 }
 
-func (m *manager) isDirty(repoRoot string) bool {
-	out, _ := m.git([]string{"status", "--porcelain"}, repoRoot, false)
-	return strings.TrimSpace(out) != ""
+func (m *manager) isDirty(repoRoot string) (bool, error) {
+	out, err := m.git([]string{"status", "--porcelain"}, repoRoot, true)
+	if err != nil {
+		return false, fmt.Errorf("check repository status: %w", err)
+	}
+	return strings.TrimSpace(out) != "", nil
 }
 
 func (m *manager) gitDir(repoRoot string) (string, error) {
@@ -167,7 +199,11 @@ func (m *manager) resetWorkingTree(repoRoot string) error {
 }
 
 func (m *manager) confirmAndReset() (bool, error) {
-	if !m.isDirty(m.submoduleRoot) {
+	dirty, err := m.isDirty(m.submoduleRoot)
+	if err != nil {
+		return false, err
+	}
+	if !dirty {
 		return true, nil
 	}
 	m.printf("Warning: submodule has local modifications (possibly from a force push).\n")
@@ -185,9 +221,12 @@ func (m *manager) confirmAndReset() (bool, error) {
 	return true, nil
 }
 
-func (m *manager) remoteTrackingSHA(branch string) string {
-	out, _ := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, false)
-	return out
+func (m *manager) remoteTrackingSHA(branch string) (string, error) {
+	out, err := m.git([]string{"rev-parse", "--verify", "origin/" + branch}, m.submoduleRoot, true)
+	if err != nil {
+		return "", fmt.Errorf("resolve origin/%s: %w", branch, err)
+	}
+	return out, nil
 }
 
 func (m *manager) remoteBranches() ([]string, error) {
@@ -219,24 +258,56 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	out := strings.TrimSpace(stdout.String())
+	result, err := command.Run(command.Options{
+		Context: m.opts.Context,
+		Name:    "git",
+		Args:    args,
+		Dir:     cwd,
+		Network: isNetworkGitCommand(args),
+	})
+	out := strings.TrimSpace(result.Stdout)
 	if err != nil {
-		if !check {
-			return out, nil
-		}
-		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(result.Stderr))
 	}
 	return out, nil
 }
 
+func isNetworkGitCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "fetch", "pull", "push", "clone":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNotGitRepoError(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "not a git repository")
+}
+
+func isNothingToCommitError(err error) bool {
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "nothing to commit") ||
+		strings.Contains(text, "nothing added to commit")
+}
+
+func isMissingGitReferenceError(err error) bool {
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "needed a single revision") ||
+		strings.Contains(text, "unknown revision") ||
+		strings.Contains(text, "bad object")
+}
+
 func (m *manager) printf(format string, args ...any) {
-	fmt.Fprintf(m.out(), format, args...)
+	if m.outputErr != nil {
+		return
+	}
+	if _, err := fmt.Fprintf(m.out(), format, args...); err != nil {
+		m.outputErr = fmt.Errorf("write operator output: %w", err)
+	}
 }
 
 func (m *manager) out() io.Writer {
@@ -247,6 +318,9 @@ func (m *manager) out() io.Writer {
 }
 
 func (m *manager) prompt(p string) (string, error) {
+	if m.outputErr != nil {
+		return "", m.outputErr
+	}
 	if m.opts.Prompt != nil {
 		return m.opts.Prompt(p)
 	}
@@ -266,6 +340,9 @@ func (m *manager) prompt(p string) (string, error) {
 }
 
 func (m *manager) readKey(p string) (string, error) {
+	if m.outputErr != nil {
+		return "", m.outputErr
+	}
 	if m.opts.ReadKey != nil {
 		return m.opts.ReadKey(p)
 	}

@@ -25,7 +25,9 @@ func main() {
 	}()
 
 	if err := cli.NewRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if _, writeErr := fmt.Fprintln(os.Stderr, err); writeErr != nil {
+			os.Exit(1)
+		}
 		if errors.Is(err, staging.ErrNothingToReview) {
 			os.Exit(2)
 		}

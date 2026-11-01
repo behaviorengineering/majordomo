@@ -102,7 +102,10 @@ func (m *manager) cmdUpdate() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	remoteSHA := m.remoteTrackingSHA(current)
+	remoteSHA, err := m.remoteTrackingSHA(current)
+	if err != nil {
+		return false, err
+	}
 	if remoteSHA != "" && localSHA != remoteSHA {
 		msg := fmt.Sprintf(
 			"Warning: local HEAD (%s) does not match origin/%s (%s).\n"+
@@ -133,7 +136,11 @@ func (m *manager) cmdUpdate() (bool, error) {
 	}
 	changed := localSHA != shaBefore
 	if m.parentRoot != "" {
-		if !m.isGitlinkInIndex(m.submoduleName) {
+		tracked, err := m.isGitlinkInIndex(m.submoduleName)
+		if err != nil {
+			return false, err
+		}
+		if !tracked {
 			m.printf("  ⚠️  Submodule not tracked on this branch — skipping parent pointer update.\n")
 		} else {
 			if _, err := m.git([]string{"add", m.submoduleName}, m.parentRoot, true); err != nil {
@@ -141,7 +148,7 @@ func (m *manager) cmdUpdate() (bool, error) {
 			}
 			commitMsg := fmt.Sprintf("Update %s submodule to latest '%s'", m.submoduleName, current)
 			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
-			if err != nil {
+			if err != nil && !isNothingToCommitError(err) {
 				return false, fmt.Errorf("git commit submodule update failed: %w", err)
 			}
 			if commitOut == "" {
@@ -195,7 +202,11 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 		return false, fmt.Errorf("git clean failed: %w", err)
 	}
 	if m.parentRoot != "" {
-		if !m.isGitlinkInIndex(m.submoduleName) {
+		tracked, err := m.isGitlinkInIndex(m.submoduleName)
+		if err != nil {
+			return false, err
+		}
+		if !tracked {
 			m.printf("  ⚠️  Submodule not tracked on this branch — skipping parent pointer update.\n")
 		} else {
 			if _, err := m.git([]string{"submodule", "set-branch", "--branch", selected, m.submoduleName}, m.parentRoot, true); err != nil {
@@ -206,7 +217,7 @@ func (m *manager) cmdSwitchBranch() (bool, error) {
 			}
 			commitMsg := fmt.Sprintf("Pin %s submodule to branch '%s'", m.submoduleName, selected)
 			commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
-			if err != nil {
+			if err != nil && !isNothingToCommitError(err) {
 				return false, fmt.Errorf("git commit submodule branch failed: %w", err)
 			}
 			if commitOut == "" {
@@ -233,7 +244,11 @@ func (m *manager) cmdPinCommit() (bool, error) {
 	if m.parentRoot == "" {
 		return false, nil
 	}
-	if !m.isGitlinkInIndex(m.submoduleName) {
+	tracked, err := m.isGitlinkInIndex(m.submoduleName)
+	if err != nil {
+		return false, err
+	}
+	if !tracked {
 		m.printf("  ⚠️  Submodule not tracked on this branch — skipping parent pointer update.\n")
 		return false, nil
 	}
@@ -242,7 +257,7 @@ func (m *manager) cmdPinCommit() (bool, error) {
 	}
 	commitMsg := fmt.Sprintf("Pin %s submodule to commit %s", m.submoduleName, sha)
 	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, m.parentRoot, false)
-	if err != nil {
+	if err != nil && !isNothingToCommitError(err) {
 		return false, fmt.Errorf("git commit submodule pin failed: %w", err)
 	}
 	if commitOut == "" {
@@ -272,6 +287,9 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	}
 	remoteRef, remoteErr := m.git([]string{"rev-parse", "--verify", "origin/" + pipelinesBranch}, m.parentRoot, false)
 	if remoteErr != nil {
+		if !isMissingGitReferenceError(remoteErr) {
+			return false, fmt.Errorf("verify %s branch: %w", pipelinesBranch, remoteErr)
+		}
 		remoteRef = ""
 	}
 	if remoteRef == "" {
@@ -300,7 +318,7 @@ func (m *manager) cmdUpdateViaWorktree() (bool, error) {
 	}
 	commitMsg := fmt.Sprintf("Update %s to %s (branch: %s)", m.submoduleName, shortSHA, branch)
 	commitOut, err := m.git([]string{"commit", "-m", commitMsg}, worktreePath, false)
-	if err != nil {
+	if err != nil && !isNothingToCommitError(err) {
 		return false, fmt.Errorf("git commit worktree update failed: %w", err)
 	}
 	if commitOut == "" {
