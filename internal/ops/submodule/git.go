@@ -4,12 +4,14 @@ package submodule
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 const (
@@ -21,6 +23,8 @@ const (
 type Options struct {
 	// StartDir is used to locate the submodule root (default: cwd).
 	StartDir string
+	// Context bounds git operations.
+	Context context.Context
 	// In/Out for prompts (tests).
 	In  io.Reader
 	Out io.Writer
@@ -35,7 +39,7 @@ type Options struct {
 type manager struct {
 	opts          Options
 	submoduleRoot string
-	parentRoot    string // empty if none
+	parentRoot    string // Empty when there is no parent repository.
 	submoduleName string
 }
 
@@ -219,12 +223,16 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 	if m.opts.GitRunner != nil {
 		return m.opts.GitRunner(args, cwd, check)
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Dir = cwd
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := process.Run(process.Options{
+		Context: m.opts.Context,
+		Name:    "git",
+		Args:    args,
+		Dir:     cwd,
+		Stdout:  &stdout,
+		Stderr:  &stderr,
+		Retry:   isRemoteGitCommand(args),
+	})
 	out := strings.TrimSpace(stdout.String())
 	if err != nil {
 		if !check {
@@ -233,6 +241,18 @@ func (m *manager) git(args []string, cwd string, check bool) (string, error) {
 		return out, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return out, nil
+}
+
+func isRemoteGitCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "fetch", "pull", "push":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *manager) printf(format string, args ...any) {

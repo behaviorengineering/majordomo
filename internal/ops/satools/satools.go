@@ -3,12 +3,16 @@ package satools
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
+
+	"github.com/behaviorengineering/majordomo/internal/ops/process"
 )
 
 // Options configures a local SA tool image build run.
@@ -19,12 +23,29 @@ type Options struct {
 	// RepoRoot is the majordomo checkout (directory containing scripts/ or go.mod).
 	// Empty → discover from cwd.
 	RepoRoot string
+	// Out receives operator-facing report output. Defaults to stdout.
+	Out io.Writer
+	// Context bounds image build and tagging commands.
+	Context context.Context
 	// Runner overrides command execution (tests).
 	Runner func(name string, args []string, env []string, dir string) (stdout, stderr string, err error)
 }
 
+var (
+	saToolHeaderTemplate = template.Must(template.New("sa-tool-header").Parse(
+		"SA Tool Image Builder\nMode:      {{.Mode}}\nContext:   {{.Workspace}}\nTools:     {{.Tools}}\nDry-run:   {{.DryRun}}\n\n",
+	))
+	saToolResultsTemplate = template.Must(template.New("sa-tool-results").Parse(
+		"\nResults: {{.Passed}}/{{.Total}} passed\n{{range .Results}}  {{.Status}}  sa-{{.Name}}\n{{end}}",
+	))
+)
+
 // Run discovers SA Dockerfiles and builds each via build-copilot-image.sh.
 func Run(opts Options) error {
+	out := opts.Out
+	if out == nil {
+		out = os.Stdout
+	}
 	repoRoot, err := resolveRepoRoot(opts.RepoRoot)
 	if err != nil {
 		return err
@@ -53,12 +74,20 @@ func Run(opts Options) error {
 	for _, df := range dockerfiles {
 		tools = append(tools, toolName(df))
 	}
-	fmt.Printf("SA Tool Image Builder\nMode:      %s\nContext:   %s\nTools:     %s\nDry-run:   %v\n\n",
-		mode, workspace, strings.Join(tools, ", "), opts.DryRun)
+	if err := saToolHeaderTemplate.Execute(out, struct {
+		Mode      string
+		Workspace string
+		Tools     string
+		DryRun    bool
+	}{mode, workspace, strings.Join(tools, ", "), opts.DryRun}); err != nil {
+		return fmt.Errorf("write SA tool report: %w", err)
+	}
 
 	if opts.DryRun {
 		for _, df := range dockerfiles {
-			fmt.Printf("  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df)
+			if err := writef(out, "  [dry-run] would build sa-%s (%s) from %s\n", toolName(df), mode, df); err != nil {
+				return fmt.Errorf("write SA tool report: %w", err)
+			}
 		}
 		return nil
 	}
@@ -68,32 +97,43 @@ func Run(opts Options) error {
 		return err
 	}
 
-	results := map[string]bool{}
+	builtResults := map[string]bool{}
 	var names []string
 	for _, df := range dockerfiles {
 		tool := toolName(df)
 		names = append(names, tool)
 		tag := imageTag(tool)
-		fmt.Printf("Building %s (%s) ...\n", tag, mode)
+		if err := writef(out, "Building %s (%s) ...\n", tag, mode); err != nil {
+			return fmt.Errorf("write SA tool report: %w", err)
+		}
 		ok, output := runBuild(opts, buildSh, df, workspace, tag, tool)
-		results[tool] = ok
-		printResult(tool, ok, output, opts.Verbose)
+		builtResults[tool] = ok
+		if err := printResult(out, tool, ok, output, opts.Verbose); err != nil {
+			return fmt.Errorf("write SA tool report: %w", err)
+		}
 	}
 
 	sort.Strings(names)
 	passed := 0
 	for _, n := range names {
-		if results[n] {
+		if builtResults[n] {
 			passed++
 		}
 	}
-	fmt.Printf("\nResults: %d/%d passed\n", passed, len(names))
+	reportResults := make([]struct{ Status, Name string }, 0, len(names))
 	for _, n := range names {
 		status := "FAIL"
-		if results[n] {
+		if builtResults[n] {
 			status = "PASS"
 		}
-		fmt.Printf("  %s  sa-%s\n", status, n)
+		reportResults = append(reportResults, struct{ Status, Name string }{status, n})
+	}
+	if err := saToolResultsTemplate.Execute(out, struct {
+		Passed  int
+		Total   int
+		Results []struct{ Status, Name string }
+	}{passed, len(names), reportResults}); err != nil {
+		return fmt.Errorf("write SA tool report: %w", err)
 	}
 	if passed < len(names) {
 		return fmt.Errorf("%d/%d SA tool builds failed", len(names)-passed, len(names))
@@ -218,7 +258,10 @@ func runBuild(opts Options, buildSh, dockerfile, workspace, tag, tool string) (b
 	lines := strings.Split(strings.TrimRight(stdout+stderr, "\n"), "\n")
 	if err == nil {
 		full := "local/sa-" + tool + ":local-test"
-		_, _, _ = runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), "")
+		if _, _, tagErr := runCmd(opts, "docker", []string{"tag", full, tag}, os.Environ(), ""); tagErr != nil {
+			lines = append(lines, fmt.Sprintf("docker tag %s: %v", tag, tagErr))
+			return false, lines
+		}
 	}
 	return err == nil, lines
 }
@@ -227,29 +270,43 @@ func runCmd(opts Options, name string, args, env []string, dir string) (string, 
 	if opts.Runner != nil {
 		return opts.Runner(name, args, env, dir)
 	}
-	cmd := exec.Command(name, args...)
-	cmd.Env = env
-	cmd.Dir = dir
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := process.Run(process.Options{
+		Context: opts.Context,
+		Name:    name,
+		Args:    args,
+		Env:     env,
+		Dir:     dir,
+		Stdout:  &stdout,
+		Stderr:  &stderr,
+		Retry:   true,
+	})
 	return stdout.String(), stderr.String(), err
 }
 
-func printResult(tool string, success bool, output []string, verbose bool) {
+func writef(out io.Writer, format string, args ...any) error {
+	_, err := fmt.Fprintf(out, format, args...)
+	return err
+}
+
+func printResult(out io.Writer, tool string, success bool, output []string, verbose bool) error {
 	marker := "✗"
 	status := "FAIL"
 	if success {
 		marker = "✓"
 		status = "PASS"
 	}
-	fmt.Printf("  %s sa-%s: %s\n", marker, tool, status)
+	if err := writef(out, "  %s sa-%s: %s\n", marker, tool, status); err != nil {
+		return err
+	}
 	if !success || verbose {
 		for _, line := range output {
-			fmt.Printf("      %s\n", line)
+			if err := writef(out, "      %s\n", line); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func setEnv(env []string, key, value string) []string {
