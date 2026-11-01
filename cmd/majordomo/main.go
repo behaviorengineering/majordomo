@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -12,7 +11,6 @@ import (
 	"github.com/behaviorengineering/majordomo/internal/ops/cli"
 	"github.com/behaviorengineering/majordomo/pkg/platform/aigateway"
 	"github.com/behaviorengineering/majordomo/pkg/platform/observability"
-	"github.com/behaviorengineering/majordomo/pkg/review/staging"
 )
 
 func main() {
@@ -24,9 +22,11 @@ func main() {
 		_ = observability.Shutdown(ctx)
 	}()
 
-	if err := cli.NewRoot().Execute(); err != nil {
+	runCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	if err := cli.NewRoot().ExecuteContext(runCtx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		if errors.Is(err, staging.ErrNothingToReview) {
+		if cli.IsNothingToReview(err) {
 			os.Exit(2)
 		}
 		os.Exit(1)

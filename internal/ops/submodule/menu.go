@@ -1,22 +1,50 @@
 package submodule
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
+	"text/template"
 )
 
-func (m *manager) buildOpsMenu(currentBranch string) string {
-	header := fmt.Sprintf(
-		"Submodule Manager\n-----------------\nSubmodule : %s\nBranch    : %s",
-		m.submoduleName, currentBranch,
-	)
-	items := []string{
-		"1. Update to latest (pull current branch)",
-		"2. Switch to a different branch",
-		"3. Pin to current commit",
-		"q. Quit",
+var (
+	opsMenuTemplate = template.Must(template.New("ops-menu").Parse(`Submodule Manager
+-----------------
+Submodule : {{.Submodule}}
+Branch    : {{.Branch}}
+
+{{range .Items}}{{.}}
+{{end}}`))
+	offBranchTemplate = template.Must(template.New("off-branch").Parse(`OFF-BRANCH WARNING
+Parent repo is on '{{.ParentBranch}}', not '{{.PipelinesBranch}}'.
+Any direct commits will land on '{{.ParentBranch}}'.
+
+1. Safe: update '{{.PipelinesBranch}}' via isolated worktree
+2. Direct: I know what I am doing (operate on '{{.ParentBranch}}')
+q. Quit
+`))
+)
+
+func (m *manager) buildOpsMenu(currentBranch string) (string, error) {
+	data := struct {
+		Submodule string
+		Branch    string
+		Items     []string
+	}{
+		Submodule: m.submoduleName,
+		Branch:    currentBranch,
+		Items: []string{
+			"1. Update to latest (pull current branch)",
+			"2. Switch to a different branch",
+			"3. Pin to current commit",
+			"q. Quit",
+		},
 	}
-	return header + "\n\n" + strings.Join(items, "\n")
+	var output bytes.Buffer
+	if err := opsMenuTemplate.Execute(&output, data); err != nil {
+		return "", err
+	}
+	return output.String(), nil
 }
 
 func (m *manager) opsMenuLoop() error {
@@ -25,7 +53,11 @@ func (m *manager) opsMenuLoop() error {
 		if err != nil {
 			return err
 		}
-		m.printf("\n%s\n", m.buildOpsMenu(currentBranch))
+		menu, err := m.buildOpsMenu(currentBranch)
+		if err != nil {
+			return fmt.Errorf("render submodule menu: %w", err)
+		}
+		m.printf("\n%s\n", menu)
 		choice, err := m.readKey("Choice: ")
 		if err != nil {
 			return err
@@ -60,14 +92,17 @@ func (m *manager) opsMenuLoop() error {
 }
 
 func (m *manager) promptOffBranchContext(currentParentBranch string) error {
-	warning := fmt.Sprintf(
-		"⚠️  OFF-BRANCH WARNING  ⚠️\nParent repo is on '%s', not '%s'.\nAny direct commits will land on '%s'.",
-		currentParentBranch, pipelinesBranch, currentParentBranch,
-	)
-	m.printf("\n%s\n\n", warning)
-	m.printf("1. 🔒 Safe  — update '%s' via isolated worktree\n", pipelinesBranch)
-	m.printf("2. ⚡ Direct — I know what I'm doing (operate on '%s')\n", currentParentBranch)
-	m.printf("q. Quit\n")
+	var output bytes.Buffer
+	if err := offBranchTemplate.Execute(&output, struct {
+		ParentBranch    string
+		PipelinesBranch string
+	}{
+		ParentBranch:    currentParentBranch,
+		PipelinesBranch: pipelinesBranch,
+	}); err != nil {
+		return fmt.Errorf("render off-branch warning: %w", err)
+	}
+	m.printf("\n%s\n", output.String())
 	for {
 		choice, err := m.readKey("\nContext: ")
 		if err != nil {
@@ -82,7 +117,7 @@ func (m *manager) promptOffBranchContext(currentParentBranch string) error {
 		case "2":
 			return m.opsMenuLoop()
 		default:
-			m.printf("Invalid choice — enter 1, 2, or q.\n")
+			m.printf("Invalid choice: enter 1, 2, or q.\n")
 		}
 	}
 }
